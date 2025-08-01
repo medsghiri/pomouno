@@ -57,6 +57,8 @@ export default function Home() {
 
     // Apply theme to document
     document.documentElement.classList.toggle('dark', settings.darkMode);
+
+
   }, []);
 
   // Listen for theme changes and unsaved settings

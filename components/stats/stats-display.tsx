@@ -208,15 +208,7 @@ export function StatsDisplay() {
     ].filter(item => item.value > 0);
   };
 
-  const prepareBreakReminderData = () => {
-    if (!dashboardStats) return [];
 
-    const { breakReminders } = dashboardStats;
-    return [
-      { name: 'Completed', value: breakReminders.totalRemindersCompleted, color: '#10b981' },
-      { name: 'Missed', value: breakReminders.totalRemindersShown - breakReminders.totalRemindersCompleted, color: '#ef4444' },
-    ].filter(item => item.value > 0);
-  };
 
   const prepareCalendarData = () => {
     const today = new Date();
@@ -336,7 +328,7 @@ export function StatsDisplay() {
                   <TrendingUp className="w-5 h-5 text-red-600 dark:text-red-400" />
                   Today's Progress
                 </h2>
-                <Badge variant="secondary" className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                <Badge variant="secondary" className="text-xs">
                   {new Date().toLocaleDateString('en-US', {
                     weekday: 'short',
                     month: 'short',
@@ -359,18 +351,18 @@ export function StatsDisplay() {
                   title="Focus Time"
                   value={formatTime(todayStats.focusTime)}
                   icon={Clock}
-                  color="text-blue-600 dark:text-blue-400"
-                  bgColor="bg-blue-50 dark:bg-blue-900/20"
-                  borderColor="border-blue-200 dark:border-blue-800"
+                  color="text-orange-600 dark:text-orange-400"
+                  bgColor="bg-orange-50 dark:bg-orange-900/20"
+                  borderColor="border-orange-200 dark:border-orange-800"
                   description="Deep work time"
                 />
                 <StatCard
                   title="Tasks Done"
                   value={todayStats.tasksCompleted}
                   icon={CheckCircle}
-                  color="text-green-600 dark:text-green-400"
-                  bgColor="bg-green-50 dark:bg-green-900/20"
-                  borderColor="border-green-200 dark:border-green-800"
+                  color="text-pink-600 dark:text-red-400"
+                  bgColor="bg-pink-50 dark:bg-pink-900/20"
+                  borderColor="border-pink-200 dark:border-red-800"
                   description="Completed today"
                 />
                 <StatCard
@@ -464,52 +456,108 @@ export function StatsDisplay() {
             </div>
           </Card>
 
-          {/* Break Reminder Completion */}
-          {dashboardStats && dashboardStats.breakReminders.totalRemindersShown > 0 && (
+          {/* Break Reminder Completion - Today Only */}
+          {todayStats.breakRemindersShown > 0 && (
             <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
                   <Coffee className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                  Break Reminder Completion
+                  Today's Break Reminder Completion
                 </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Summary Stats */}
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                          {dashboardStats.breakReminders.totalRemindersCompleted}
+                      <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                        <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                          {todayStats.breakRemindersCompleted}
                         </div>
-                        <div className="text-sm text-green-700 dark:text-green-300">Completed</div>
+                        <div className="text-sm text-red-700 dark:text-red-300">Completed</div>
                       </div>
-                      <div className="text-center p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                        <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                          {Math.round(dashboardStats.breakReminders.completionRate)}%
+                      <div className="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                        <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                          {todayStats.breakRemindersShown > 0 ? Math.round((todayStats.breakRemindersCompleted / todayStats.breakRemindersShown) * 100) : 0}%
                         </div>
-                        <div className="text-sm text-amber-700 dark:text-amber-300">Completion Rate</div>
+                        <div className="text-sm text-orange-700 dark:text-orange-300">Completion Rate</div>
                       </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground text-center">
+                      {todayStats.breakRemindersShown} reminders shown today
                     </div>
                   </div>
 
-                  <div className="h-[150px]">
-                    <ChartContainer config={chartConfig}>
-                      <PieChart>
-                        <Pie
-                          data={prepareBreakReminderData()}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={30}
-                          outerRadius={60}
-                          paddingAngle={5}
-                          dataKey="value"
-                        >
-                          {prepareBreakReminderData().map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                      </PieChart>
-                    </ChartContainer>
+                  {/* Today's Completed Reminders */}
+                  <div className="space-y-3">
+
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {(() => {
+                        // Get today's break reminder completions
+                        const today = new Date().toISOString().split('T')[0];
+                        const todayStart = new Date(today).getTime();
+                        const todayEnd = todayStart + (24 * 60 * 60 * 1000) - 1;
+
+                        const completions = LocalStorage.getBreakReminderCompletions().filter(c =>
+                          c.completedAt >= todayStart && c.completedAt <= todayEnd
+                        );
+
+                        const reminders = LocalStorage.getBreakReminders();
+
+                        if (completions.length === 0) {
+                          return (
+                            <div className="text-xs text-muted-foreground italic">
+                              No reminders completed yet today
+                            </div>
+                          );
+                        }
+
+                        // Group completions by reminder
+                        const completionsByReminder = completions.reduce((acc, completion) => {
+                          const reminder = reminders.find(r => r.id === completion.reminderId);
+                          if (reminder) {
+                            const key = reminder.id;
+                            if (!acc[key]) {
+                              acc[key] = {
+                                reminder,
+                                count: 0,
+                                times: []
+                              };
+                            }
+                            acc[key].count++;
+                            acc[key].times.push(new Date(completion.completedAt));
+                          }
+                          return acc;
+                        }, {} as Record<string, { reminder: any; count: number; times: Date[] }>);
+
+                        return Object.values(completionsByReminder).map(({ reminder, count, times }) => (
+                          <div key={reminder.id} className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                            <span className="text-sm">
+                              {(() => {
+                                const categories = LocalStorage.getBreakReminderCategories();
+                                if (reminder.customCategory) {
+                                  const customCat = categories.find(c => c.id === reminder.customCategory);
+                                  return customCat?.icon || '📝';
+                                }
+                                switch (reminder.category) {
+                                  case 'hydration': return '💧';
+                                  case 'movement': return '🚶';
+                                  case 'rest': return '😌';
+                                  default: return '📝';
+                                }
+                              })()}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-medium text-foreground truncate">
+                                {reminder.title}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {count} time{count > 1 ? 's' : ''}
+                              </div>
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -523,7 +571,7 @@ export function StatsDisplay() {
           <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <Calendar className="w-5 h-5 text-red-600 dark:text-red-400" />
                 Weekly Progress
               </h2>
               <div className="flex items-center gap-2 text-sm">
@@ -556,9 +604,9 @@ export function StatsDisplay() {
                   title="Total Focus Time"
                   value={formatTime(weeklyStats.totalFocusTime)}
                   icon={Clock}
-                  color="text-blue-600 dark:text-blue-400"
-                  bgColor="bg-blue-50 dark:bg-blue-900/20"
-                  borderColor="border-blue-200 dark:border-blue-800"
+                  color="text-orange-600 dark:text-orange-400"
+                  bgColor="bg-orange-50 dark:bg-orange-900/20"
+                  borderColor="border-orange-200 dark:border-orange-800"
                   description="Deep work time"
                 />
                 <StatCard
@@ -607,7 +655,7 @@ export function StatsDisplay() {
                 <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                      <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      <Clock className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                       Daily Focus Time
                     </h3>
 
@@ -636,7 +684,7 @@ export function StatsDisplay() {
                 <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                      <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                      <CheckCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
                       Task Completion
                     </h3>
 
@@ -689,7 +737,7 @@ export function StatsDisplay() {
           <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                <Calendar className="w-5 h-5 text-green-600 dark:text-green-400" />
+                <Calendar className="w-5 h-5 text-red-600 dark:text-red-400" />
                 Monthly Progress
               </h2>
               <div className="flex items-center gap-2 text-sm">
@@ -721,9 +769,9 @@ export function StatsDisplay() {
                   title="Total Focus Time"
                   value={formatTime(monthlyStats.totalFocusTime)}
                   icon={Clock}
-                  color="text-blue-600 dark:text-blue-400"
-                  bgColor="bg-blue-50 dark:bg-blue-900/20"
-                  borderColor="border-blue-200 dark:border-blue-800"
+                  color="text-orange-600 dark:text-orange-400"
+                  bgColor="bg-orange-50 dark:bg-orange-900/20"
+                  borderColor="border-orange-200 dark:border-orange-800"
                   description="Deep work time"
                 />
                 <StatCard
@@ -785,7 +833,7 @@ export function StatsDisplay() {
               <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                    <Calendar className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    <Calendar className="w-5 h-5 text-red-600 dark:text-red-400" />
                     Task Calendar
                   </h3>
 
@@ -816,9 +864,9 @@ export function StatsDisplay() {
                             className={`min-h-[80px] rounded-lg p-1 text-xs transition-all duration-200 hover:scale-105 cursor-pointer border ${day.isToday
                               ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
                               : hasUpcomingTasks
-                                ? 'border-blue-300 bg-blue-50 dark:bg-blue-900/20'
+                                ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/20'
                                 : intensity > 0
-                                  ? 'border-green-300 bg-green-50 dark:bg-green-900/20'
+                                  ? 'border-red-300 bg-red-50 dark:bg-red-900/20'
                                   : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50'
                               }`}
                             title={`${formatDate(day.date)}: ${day.sessions} sessions, ${day.tasks.map(t => t.title).join(', ')}`}
@@ -835,7 +883,7 @@ export function StatsDisplay() {
                               <div className={`font-medium mb-1 ${day.isToday
                                 ? 'text-red-700 dark:text-red-300'
                                 : hasUpcomingTasks
-                                  ? 'text-blue-700 dark:text-blue-300'
+                                  ? 'text-orange-700 dark:text-orange-300'
                                   : 'text-gray-700 dark:text-gray-300'
                                 }`}>
                                 {day.dayNumber || new Date(day.date).getDate()}
@@ -844,8 +892,8 @@ export function StatsDisplay() {
                               {/* Session indicator */}
                               {day.sessions > 0 && (
                                 <div className="mb-1">
-                                  <div className={`w-full h-1 rounded ${intensity > 0.7 ? 'bg-green-600' :
-                                    intensity > 0.4 ? 'bg-green-500' : 'bg-green-400'
+                                  <div className={`w-full h-1 rounded ${intensity > 0.7 ? 'bg-red-600' :
+                                    intensity > 0.4 ? 'bg-red-500' : 'bg-red-400'
                                     }`} />
                                 </div>
                               )}
@@ -856,14 +904,14 @@ export function StatsDisplay() {
                                   {day.tasks.slice(0, 2).map((task, taskIndex) => (
                                     <div
                                       key={task.id}
-                                      className="text-xs p-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 truncate"
+                                      className="text-xs p-1 rounded bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 truncate"
                                       title={task.title}
                                     >
                                       {task.title.length > 12 ? `${task.title.substring(0, 12)}...` : task.title}
                                     </div>
                                   ))}
                                   {day.tasks.length > 2 && (
-                                    <div className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                                    <div className="text-xs text-orange-600 dark:text-orange-400 font-medium">
                                       +{day.tasks.length - 2} more
                                     </div>
                                   )}
@@ -879,11 +927,11 @@ export function StatsDisplay() {
                     <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 rounded bg-green-400" />
+                          <div className="w-3 h-3 rounded bg-red-400" />
                           <span>Sessions</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 rounded bg-blue-400" />
+                          <div className="w-3 h-3 rounded bg-orange-400" />
                           <span>Tasks Due</span>
                         </div>
                         <div className="flex items-center gap-1">
@@ -918,17 +966,17 @@ export function StatsDisplay() {
                   title="Total Focus Time"
                   value={formatTime(dashboardStats.pomodoro.totalFocusTime)}
                   icon={Clock}
-                  color="text-blue-600 dark:text-blue-400"
-                  bgColor="bg-blue-50 dark:bg-blue-900/20"
-                  borderColor="border-blue-200 dark:border-blue-800"
+                  color="text-orange-600 dark:text-orange-400"
+                  bgColor="bg-orange-50 dark:bg-orange-900/20"
+                  borderColor="border-orange-200 dark:border-orange-800"
                   description="Deep work time"
                 />
                 <StatCard
                   title="Tasks Completed"
                   value={dashboardStats.tasks.completedTasks}
                   icon={CheckCircle}
-                  color="text-green-600 dark:text-green-400"
-                  bgColor="bg-green-50 dark:bg-green-900/20"
+                  color="text-red-600 dark:text-red-400"
+                  bgColor="bg-red-50 dark:bg-red-900/20"
                   borderColor="border-green-200 dark:border-green-800"
                   description="Successfully finished"
                 />

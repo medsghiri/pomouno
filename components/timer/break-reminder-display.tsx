@@ -120,12 +120,12 @@ export function BreakReminderDisplay({ breakType, isVisible, sessionId, onClose,
     }
 
     return (
-        <Card className="bg-white/95 backdrop-blur-sm border-gray-200 dark:bg-gray-900/95 dark:border-gray-700 shadow-lg">
+        <Card className="shadow-lg bg-background/80">
             <div className="p-4 space-y-4">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <Coffee className="w-5 h-5 text-orange-500" />
-                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                        <h3 className="font-semibold">
                             {getBreakTypeTitle()}
                         </h3>
                     </div>
@@ -134,7 +134,7 @@ export function BreakReminderDisplay({ breakType, isVisible, sessionId, onClose,
                             variant="ghost"
                             size="sm"
                             onClick={onClose}
-                            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                            className=""
                         >
                             <X className="w-4 h-4" />
                         </Button>
@@ -149,7 +149,7 @@ export function BreakReminderDisplay({ breakType, isVisible, sessionId, onClose,
                                 "flex items-start gap-3 p-3 rounded-lg border transition-all duration-200",
                                 completedReminders.has(reminder.id)
                                     ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700/50"
-                                    : "bg-gray-50 border-gray-200 hover:bg-gray-100 dark:bg-gray-800/50 dark:border-gray-700 dark:hover:bg-gray-700/50"
+                                    : "bg-gray-50 border-gray-200/20 hover:bg-gray-100 dark:bg-background/50 dark:border-accent/50 dark:hover:bg-gray-700/50"
                             )}
                         >
                             <div className="flex-shrink-0 mt-0.5">

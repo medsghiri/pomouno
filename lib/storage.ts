@@ -656,6 +656,8 @@ export class LocalStorage {
     return this.getDailyStats(today);
   }
 
+
+
   static saveTodaysStats(stats: TodaysStats): void {
     this.saveDailyStats(stats);
   }

@@ -287,7 +287,7 @@ const DEFAULT_SETTINGS: Settings = {
   // New playlist defaults
   usePlaylistForLofi: true,
   // Daily goal default
-  dailySessionGoal: 4,
+  dailySessionGoal: 8,
 };
 
 function safeJsonParse<T>(jsonString: string | null, defaultValue: T): T {

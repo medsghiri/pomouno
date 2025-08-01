@@ -36,7 +36,7 @@ const DEFAULT_SETTINGS: Settings = {
   breakAudio: 'none',
   notificationAudio: 'notification-ping',
   usePlaylistForLofi: true,
-  dailySessionGoal: 4,
+  dailySessionGoal: 8,
 };
 
 interface SettingsPanelProps {
@@ -388,11 +388,16 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                 min="1"
                 max="20"
                 value={settings.dailySessionGoal}
-                onChange={(e) => handleSettingChange('dailySessionGoal', parseInt(e.target.value) || 4)}
+                onChange={(e) => handleSettingChange('dailySessionGoal', parseInt(e.target.value) || 8)}
                 className="w-full bg-white/20 dark:bg-gray-700/50 text-gray-900 dark:text-white backdrop-blur-sm"
               />
               <p className="text-xs text-gray-600 dark:text-gray-400">
-                Set your daily session target for progress tracking
+                Set your daily session target for progress tracking. {settings.dailySessionGoal} sessions = {(() => {
+                  const totalMinutes = settings.dailySessionGoal * settings.workDuration;
+                  const hours = Math.floor(totalMinutes / 60);
+                  const minutes = totalMinutes % 60;
+                  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+                })()} of focused work.
               </p>
             </div>
           </Card>

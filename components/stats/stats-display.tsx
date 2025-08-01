@@ -146,12 +146,12 @@ export function StatsDisplay() {
     setSelectedDate(newDate);
   };
 
-  const getMotivationalMessage = (sessions: number) => {
+  const getMotivationalMessage = (sessions: number, dailyGoal: number) => {
     if (sessions === 0) return "Ready to start your first session?";
-    if (sessions >= 8) return "Outstanding focus today! 🏆";
-    if (sessions >= 6) return "Excellent productivity! 🎉";
-    if (sessions >= 4) return "Great momentum! Keep it up! 💪";
-    if (sessions >= 2) return "Good progress! You're on fire! 🔥";
+    if (sessions >= dailyGoal) return "🎯 Daily goal achieved! Outstanding work! 🏆";
+    if (sessions >= dailyGoal * 0.75) return "Almost there! You're doing great! 💪";
+    if (sessions >= dailyGoal * 0.5) return "Halfway to your goal! Keep it up! 🔥";
+    if (sessions >= dailyGoal * 0.25) return "Good progress! You're on fire! 🚀";
     return "Great start! Let's keep going! 🚀";
   };
 
@@ -385,32 +385,37 @@ export function StatsDisplay() {
               </div>
 
               {/* Progress Bar */}
-              {todayStats.sessions > 0 && (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
-                    <span>Session Progress</span>
-                    <span>{todayStats.sessions} sessions completed</span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div
-                      className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min((todayStats.sessions / (LocalStorage.getSettings().dailySessionGoal || 4)) * 100, 100)}%` }}
-                    ></div>
-                  </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Session Progress</span>
+                  <span>{todayStats.sessions} / {LocalStorage.getSettings().dailySessionGoal} sessions completed</span>
                 </div>
-              )}
-
-              {/* Motivational Section */}
-              <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                <div className="w-full bg-accent rounded-full h-2">
+                  <div
+                    className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min((todayStats.sessions / (LocalStorage.getSettings().dailySessionGoal || 4)) * 100, 100)}%` }}
+                  ></div>
+                </div>
                 <div className="text-center">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {getMotivationalMessage(todayStats.sessions)}
+                  <p className="text-sm font-medium text-foreground">
+                    {todayStats.sessions >= LocalStorage.getSettings().dailySessionGoal
+                      ? "🎯 Daily goal achieved! Outstanding work! 🏆"
+                      : todayStats.sessions === 0
+                        ? "Ready to start your first session?"
+                        : `${LocalStorage.getSettings().dailySessionGoal - todayStats.sessions} more sessions to reach your daily goal! 🚀`
+                    }
                   </p>
+                </div>
+              </div>
+
+              {/* Additional Stats */}
+              <div className="pt-4 border-t border-accent">
+                <div className="text-center">
                   {todayStats.sessions > 0 && (
-                    <div className="flex justify-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                    <div className="flex justify-center gap-4 text-xs text-muted-foreground">
                       <span>Average: {Math.round((todayStats.focusTime / Math.max(todayStats.sessions, 1)) * 10) / 10}m per session</span>
-                      {todayStats.sessions >= 4 && (
-                        <span>🎯 Excellent productivity!</span>
+                      {todayStats.sessions >= LocalStorage.getSettings().dailySessionGoal && (
+                        <span>🎯 Goal achieved!</span>
                       )}
                     </div>
                   )}

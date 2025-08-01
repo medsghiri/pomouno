@@ -33,6 +33,7 @@ export default function Home() {
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [showTasks, setShowTasks] = useState(false);
   const [showBreakReminders, setShowBreakReminders] = useState(false);
+  const [dailyGoal, setDailyGoal] = useState(8);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -52,6 +53,7 @@ export default function Home() {
     // Load theme settings
     const settings = LocalStorage.getSettings();
     setIsDarkMode(settings.darkMode);
+    setDailyGoal(settings.dailySessionGoal);
 
     // Apply theme to document
     document.documentElement.classList.toggle('dark', settings.darkMode);
@@ -62,6 +64,7 @@ export default function Home() {
     const handleSettingsUpdate = (event: CustomEvent) => {
       const settings = event.detail;
       setIsDarkMode(settings.darkMode);
+      setDailyGoal(settings.dailySessionGoal);
       document.documentElement.classList.toggle('dark', settings.darkMode);
       setHasUnsavedSettings(false);
     };
@@ -169,6 +172,14 @@ export default function Home() {
     LocalStorage.saveTodaysStats(updatedStats);
     setSessionsCompleted(updatedStats.sessions);
 
+    // Check if daily goal is achieved
+    if (updatedStats.sessions === dailyGoal) {
+      toast({
+        title: "🎯 Daily goal achieved!",
+        description: `Congratulations! You've completed ${dailyGoal} sessions today. Outstanding work!`,
+      });
+    }
+
     if (user) {
       FirebaseService.saveSessions(user, [session]).catch(console.error);
       FirebaseService.saveStats(user, updatedStats).catch(console.error);
@@ -183,7 +194,7 @@ export default function Home() {
         setShowAuthPrompt(true);
       }
     }
-  }, [user]);
+  }, [user, toast]);
 
   const handleStartFocusSession = useCallback((taskId: string) => {
     setSelectedTaskId(taskId);
@@ -334,6 +345,37 @@ export default function Home() {
                 selectedTaskId={selectedTaskId}
                 onTaskSessionComplete={handleTaskSessionComplete}
               />
+
+              {/* Daily Goal Progress */}
+              <div className="mt-6 bg-background/80 backdrop-blur-sm border border-accent rounded-xl p-4 shadow-lg">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <Target className="w-4 h-4 text-red-600 dark:text-red-400" />
+                    Daily Goal Progress
+                  </h3>
+                  <span className="text-xs text-muted-foreground">
+                    {sessionsCompleted} / {dailyGoal} sessions
+                  </span>
+                </div>
+
+                <div className="w-full bg-accent rounded-full h-2 mb-2">
+                  <div
+                    className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min((sessionsCompleted / dailyGoal) * 100, 100)}%`
+                    }}
+                  ></div>
+                </div>
+
+                <p className="text-xs text-center text-muted-foreground">
+                  {sessionsCompleted >= dailyGoal
+                    ? "🎯 Daily goal achieved! Outstanding work! 🏆"
+                    : sessionsCompleted === 0
+                      ? "Ready to start your first session?"
+                      : `${dailyGoal - sessionsCompleted} more sessions to reach your daily goal! 🚀`
+                  }
+                </p>
+              </div>
             </div>
           </div>
         </div>

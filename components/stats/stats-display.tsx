@@ -687,13 +687,11 @@ export function StatsDisplay() {
                 <Calendar className="w-5 h-5 text-green-600 dark:text-green-400" />
                 Monthly Progress
               </h2>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 text-sm">
                 <Button variant="outline" size="sm" onClick={() => navigateMonth('prev')}>
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
-                <Badge variant="secondary" className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                  {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                </Badge>
+                {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                 <Button variant="outline" size="sm" onClick={() => navigateMonth('next')}>
                   <ChevronRight className="w-4 h-4" />
                 </Button>

@@ -124,7 +124,7 @@ export function SoundControlPopover({ className }: SoundControlPopoverProps) {
                     <VolumeIcon className="w-4 h-4" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-64 bg-white/95 dark:bg-gray-800/95 backdrop-blur-md" align="center">
+            <PopoverContent className="w-64 backdrop-blur-md" align="center">
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">

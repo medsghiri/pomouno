@@ -213,11 +213,19 @@ export function BreakReminderManager() {
             description: description.trim(),
             breakType,
             category,
-            customCategory: category === 'custom' && selectedCustomCategory ? selectedCustomCategory : undefined,
             enabled,
             frequency,
-            customFrequency: frequency === 'custom' ? customFrequency : undefined,
         };
+
+        // Only add customCategory if it has a value
+        if (category === 'custom' && selectedCustomCategory) {
+            reminderData.customCategory = selectedCustomCategory;
+        }
+
+        // Only add customFrequency if frequency is custom
+        if (frequency === 'custom') {
+            reminderData.customFrequency = customFrequency;
+        }
 
         if (editingId) {
             // Update existing reminder
@@ -364,8 +372,8 @@ export function BreakReminderManager() {
         const categoryInfo = TaskUtils.getCategoryDisplayInfo(reminder);
         const color = categoryInfo.color;
 
-        // Convert hex color to appropriate Tailwind classes or inline styles
-        return `bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400`;
+        // Use semantic color classes that adapt to theme
+        return `bg-accent text-accent-foreground`;
     };
 
     const getFrequencyDisplayText = (reminder: BreakReminder) => {
@@ -403,7 +411,7 @@ export function BreakReminderManager() {
         <>
             {/* Sheet Header */}
             <div className="p-4 pr-16 border-b flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Break Reminders</h2>
+                <h2 className="text-xl font-semibold text-foreground">Break Reminders</h2>
                 <Button
                     onClick={() => {
                         resetForm();
@@ -418,13 +426,13 @@ export function BreakReminderManager() {
 
             <div className="p-4 space-y-4">{/* Content area */}
 
-                <div className="text-sm text-gray-600 dark:text-gray-400">
+                <div className="text-sm text-muted-foreground">
                     Create custom reminders to help maintain healthy habits during your breaks.
                 </div>
 
                 <div className="space-y-3 flex-1 overflow-y-auto pr-2">
                     {reminders.length === 0 ? (
-                        <div className="text-center py-8 text-gray-600 dark:text-gray-400">
+                        <div className="text-center py-8 text-muted-foreground">
                             <Coffee className="w-12 h-12 mx-auto mb-4 opacity-50" />
                             <p>No break reminders yet. Add some to help maintain healthy habits!</p>
                         </div>
@@ -433,42 +441,89 @@ export function BreakReminderManager() {
                             <Card
                                 key={reminder.id}
                                 className={cn(
-                                    "p-3 sm:p-4 transition-all duration-200",
+                                    "p-3 sm:p-4 rounded-lg border transition-all duration-200 space-y-1",
                                     reminder.enabled
-                                        ? "bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700"
-                                        : "bg-gray-50 border-gray-200 opacity-60 dark:bg-gray-800/50 dark:border-gray-700"
+                                        ? "bg-background border-accent hover:bg-accent/10"
+                                        : "bg-background border-accent hover:bg-accent/10 opacity-60"
                                 )}
                             >
-                                <div className="space-y-3">
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex items-start gap-3 flex-1 min-w-0">
-                                            <div className="mt-1 flex-shrink-0">
-                                                {getCategoryIcon(reminder)}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                                    <h3 className="font-medium text-gray-900 dark:text-gray-100 text-sm sm:text-base">
-                                                        {reminder.title}
-                                                    </h3>
-                                                    <Badge
-                                                        variant="secondary"
-                                                        className={cn("text-xs flex-shrink-0", getCategoryColor(reminder))}
-                                                    >
-                                                        {TaskUtils.getCategoryDisplayInfo(reminder).name}
-                                                    </Badge>
-                                                </div>
+                                <div className="flex gap-3 items-center">
+                                    {/* Icon and title */}
+                                    <div className="flex-shrink-0 w-5 mt-0.5">
+                                        {getCategoryIcon(reminder)}
+                                    </div>
+                                    <div>
+                                        <span className="cursor-pointer transition-colors block text-sm font-medium text-foreground hover:text-muted-foreground">
+                                            {reminder.title}
+                                        </span>
+                                    </div>
+                                </div>
 
-                                                {reminder.description && (
-                                                    <div className="w-full">
-                                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 break-words">
-                                                            {reminder.description}
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
+                                {/* Content area - aligned with icon */}
+                                <div className="flex-1 min-w-0 space-y-2">
+                                    {/* Description */}
+                                    {reminder.description && (
+                                        <div className="w-full">
+                                            <p className="text-sm text-muted-foreground break-words">
+                                                {reminder.description}
+                                            </p>
                                         </div>
+                                    )}
 
-                                        <div className="flex items-center gap-1 sm:gap-2 ml-2 flex-shrink-0">
+                                    {/* Badges */}
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <Badge
+                                            variant="secondary"
+                                            className="text-xs bg-accent text-accent-foreground"
+                                        >
+                                            {TaskUtils.getCategoryDisplayInfo(reminder).name}
+                                        </Badge>
+
+                                        <Badge
+                                            variant="secondary"
+                                            className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
+                                        >
+                                            {reminder.breakType === 'both' ? 'All breaks' :
+                                                reminder.breakType === 'short' ? 'Short breaks' : 'Long breaks'}
+                                        </Badge>
+
+                                        <Badge
+                                            variant="secondary"
+                                            className="text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400"
+                                        >
+                                            {getFrequencyDisplayText(reminder)}
+                                        </Badge>
+                                    </div>
+
+                                    {/* Status and Created date */}
+                                    <div className='w-full flex justify-between items-center'>
+                                        <div>
+                                            <Badge
+                                                variant="secondary"
+                                                className={cn(
+                                                    "text-xs",
+                                                    reminder.enabled
+                                                        ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
+                                                        : "bg-accent text-accent-foreground"
+                                                )}
+                                            >
+                                                {reminder.enabled ? 'Enabled' : 'Disabled'}
+                                            </Badge>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {getCompletionStatusText(reminder)}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className='flex items-center justify-between w-full mt-2'>
+                                    {/* Left side - empty for now */}
+                                    <div className='flex justify-start items-start'>
+                                    </div>
+
+                                    {/* Right side - action buttons */}
+                                    <div className='flex float-right gap-1'>
+                                        <div className="flex items-center gap-1">
                                             <Switch
                                                 checked={reminder.enabled}
                                                 onCheckedChange={() => toggleReminder(reminder.id)}
@@ -478,34 +533,19 @@ export function BreakReminderManager() {
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => handleEdit(reminder)}
-                                                className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:bg-gray-100 dark:focus-visible:bg-gray-700"
+                                                className="h-8 w-8 p-0 hover:bg-red-100 bg-accent dark:hover:bg-accent cursor-pointer"
                                             >
-                                                <Edit3 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                                <Edit3 className="w-3 h-3" />
                                             </Button>
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => handleDelete(reminder.id)}
-                                                className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20 focus-visible:bg-red-100 focus-visible:text-red-600 dark:focus-visible:bg-red-900/20"
+                                                className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20 cursor-pointer"
                                             >
-                                                <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                                <Trash2 className="w-3 h-3" />
                                             </Button>
                                         </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-500 flex-wrap w-full">
-                                        <span className="flex-shrink-0">
-                                            {reminder.breakType === 'both' ? 'All breaks' :
-                                                reminder.breakType === 'short' ? 'Short breaks' : 'Long breaks'}
-                                        </span>
-                                        <span className="hidden sm:inline">•</span>
-                                        <span className="flex-shrink-0">
-                                            {getFrequencyDisplayText(reminder)}
-                                        </span>
-                                        <span className="hidden sm:inline">•</span>
-                                        <span className="flex-shrink-0">
-                                            {getCompletionStatusText(reminder)}
-                                        </span>
                                     </div>
                                 </div>
                             </Card>
@@ -631,7 +671,7 @@ export function BreakReminderManager() {
                         </div>
 
                         {frequency === 'custom' && (
-                            <div className="space-y-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                            <div className="space-y-3 p-3 bg-accent rounded-lg">
                                 <Label>Custom Frequency</Label>
                                 <div className="flex gap-2">
                                     <div className="flex-1">
@@ -708,7 +748,7 @@ export function BreakReminderManager() {
 
                     <div className="space-y-4">
                         {/* Create New Category */}
-                        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-3">
+                        <div className="p-4 bg-accent rounded-lg space-y-3">
                             <h4 className="font-medium text-sm">Create New Category</h4>
 
                             <div className="grid grid-cols-3 gap-2">
@@ -769,7 +809,7 @@ export function BreakReminderManager() {
                                 {categories.filter(cat => !['hydration', 'movement', 'rest'].includes(cat.name.toLowerCase())).map((category) => (
                                     <div
                                         key={category.id}
-                                        className="flex items-center justify-between p-2 bg-white dark:bg-gray-700 border rounded-lg"
+                                        className="flex items-center justify-between p-2 bg-background border-accent border rounded-lg"
                                     >
                                         <div className="flex items-center gap-2">
                                             <span className="text-lg">{category.icon}</span>
@@ -790,7 +830,7 @@ export function BreakReminderManager() {
                                     </div>
                                 ))}
                                 {categories.filter(cat => !['hydration', 'movement', 'rest'].includes(cat.name.toLowerCase())).length === 0 && (
-                                    <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
+                                    <div className="text-center py-4 text-muted-foreground text-sm">
                                         No custom categories yet
                                     </div>
                                 )}

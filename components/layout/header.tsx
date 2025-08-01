@@ -91,7 +91,7 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick }: HeaderPro
                     className="text-foreground hover:text-foreground hover:bg-accent transition-colors px-2 sm:px-3"
                   >
                     <BarChart3 className="w-4 h-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Report</span>
+                    <span className="hidden sm:inline">Stats</span>
                   </Button>
 
                   {/* Settings Button */}

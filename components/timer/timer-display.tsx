@@ -360,14 +360,14 @@ export function TimerDisplay({
               <Button
                 variant="outline"
                 size="sm"
-                className="bg-white/10 hover:bg-white/20 text-gray-700 dark:text-gray-300 transition-all duration-200 backdrop-blur-sm dark:bg-gray-800/30 dark:hover:bg-gray-700/40"
+                className=""
               >
                 <Music className="w-4 h-4 mr-2" />
                 {getCurrentAudioName()}
                 <ChevronDown className="w-4 h-4 ml-2" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="center" className="w-56 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
+            <DropdownMenuContent align="center" className="w-56 backdrop-blur-sm">
               <DropdownMenuItem
                 onClick={() => handleAudioChange('none')}
                 className="flex items-center justify-between text-gray-900 dark:text-white"

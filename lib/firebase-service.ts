@@ -424,8 +424,12 @@ export class FirebaseService {
       // Add new reminders in batch
       reminders.forEach(reminder => {
         const docRef = doc(remindersRef);
+        // Filter out undefined values to prevent Firebase errors
+        const cleanReminder = Object.fromEntries(
+          Object.entries(reminder).filter(([_, value]) => value !== undefined)
+        );
         batch.set(docRef, {
-          ...reminder,
+          ...cleanReminder,
           userId: user.uid,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()

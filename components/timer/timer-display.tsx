@@ -74,10 +74,12 @@ export function TimerDisplay({
 
     window.addEventListener('sessionCompleted', handleStatsUpdate);
     window.addEventListener('taskCompleted', handleStatsUpdate);
+    window.addEventListener('firebaseDataSynced', handleStatsUpdate);
 
     return () => {
       window.removeEventListener('sessionCompleted', handleStatsUpdate);
       window.removeEventListener('taskCompleted', handleStatsUpdate);
+      window.removeEventListener('firebaseDataSynced', handleStatsUpdate);
     };
   }, []);
 
@@ -260,9 +262,9 @@ export function TimerDisplay({
 
   return (
     <div className="text-center space-y-6 sm:space-y-8">
-      {/* Session Info */}
+      {/* Daily Progress Info */}
       <div className="text-gray-700 dark:text-gray-300 text-sm font-medium tracking-wide px-4">
-        {getSessionTypeLabel(sessionType).toUpperCase()} • {currentSession} / {totalSessions}
+        {homepageStats.focusLabel}
       </div>
 
       {/* Circular Timer */}

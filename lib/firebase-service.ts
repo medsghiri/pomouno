@@ -19,26 +19,36 @@ import { User } from 'firebase/auth';
 import { db } from './firebase';
 import { PomodoroSession, Task, Settings, TodaysStats } from './storage';
 
+// Helper function to remove undefined values from objects
+function removeUndefinedFields(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(removeUndefinedFields);
+
+  const cleaned: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      cleaned[key] = removeUndefinedFields(value);
+    }
+  }
+  return cleaned;
+}
+
 export class FirebaseService {
   // Test function to verify Firebase permissions
   static async testFirebaseConnection(user: User) {
     try {
-      console.log('Testing Firebase connection for user:', user.uid);
-
       // Test 1: Try to write to users collection
       const userRef = doc(db, 'users', user.uid);
       await setDoc(userRef, {
         testField: 'test',
         timestamp: serverTimestamp()
       }, { merge: true });
-      console.log('✅ User profile write test passed');
 
       // Test 2: Try to read from users collection
       const userDoc = await getDoc(userRef);
-      if (userDoc.exists()) {
-        console.log('✅ User profile read test passed');
-      } else {
-        console.log('❌ User profile read test failed - document does not exist');
+      if (!userDoc.exists()) {
+        throw new Error('User profile read test failed - document does not exist');
       }
 
       return true;
@@ -51,7 +61,7 @@ export class FirebaseService {
   // User profile management with proper indexing
   static async saveUserProfile(user: User) {
     const userRef = doc(db, 'users', user.uid);
-    await setDoc(userRef, {
+    const cleanProfile = removeUndefinedFields({
       email: user.email,
       displayName: user.displayName,
       photoURL: user.photoURL,
@@ -60,7 +70,8 @@ export class FirebaseService {
       // Add metadata for better querying
       emailDomain: user.email?.split('@')[1] || null,
       isActive: true
-    }, { merge: true });
+    });
+    await setDoc(userRef, cleanProfile, { merge: true });
   }
 
   // Optimized sessions management with batch writes
@@ -72,7 +83,7 @@ export class FirebaseService {
 
     sessions.forEach(session => {
       const docRef = doc(sessionsRef);
-      batch.set(docRef, {
+      const cleanSession = removeUndefinedFields({
         ...session,
         userId: user.uid,
         // Add proper timestamps for better querying
@@ -84,6 +95,7 @@ export class FirebaseService {
         month: new Date(session.timestamp).getMonth() + 1,
         year: new Date(session.timestamp).getFullYear()
       });
+      batch.set(docRef, cleanSession);
     });
 
     await batch.commit();
@@ -102,10 +114,19 @@ export class FirebaseService {
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
       const { userId, createdAt, dateString, month, year, ...sessionData } = data;
+
+      // Handle both Firestore Timestamp objects and regular numbers
+      let timestamp = data.timestamp;
+      if (timestamp && typeof timestamp.toMillis === 'function') {
+        timestamp = timestamp.toMillis();
+      } else if (typeof timestamp !== 'number') {
+        timestamp = Date.now(); // Fallback for invalid timestamps
+      }
+
       return {
         id: doc.id,
         ...sessionData,
-        timestamp: data.timestamp?.toMillis() || data.timestamp
+        timestamp
       } as PomodoroSession;
     });
   }
@@ -126,10 +147,19 @@ export class FirebaseService {
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
       const { userId, createdAt, dateString, month, year, ...sessionData } = data;
+
+      // Handle both Firestore Timestamp objects and regular numbers
+      let timestamp = data.timestamp;
+      if (timestamp && typeof timestamp.toMillis === 'function') {
+        timestamp = timestamp.toMillis();
+      } else if (typeof timestamp !== 'number') {
+        timestamp = Date.now(); // Fallback for invalid timestamps
+      }
+
       return {
         id: doc.id,
         ...sessionData,
-        timestamp: data.timestamp?.toMillis() || data.timestamp
+        timestamp
       } as PomodoroSession;
     });
   }
@@ -154,16 +184,34 @@ export class FirebaseService {
       // Add new tasks in batch
       tasks.forEach(task => {
         const docRef = doc(tasksRef);
-        batch.set(docRef, {
+
+        // Validate and fix createdAt timestamp
+        let validCreatedAt = task.createdAt;
+        if (!validCreatedAt || isNaN(validCreatedAt) || validCreatedAt <= 0) {
+          validCreatedAt = Date.now();
+        }
+
+        let createdDateString;
+        try {
+          createdDateString = new Date(validCreatedAt).toISOString().split('T')[0];
+        } catch (error) {
+          createdDateString = new Date().toISOString().split('T')[0];
+        }
+
+        // Clean the task data to remove undefined fields
+        const cleanTask = removeUndefinedFields({
           ...task,
+          createdAt: validCreatedAt, // Use the validated timestamp
           userId: user.uid,
-          createdAt: serverTimestamp(),
+          firebaseCreatedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           // Add status for better querying
           status: task.completed ? 'completed' : 'active',
           // Add creation date string
-          createdDateString: new Date(task.createdAt).toISOString().split('T')[0]
+          createdDateString
         });
+
+        batch.set(docRef, cleanTask);
       });
 
       await batch.commit();
@@ -195,21 +243,23 @@ export class FirebaseService {
   // Update single task efficiently
   static async updateTask(user: User, taskId: string, updates: Partial<Task>) {
     const taskRef = doc(db, 'tasks', taskId);
-    await updateDoc(taskRef, {
+    const cleanUpdates = removeUndefinedFields({
       ...updates,
       updatedAt: serverTimestamp(),
       status: updates.completed ? 'completed' : 'active'
     });
+    await updateDoc(taskRef, cleanUpdates);
   }
 
   // Settings management with versioning
   static async saveSettings(user: User, settings: Settings) {
     const settingsRef = doc(db, 'users', user.uid, 'preferences', 'settings');
-    await setDoc(settingsRef, {
+    const cleanSettings = removeUndefinedFields({
       ...settings,
       updatedAt: serverTimestamp(),
       version: 1 // For future migrations
     });
+    await setDoc(settingsRef, cleanSettings);
   }
 
   static async getSettings(user: User): Promise<Settings | null> {
@@ -226,7 +276,7 @@ export class FirebaseService {
   // Optimized stats management with proper indexing
   static async saveStats(user: User, stats: TodaysStats) {
     const statsRef = doc(db, 'stats', `${user.uid}_${stats.date}`);
-    await setDoc(statsRef, {
+    const cleanStats = removeUndefinedFields({
       ...stats,
       userId: user.uid,
       updatedAt: serverTimestamp(),
@@ -237,6 +287,7 @@ export class FirebaseService {
       month: new Date(stats.date).getMonth() + 1,
       year: new Date(stats.date).getFullYear()
     });
+    await setDoc(statsRef, cleanStats);
   }
 
   static async getWeeklyStats(user: User): Promise<TodaysStats[]> {
@@ -288,21 +339,15 @@ export class FirebaseService {
   // Improved migration with better error handling and data validation
   static async migrateUserData(user: User, localData: any) {
     try {
-      console.log('🚀 Starting migration for user:', user.uid);
-
       // Wait a bit to ensure auth token is fully ready
-      console.log('⏳ Waiting for auth token to be ready...');
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Test Firebase connection first
-      console.log('🔍 Testing Firebase connection...');
       await this.testFirebaseConnection(user);
 
       // Save user profile first
-      console.log('👤 Saving user profile...');
       try {
         await this.saveUserProfile(user);
-        console.log('✅ User profile saved successfully');
       } catch (profileError) {
         console.error('❌ User profile save failed:', profileError);
         throw profileError;
@@ -310,15 +355,12 @@ export class FirebaseService {
 
       // Validate and migrate sessions
       if (localData.sessions && Array.isArray(localData.sessions) && localData.sessions.length > 0) {
-        console.log('📊 Migrating sessions...');
         try {
           const validSessions = localData.sessions.filter((session: any) =>
             session.id && session.type && typeof session.duration === 'number' && session.timestamp
           );
           if (validSessions.length > 0) {
-            console.log('📊 Valid sessions to migrate:', validSessions.length);
             await this.saveSessions(user, validSessions);
-            console.log(`✅ Migrated ${validSessions.length} sessions`);
           }
         } catch (sessionsError) {
           console.error('❌ Sessions migration failed:', sessionsError);
@@ -328,15 +370,12 @@ export class FirebaseService {
 
       // Validate and migrate tasks
       if (localData.tasks && Array.isArray(localData.tasks) && localData.tasks.length > 0) {
-        console.log('📝 Migrating tasks...');
         try {
           const validTasks = localData.tasks.filter((task: any) =>
             task.id && task.title && typeof task.completed === 'boolean'
           );
           if (validTasks.length > 0) {
-            console.log('📝 Valid tasks to migrate:', validTasks.length);
             await this.saveTasks(user, validTasks);
-            console.log(`✅ Migrated ${validTasks.length} tasks`);
           }
         } catch (tasksError) {
           console.error('❌ Tasks migration failed:', tasksError);
@@ -346,57 +385,44 @@ export class FirebaseService {
 
       // Validate and migrate settings
       if (localData.settings && typeof localData.settings === 'object') {
-        console.log('⚙️ Migrating settings...');
         await this.saveSettings(user, localData.settings);
-        console.log('✅ Settings migrated');
       }
 
       // Validate and migrate stats
       if (localData.stats && typeof localData.stats === 'object' && localData.stats.date) {
-        console.log('📈 Migrating stats...');
         await this.saveStats(user, localData.stats);
-        console.log('✅ Stats migrated');
       }
 
       // Validate and migrate break reminders
       if (localData.breakReminders && Array.isArray(localData.breakReminders) && localData.breakReminders.length > 0) {
-        console.log('☕ Migrating break reminders...');
         try {
           const validReminders = localData.breakReminders.filter((reminder: any) =>
             reminder.id && reminder.title && typeof reminder.enabled === 'boolean'
           );
           if (validReminders.length > 0) {
-            console.log('☕ Valid break reminders to migrate:', validReminders.length);
             await this.saveBreakReminders(user, validReminders);
-            console.log(`✅ Migrated ${validReminders.length} break reminders`);
           }
         } catch (remindersError) {
           console.error('❌ Break reminders migration failed:', remindersError);
           // Don't throw - continue with other data
-          console.log('⚠️ Continuing migration without break reminders');
         }
       }
 
       // Validate and migrate break reminder completions
       if (localData.breakReminderCompletions && Array.isArray(localData.breakReminderCompletions) && localData.breakReminderCompletions.length > 0) {
-        console.log('☕ Migrating break reminder completions...');
         try {
           const validCompletions = localData.breakReminderCompletions.filter((completion: any) =>
             completion.id && completion.reminderId && completion.completedAt
           );
           if (validCompletions.length > 0) {
-            console.log('☕ Valid break reminder completions to migrate:', validCompletions.length);
             await this.saveBreakReminderCompletions(user, validCompletions);
-            console.log(`✅ Migrated ${validCompletions.length} break reminder completions`);
           }
         } catch (completionsError) {
           console.error('❌ Break reminder completions migration failed:', completionsError);
           // Don't throw - continue with other data
-          console.log('⚠️ Continuing migration without break reminder completions');
         }
       }
 
-      console.log('🎉 Migration completed successfully!');
       return true;
     } catch (error) {
       console.error('❌ Migration error:', error);
@@ -424,16 +450,14 @@ export class FirebaseService {
       // Add new reminders in batch
       reminders.forEach(reminder => {
         const docRef = doc(remindersRef);
-        // Filter out undefined values to prevent Firebase errors
-        const cleanReminder = Object.fromEntries(
-          Object.entries(reminder).filter(([_, value]) => value !== undefined)
-        );
-        batch.set(docRef, {
-          ...cleanReminder,
+        // Clean the reminder data to remove undefined fields
+        const cleanReminder = removeUndefinedFields({
+          ...reminder,
           userId: user.uid,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
+        batch.set(docRef, cleanReminder);
       });
 
       await batch.commit();
@@ -471,7 +495,7 @@ export class FirebaseService {
 
     completions.forEach(completion => {
       const docRef = doc(completionsRef);
-      batch.set(docRef, {
+      const cleanCompletion = removeUndefinedFields({
         ...completion,
         userId: user.uid,
         createdAt: serverTimestamp(),
@@ -479,6 +503,7 @@ export class FirebaseService {
         // Add date string for easier daily queries
         dateString: new Date(completion.completedAt).toISOString().split('T')[0]
       });
+      batch.set(docRef, cleanCompletion);
     });
 
     await batch.commit();
@@ -539,5 +564,161 @@ export class FirebaseService {
     }
 
     return oldSessions.docs.length;
+  }
+
+  // Account Management Methods
+
+  // Export all user data
+  static async exportUserData(user: User) {
+    try {
+      const [
+        sessions,
+        tasks,
+        settings,
+        weeklyStats,
+        monthlyStats,
+        breakReminders,
+        breakReminderCompletions,
+        userProfile
+      ] = await Promise.all([
+        this.getRecentSessions(user, 1000), // Get more sessions for export
+        this.getTasks(user),
+        this.getSettings(user),
+        this.getWeeklyStats(user),
+        this.getMonthlyStats(user, new Date().getFullYear(), new Date().getMonth() + 1),
+        this.getBreakReminders(user),
+        this.getBreakReminderCompletions(user),
+        this.getUserProfile(user)
+      ]);
+
+      return {
+        exportDate: new Date().toISOString(),
+        user: {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          profile: userProfile
+        },
+        data: {
+          sessions,
+          tasks,
+          settings,
+          weeklyStats,
+          monthlyStats,
+          breakReminders,
+          breakReminderCompletions
+        },
+        summary: {
+          totalSessions: sessions.length,
+          totalTasks: tasks.length,
+          totalBreakReminders: breakReminders.length,
+          totalBreakReminderCompletions: breakReminderCompletions.length
+        }
+      };
+    } catch (error) {
+      console.error('Error exporting user data:', error);
+      throw error;
+    }
+  }
+
+  // Get user profile
+  static async getUserProfile(user: User) {
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const docSnap = await getDoc(userRef);
+      return docSnap.exists() ? docSnap.data() : null;
+    } catch (error) {
+      console.error('Error getting user profile:', error);
+      return null;
+    }
+  }
+
+  // Reset all user progress (keep account, delete data)
+  static async resetUserProgress(user: User) {
+    const batch = writeBatch(db);
+
+    try {
+      // Delete all sessions
+      const sessionsRef = collection(db, 'sessions');
+      const sessionsQuery = query(sessionsRef, where('userId', '==', user.uid));
+      const sessionsSnapshot = await getDocs(sessionsQuery);
+      sessionsSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      // Delete all tasks
+      const tasksRef = collection(db, 'tasks');
+      const tasksQuery = query(tasksRef, where('userId', '==', user.uid));
+      const tasksSnapshot = await getDocs(tasksQuery);
+      tasksSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      // Delete all stats
+      const statsRef = collection(db, 'stats');
+      const statsQuery = query(statsRef, where('userId', '==', user.uid));
+      const statsSnapshot = await getDocs(statsQuery);
+      statsSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      // Delete all break reminders
+      const breakRemindersRef = collection(db, 'breakReminders');
+      const breakRemindersQuery = query(breakRemindersRef, where('userId', '==', user.uid));
+      const breakRemindersSnapshot = await getDocs(breakRemindersQuery);
+      breakRemindersSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      // Delete all break reminder completions
+      const breakCompletionsRef = collection(db, 'breakReminderCompletions');
+      const breakCompletionsQuery = query(breakCompletionsRef, where('userId', '==', user.uid));
+      const breakCompletionsSnapshot = await getDocs(breakCompletionsQuery);
+      breakCompletionsSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      // Reset settings to defaults
+      const settingsRef = doc(db, 'users', user.uid, 'preferences', 'settings');
+      batch.delete(settingsRef);
+
+      // Commit all deletions
+      await batch.commit();
+
+      console.log('User progress reset successfully');
+    } catch (error) {
+      console.error('Error resetting user progress:', error);
+      throw error;
+    }
+  }
+
+  // Delete all user data (for account deletion)
+  static async deleteUserData(user: User) {
+    try {
+      // First reset all progress
+      await this.resetUserProgress(user);
+
+      // Delete user profile
+      const userRef = doc(db, 'users', user.uid);
+      await deleteDoc(userRef);
+
+      // Delete user preferences collection
+      const preferencesRef = collection(db, 'users', user.uid, 'preferences');
+      const preferencesSnapshot = await getDocs(preferencesRef);
+      const batch = writeBatch(db);
+
+      preferencesSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      if (preferencesSnapshot.docs.length > 0) {
+        await batch.commit();
+      }
+
+      console.log('User data deleted successfully');
+    } catch (error) {
+      console.error('Error deleting user data:', error);
+      throw error;
+    }
   }
 }

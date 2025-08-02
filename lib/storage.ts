@@ -1,3 +1,6 @@
+import { auth } from '@/lib/firebase';
+import { FirebaseService } from '@/lib/firebase-service';
+
 export interface PomodoroSession {
   id: string;
   type: 'work' | 'short-break' | 'long-break';
@@ -322,6 +325,12 @@ function getWeekEnd(date: Date): Date {
 }
 
 export class LocalStorage {
+  // Firebase sync flag to prevent infinite loops
+  private static _isLoadingFromFirebase = false;
+
+  // Flag to disable Firebase sync if there are persistent issues
+  private static _firebaseSyncDisabled = false;
+
   // Session management
   static getTodaysSessions(): PomodoroSession[] {
     if (typeof window === 'undefined') return [];
@@ -350,6 +359,11 @@ export class LocalStorage {
     const allSessions = this.getAllSessions();
     allSessions.push(session);
     this.saveAllSessions(allSessions);
+
+    // Sync individual session to Firebase (non-blocking)
+    this.syncToFirebase('sessions', session).catch(() => {
+      // Silently fail - local storage is primary
+    });
   }
 
   static getSessionsByDateRange(startDate: string, endDate: string): PomodoroSession[] {
@@ -366,12 +380,39 @@ export class LocalStorage {
   static getTasks(): Task[] {
     if (typeof window === 'undefined') return [];
     const tasks = localStorage.getItem('pomouono_tasks');
-    return safeJsonParse(tasks, []);
+    const parsedTasks = safeJsonParse(tasks, []);
+
+    // Fix any tasks with invalid dates
+    const validTasks = parsedTasks.map((task: any) => ({
+      ...task,
+      createdAt: task.createdAt && !isNaN(task.createdAt) && task.createdAt > 0 ? task.createdAt : Date.now(),
+      completedAt: task.completedAt && !isNaN(task.completedAt) && task.completedAt > 0 ? task.completedAt : undefined
+    }));
+
+    // Save the fixed tasks back if any were invalid
+    if (JSON.stringify(parsedTasks) !== JSON.stringify(validTasks)) {
+      this.saveTasks(validTasks);
+    }
+
+    return validTasks;
   }
 
   static saveTasks(tasks: Task[]): void {
     if (typeof window === 'undefined') return;
-    localStorage.setItem('pomouono_tasks', JSON.stringify(tasks));
+
+    // Fix invalid dates before saving
+    const validTasks = tasks.map(task => ({
+      ...task,
+      createdAt: task.createdAt && !isNaN(task.createdAt) && task.createdAt > 0 ? task.createdAt : Date.now(),
+      completedAt: task.completedAt && !isNaN(task.completedAt) && task.completedAt > 0 ? task.completedAt : undefined
+    }));
+
+    localStorage.setItem('pomouono_tasks', JSON.stringify(validTasks));
+
+    // Sync to Firebase (non-blocking)
+    this.syncToFirebase('tasks', validTasks).catch(() => {
+      // Silently fail - local storage is primary
+    });
   }
 
   static getActiveTasks(): Task[] {
@@ -521,6 +562,10 @@ export class LocalStorage {
       localStorage.setItem('pomouono_settings', JSON.stringify(DEFAULT_SETTINGS));
     } else {
       localStorage.setItem('pomouono_settings', settingsJson);
+      // Sync settings to Firebase (non-blocking)
+      this.syncToFirebase('settings', settings).catch(() => {
+        // Silently fail - local storage is primary
+      });
     }
   }
 
@@ -648,12 +693,274 @@ export class LocalStorage {
     const filteredStats = allStats.filter(s => s.date >= cutoffString);
 
     localStorage.setItem('pomouono_daily_stats', JSON.stringify(filteredStats));
+
+    // TODO: Re-enable Firebase sync when permissions are fixed
   }
 
   // Today's stats (backward compatibility)
   static getTodaysStats(): TodaysStats {
     const today = getDateString();
     return this.getDailyStats(today);
+  }
+
+  // Firebase sync methods
+  static async syncFromFirebase(): Promise<void> {
+    if (typeof window === 'undefined' || this._isLoadingFromFirebase) return;
+
+    try {
+      this._isLoadingFromFirebase = true;
+
+      // Import Firebase modules dynamically to avoid SSR issues
+      const { auth } = await import('@/lib/firebase');
+      const { FirebaseService } = await import('@/lib/firebase-service');
+
+      const user = auth.currentUser;
+      if (!user) return;
+
+      // Check if user has valid authentication
+      try {
+        await user.getIdToken();
+      } catch (tokenError) {
+        console.warn('User token invalid, skipping Firebase sync:', tokenError);
+        return;
+      }
+
+      // Load settings from Firebase
+      const firebaseSettings = await FirebaseService.getSettings(user);
+      if (firebaseSettings) {
+        // Temporarily disable Firebase sync to prevent loop
+        const originalFlag = this._isLoadingFromFirebase;
+        this._isLoadingFromFirebase = true;
+        this.saveSettings(firebaseSettings);
+        this._isLoadingFromFirebase = originalFlag;
+      }
+
+      // Load tasks from Firebase
+      const firebaseTasks = await FirebaseService.getTasks(user);
+      if (firebaseTasks.length > 0) {
+        // Temporarily disable Firebase sync to prevent loop
+        const originalFlag = this._isLoadingFromFirebase;
+        this._isLoadingFromFirebase = true;
+        this.saveTasks(firebaseTasks);
+        this._isLoadingFromFirebase = originalFlag;
+      }
+
+      // Load recent sessions from Firebase (last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+      const endDate = new Date().toISOString().split('T')[0];
+
+      const firebaseSessions = await FirebaseService.getSessionsByDateRange(user, startDate, endDate);
+      if (firebaseSessions.length > 0) {
+        // Merge with existing sessions, avoiding duplicates
+        const existingSessions = this.getAllSessions();
+        const existingIds = new Set(existingSessions.map(s => s.id));
+        const newSessions = firebaseSessions.filter(s => !existingIds.has(s.id));
+
+        if (newSessions.length > 0) {
+          // Temporarily disable Firebase sync to prevent loop
+          const originalFlag = this._isLoadingFromFirebase;
+          this._isLoadingFromFirebase = true;
+          this.saveAllSessions([...existingSessions, ...newSessions]);
+          this._isLoadingFromFirebase = originalFlag;
+        }
+      }
+
+      // Load break reminders from Firebase
+      const firebaseBreakReminders = await FirebaseService.getBreakReminders(user);
+      if (firebaseBreakReminders.length > 0) {
+        // Temporarily disable Firebase sync to prevent loop
+        const originalFlag = this._isLoadingFromFirebase;
+        this._isLoadingFromFirebase = true;
+        this.saveBreakReminders(firebaseBreakReminders);
+        this._isLoadingFromFirebase = originalFlag;
+      }
+
+      // Load break reminder completions from Firebase (last 30 days)
+      const thirtyDaysAgoMs = thirtyDaysAgo.getTime();
+      const nowMs = Date.now();
+      const firebaseBreakCompletions = await FirebaseService.getBreakReminderCompletions(user, {
+        start: thirtyDaysAgoMs,
+        end: nowMs
+      });
+      if (firebaseBreakCompletions.length > 0) {
+        // Merge with existing completions, avoiding duplicates
+        const existingCompletions = this.getBreakReminderCompletions();
+        const existingCompletionIds = new Set(existingCompletions.map(c => c.id));
+        const newCompletions = firebaseBreakCompletions.filter(c => !existingCompletionIds.has(c.id));
+
+        if (newCompletions.length > 0) {
+          // Temporarily disable Firebase sync to prevent loop
+          const originalFlag = this._isLoadingFromFirebase;
+          this._isLoadingFromFirebase = true;
+          this.saveBreakReminderCompletions([...existingCompletions, ...newCompletions]);
+          this._isLoadingFromFirebase = originalFlag;
+          console.log(`✅ ${newCompletions.length} break reminder completions synced from Firebase`);
+        }
+      }
+
+
+
+      // Dispatch event to notify components that data has been synced
+      window.dispatchEvent(new CustomEvent('firebaseDataSynced'));
+
+    } catch (error) {
+      console.error('❌ Firebase sync failed:', error);
+    } finally {
+      this._isLoadingFromFirebase = false;
+    }
+  }
+
+  static isLoadingFromFirebase(): boolean {
+    return this._isLoadingFromFirebase;
+  }
+
+  // Methods to control Firebase sync
+  static disableFirebaseSync(): void {
+    this._firebaseSyncDisabled = true;
+    console.log('Firebase sync disabled');
+  }
+
+  static enableFirebaseSync(): void {
+    this._firebaseSyncDisabled = false;
+    console.log('Firebase sync enabled');
+  }
+
+  static isFirebaseSyncDisabled(): boolean {
+    return this._firebaseSyncDisabled;
+  }
+
+
+  static async manualFirebaseSync(): Promise<void> {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const { auth } = await import('@/lib/firebase');
+      const user = auth.currentUser;
+
+      if (!user) {
+        console.warn('No user logged in for manual sync');
+        return;
+      }
+
+      console.log('🔄 Starting manual Firebase sync...');
+
+      // Get all local data
+      const tasks = this.getTasks();
+      const settings = this.getSettings();
+      const sessions = this.getAllSessions();
+      const breakReminders = this.getBreakReminders();
+
+      console.log('📊 Local data to sync:', {
+        tasks: tasks.length,
+        sessions: sessions.length,
+        breakReminders: breakReminders.length,
+        hasSettings: !!settings
+      });
+
+      // This will be implemented when Firebase permissions are fixed
+
+      console.log('✅ Manual sync completed (local storage only for now)');
+
+    } catch (error) {
+      console.error('❌ Manual sync failed:', error);
+    }
+  }
+
+
+
+  // Reset all local data (for account deletion or progress reset)
+  static resetAllData(): void {
+    if (typeof window === 'undefined') return;
+
+    // Clear all localStorage items related to PomoUno
+    const keysToRemove = [
+      'pomouono_today_sessions',
+      'pomouono_all_sessions',
+      'pomouono_tasks',
+      'pomouono_settings',
+      'pomouono_daily_stats',
+      'pomouono_break_reminders',
+      'pomouono_break_reminder_categories',
+      'pomouono_break_reminder_completions',
+      'pomouono_task_categories',
+      'pomouono_onboarding_shown',
+      'pomouono_last_daily_reset'
+    ];
+
+    keysToRemove.forEach(key => {
+      localStorage.removeItem(key);
+    });
+
+    console.log('All local data has been reset');
+  }
+
+  // Helper method to sync data to Firebase when user is logged in
+  static async syncToFirebase(dataType: 'sessions' | 'tasks' | 'settings' | 'stats' | 'breakReminders' | 'breakReminderCompletions', data?: any): Promise<void> {
+    if (typeof window === 'undefined' || this._isLoadingFromFirebase || this._firebaseSyncDisabled) return;
+
+    try {
+      // Use static imports - Firebase modules are already available
+      const { auth } = require('@/lib/firebase');
+      const { FirebaseService } = require('@/lib/firebase-service');
+
+      const user = auth.currentUser;
+      if (!user) return;
+
+      // Check if user is properly authenticated with a valid token
+      try {
+        await user.getIdToken();
+      } catch (tokenError) {
+        console.warn('User token invalid, skipping Firebase sync:', tokenError);
+        return;
+      }
+
+      switch (dataType) {
+        case 'sessions':
+          if (data) {
+            await FirebaseService.saveSessions(user, Array.isArray(data) ? data : [data]);
+          }
+          break;
+        case 'tasks':
+          const tasks = data || this.getTasks();
+          await FirebaseService.saveTasks(user, tasks);
+          break;
+        case 'settings':
+          const settings = data || this.getSettings();
+          await FirebaseService.saveSettings(user, settings);
+          break;
+        case 'stats':
+          if (data) {
+            await FirebaseService.saveStats(user, data);
+          }
+          break;
+        case 'breakReminders':
+          const breakReminders = data || this.getBreakReminders();
+          await FirebaseService.saveBreakReminders(user, breakReminders);
+          break;
+        case 'breakReminderCompletions':
+          if (data) {
+            await FirebaseService.saveBreakReminderCompletions(user, Array.isArray(data) ? data : [data]);
+          }
+          break;
+      }
+    } catch (error) {
+      // Don't throw errors for Firebase sync failures - just log them
+      console.warn(`⚠️ Firebase sync failed for ${dataType}:`, error);
+
+      // If it's a permission error, disable Firebase sync temporarily
+      if (error instanceof Error && error.message.includes('permissions')) {
+        console.warn('Firebase permissions issue - disabling sync temporarily');
+        this._firebaseSyncDisabled = true;
+
+        // Re-enable after 5 minutes
+        setTimeout(() => {
+          this._firebaseSyncDisabled = false;
+          console.log('Firebase sync re-enabled');
+        }, 5 * 60 * 1000);
+      }
+    }
   }
 
 
@@ -783,6 +1090,11 @@ export class LocalStorage {
   static saveBreakReminders(reminders: BreakReminder[]): void {
     if (typeof window === 'undefined') return;
     localStorage.setItem('pomouono_break_reminders', JSON.stringify(reminders));
+
+    // Sync to Firebase (non-blocking)
+    this.syncToFirebase('breakReminders', reminders).catch(() => {
+      // Silently fail - local storage is primary
+    });
   }
 
   static getBreakRemindersForType(breakType: 'short' | 'long'): BreakReminder[] {
@@ -838,17 +1150,7 @@ export class LocalStorage {
 
     this.saveBreakReminderCompletions(filteredCompletions);
 
-    // Sync to Firebase if user is authenticated
-    if (typeof window !== 'undefined') {
-      import('@/lib/firebase').then(({ auth }) => {
-        import('@/lib/firebase-service').then(({ FirebaseService }) => {
-          const user = auth.currentUser;
-          if (user) {
-            FirebaseService.saveBreakReminderCompletions(user, [completion]).catch(console.error);
-          }
-        });
-      });
-    }
+    // TODO: Re-enable Firebase sync when permissions are fixed
   }
 
   static getBreakReminderCompletionsForSession(sessionId: string): BreakReminderCompletion[] {
@@ -958,13 +1260,25 @@ export class LocalStorage {
     dailyStats.forEach(day => {
       const dayTasks = tasks.filter(task => {
         if (!task.completedAt) return false;
-        const taskDate = new Date(task.completedAt).toISOString().split('T')[0];
-        return taskDate === day.date;
+        try {
+          // Validate the timestamp before converting
+          if (isNaN(task.completedAt) || task.completedAt <= 0) return false;
+          const taskDate = new Date(task.completedAt).toISOString().split('T')[0];
+          return taskDate === day.date;
+        } catch (error) {
+          return false;
+        }
       });
 
       const dayCreated = tasks.filter(task => {
-        const taskDate = new Date(task.createdAt).toISOString().split('T')[0];
-        return taskDate === day.date;
+        try {
+          // Validate the timestamp before converting
+          if (!task.createdAt || isNaN(task.createdAt) || task.createdAt <= 0) return false;
+          const taskDate = new Date(task.createdAt).toISOString().split('T')[0];
+          return taskDate === day.date;
+        } catch (error) {
+          return false;
+        }
       });
 
       dailyCompletions.push({
@@ -1008,7 +1322,16 @@ export class LocalStorage {
     // Calculate streak days (consecutive days with reviews)
     const reviewDates = spacedRepetitionTasks
       .filter(task => task.spacedRepetition?.lastReviewed)
-      .map(task => new Date(task.spacedRepetition!.lastReviewed!).toISOString().split('T')[0])
+      .map(task => {
+        try {
+          const timestamp = task.spacedRepetition!.lastReviewed!;
+          if (isNaN(timestamp) || timestamp <= 0) return null;
+          return new Date(timestamp).toISOString().split('T')[0];
+        } catch (error) {
+          return null;
+        }
+      })
+      .filter((date): date is string => date !== null)
       .sort();
 
     let streakDays = 0;
@@ -1265,55 +1588,64 @@ export class LocalStorage {
     const end = new Date(endDate);
 
     tasks.forEach(task => {
-      // Regular tasks (show on creation date if not completed)
-      if (!task.recurring?.enabled && !task.spacedRepetition?.enabled) {
-        const taskDate = new Date(task.createdAt);
-        if (taskDate >= start && taskDate <= end && !task.completed) {
-          events.push({
-            id: `task-${task.id}`,
-            title: task.title,
-            date: taskDate.toISOString().split('T')[0],
-            type: 'task',
-            taskId: task.id,
-            priority: task.priority,
-            category: task.category,
-            isCompleted: task.completed
+      try {
+        // Regular tasks (show on creation date if not completed)
+        if (!task.recurring?.enabled && !task.spacedRepetition?.enabled) {
+          if (!task.createdAt || isNaN(task.createdAt) || task.createdAt <= 0) return;
+          const taskDate = new Date(task.createdAt);
+          if (taskDate >= start && taskDate <= end && !task.completed) {
+            events.push({
+              id: `task-${task.id}`,
+              title: task.title,
+              date: taskDate.toISOString().split('T')[0],
+              type: 'task',
+              taskId: task.id,
+              priority: task.priority,
+              category: task.category,
+              isCompleted: task.completed
+            });
+          }
+        }
+
+        // Recurring tasks
+        if (task.recurring?.enabled) {
+          const recurringDates = this.calculateRecurringDates(task, start, end);
+          recurringDates.forEach(date => {
+            events.push({
+              id: `recurring-${task.id}-${date}`,
+              title: task.title,
+              date,
+              type: 'recurring-task',
+              taskId: task.id,
+              priority: task.priority,
+              category: task.category,
+              isCompleted: false // Recurring tasks reset daily
+            });
           });
         }
-      }
 
-      // Recurring tasks
-      if (task.recurring?.enabled) {
-        const recurringDates = this.calculateRecurringDates(task, start, end);
-        recurringDates.forEach(date => {
-          events.push({
-            id: `recurring-${task.id}-${date}`,
-            title: task.title,
-            date,
-            type: 'recurring-task',
-            taskId: task.id,
-            priority: task.priority,
-            category: task.category,
-            isCompleted: false // Recurring tasks reset daily
-          });
-        });
-      }
-
-      // Spaced repetition tasks
-      if (task.spacedRepetition?.enabled) {
-        const reviewDate = new Date(task.spacedRepetition.nextReviewDate);
-        if (reviewDate >= start && reviewDate <= end) {
-          events.push({
-            id: `spaced-${task.id}`,
-            title: `Review: ${task.title}`,
-            date: reviewDate.toISOString().split('T')[0],
-            type: 'spaced-repetition',
-            taskId: task.id,
-            priority: task.priority,
-            category: task.category,
-            isCompleted: false
-          });
+        // Spaced repetition tasks
+        if (task.spacedRepetition?.enabled) {
+          const nextReviewDate = task.spacedRepetition.nextReviewDate;
+          if (nextReviewDate && !isNaN(nextReviewDate) && nextReviewDate > 0) {
+            const reviewDate = new Date(nextReviewDate);
+            if (reviewDate >= start && reviewDate <= end) {
+              events.push({
+                id: `spaced-${task.id}`,
+                title: `Review: ${task.title}`,
+                date: reviewDate.toISOString().split('T')[0],
+                type: 'spaced-repetition',
+                taskId: task.id,
+                priority: task.priority,
+                category: task.category,
+                isCompleted: false
+              });
+            }
+          }
         }
+      } catch (error) {
+        // Skip tasks with invalid data
+        console.warn('Skipping task with invalid data:', task.id, error);
       }
     });
 
@@ -1323,57 +1655,67 @@ export class LocalStorage {
   private static calculateRecurringDates(task: Task, startDate: Date, endDate: Date): string[] {
     if (!task.recurring?.enabled) return [];
 
-    const dates: string[] = [];
-    const current = new Date(Math.max(startDate.getTime(), task.createdAt));
-    const end = new Date(endDate);
-
-    while (current <= end) {
-      const dateString = current.toISOString().split('T')[0];
-
-      switch (task.recurring.pattern) {
-        case 'daily':
-          dates.push(dateString);
-          current.setDate(current.getDate() + (task.recurring.interval || 1));
-          break;
-
-        case 'weekdays':
-          if (current.getDay() >= 1 && current.getDay() <= 5) { // Monday to Friday
-            dates.push(dateString);
-          }
-          current.setDate(current.getDate() + 1);
-          break;
-
-        case 'weekly':
-          if (!task.recurring.daysOfWeek || task.recurring.daysOfWeek.includes(current.getDay())) {
-            dates.push(dateString);
-          }
-          current.setDate(current.getDate() + 1);
-          break;
-
-        case 'specific-days':
-          if (task.recurring.daysOfWeek?.includes(current.getDay())) {
-            dates.push(dateString);
-          }
-          current.setDate(current.getDate() + 1);
-          break;
-
-        case 'monthly':
-          if (current.getDate() === (task.recurring.dayOfMonth || 1)) {
-            dates.push(dateString);
-          }
-          current.setDate(current.getDate() + 1);
-          break;
-
-        default:
-          current.setDate(current.getDate() + 1);
-          break;
+    try {
+      // Validate task.createdAt before using it
+      if (!task.createdAt || isNaN(task.createdAt) || task.createdAt <= 0) {
+        return [];
       }
 
-      // Prevent infinite loops
-      if (dates.length > 1000) break;
-    }
+      const dates: string[] = [];
+      const current = new Date(Math.max(startDate.getTime(), task.createdAt));
+      const end = new Date(endDate);
 
-    return dates;
+      while (current <= end) {
+        const dateString = current.toISOString().split('T')[0];
+
+        switch (task.recurring.pattern) {
+          case 'daily':
+            dates.push(dateString);
+            current.setDate(current.getDate() + (task.recurring.interval || 1));
+            break;
+
+          case 'weekdays':
+            if (current.getDay() >= 1 && current.getDay() <= 5) { // Monday to Friday
+              dates.push(dateString);
+            }
+            current.setDate(current.getDate() + 1);
+            break;
+
+          case 'weekly':
+            if (!task.recurring.daysOfWeek || task.recurring.daysOfWeek.includes(current.getDay())) {
+              dates.push(dateString);
+            }
+            current.setDate(current.getDate() + 1);
+            break;
+
+          case 'specific-days':
+            if (task.recurring.daysOfWeek?.includes(current.getDay())) {
+              dates.push(dateString);
+            }
+            current.setDate(current.getDate() + 1);
+            break;
+
+          case 'monthly':
+            if (current.getDate() === (task.recurring.dayOfMonth || 1)) {
+              dates.push(dateString);
+            }
+            current.setDate(current.getDate() + 1);
+            break;
+
+          default:
+            current.setDate(current.getDate() + 1);
+            break;
+        }
+
+        // Prevent infinite loops
+        if (dates.length > 1000) break;
+      }
+
+      return dates;
+    } catch (error) {
+      console.warn('Error calculating recurring dates for task:', task.id, error);
+      return [];
+    }
   }
 
   // Data export

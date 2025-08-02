@@ -172,11 +172,20 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
       }));
     };
 
+    // Listen for Firebase data sync to refresh settings
+    const handleFirebaseDataSynced = () => {
+      const savedSettings = LocalStorage.getSettings();
+      setSettings(savedSettings);
+      loadCategories();
+    };
+
     window.addEventListener('settingsUpdated', handleSettingsUpdate as EventListener);
+    window.addEventListener('firebaseDataSynced', handleFirebaseDataSynced);
     audioService.onVolumeChange(handleVolumeChange);
 
     return () => {
       window.removeEventListener('settingsUpdated', handleSettingsUpdate as EventListener);
+      window.removeEventListener('firebaseDataSynced', handleFirebaseDataSynced);
       audioService.removeVolumeChangeCallback(handleVolumeChange);
     };
   }, []);

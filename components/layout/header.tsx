@@ -133,6 +133,10 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick }: HeaderPro
                         </div>
 
                         <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => window.location.href = '/account'}>
+                          <User className="w-4 h-4 mr-2" />
+                          Account Settings
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={handleSignOut} className="text-red-600">
                           <LogOut className="w-4 h-4 mr-2" />
                           Sign Out

@@ -88,11 +88,13 @@ export function StatsDisplay() {
     window.addEventListener('sessionCompleted', handleStatsUpdate);
     window.addEventListener('taskCompleted', handleStatsUpdate);
     window.addEventListener('taskSessionCompleted', handleStatsUpdate);
+    window.addEventListener('firebaseDataSynced', handleStatsUpdate);
 
     return () => {
       window.removeEventListener('sessionCompleted', handleStatsUpdate);
       window.removeEventListener('taskCompleted', handleStatsUpdate);
       window.removeEventListener('taskSessionCompleted', handleStatsUpdate);
+      window.removeEventListener('firebaseDataSynced', handleStatsUpdate);
     };
   }, [selectedDate]);
 

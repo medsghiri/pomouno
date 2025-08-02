@@ -66,6 +66,18 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
     useEffect(() => {
         loadTasks();
         loadCategories();
+
+        // Listen for Firebase data sync to refresh tasks
+        const handleFirebaseDataSynced = () => {
+            loadTasks();
+            loadCategories();
+        };
+
+        window.addEventListener('firebaseDataSynced', handleFirebaseDataSynced);
+
+        return () => {
+            window.removeEventListener('firebaseDataSynced', handleFirebaseDataSynced);
+        };
     }, []);
 
     const loadCategories = () => {
@@ -763,7 +775,9 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                             )}
                                         </div>
                                         <div className="text-xs text-gray-500 dark:text-gray-500">
-                                            Created: {new Date(task.createdAt).toLocaleDateString()}
+                                            Created: {task.createdAt && !isNaN(task.createdAt) && task.createdAt > 0
+                                                ? new Date(task.createdAt).toLocaleDateString()
+                                                : 'Unknown'}
                                         </div>
                                     </div>
                                 </div>

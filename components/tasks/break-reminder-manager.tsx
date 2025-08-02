@@ -151,6 +151,18 @@ export function BreakReminderManager() {
     useEffect(() => {
         loadReminders();
         loadCategories();
+
+        // Listen for Firebase data sync to refresh break reminders
+        const handleFirebaseDataSynced = () => {
+            loadReminders();
+            loadCategories();
+        };
+
+        window.addEventListener('firebaseDataSynced', handleFirebaseDataSynced);
+
+        return () => {
+            window.removeEventListener('firebaseDataSynced', handleFirebaseDataSynced);
+        };
     }, []);
 
     const loadCategories = () => {

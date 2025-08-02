@@ -119,6 +119,18 @@ export function MobileMenu({ onAuthClick, onSettingsClick, onStatsClick }: Mobil
                                     <span className="font-medium">Settings</span>
                                 </Button>
 
+                                {user && (
+                                    <Button
+                                        onClick={() => handleMenuItemClick(() => window.location.href = '/account')}
+                                        variant="ghost"
+                                        size="lg"
+                                        className="w-full justify-start h-12 text-foreground hover:text-foreground hover:bg-accent rounded-xl transition-all duration-200"
+                                    >
+                                        <User className="w-5 h-5 mr-4" />
+                                        <span className="font-medium">Account</span>
+                                    </Button>
+                                )}
+
 
                             </div>
                         </>

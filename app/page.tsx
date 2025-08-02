@@ -75,51 +75,34 @@ export default function Home() {
       setHasUnsavedSettings(true);
     };
 
+    const handleFirebaseDataSynced = () => {
+      // Refresh stats when Firebase data is synced
+      const stats = LocalStorage.getTodaysStats();
+      setSessionsCompleted(stats.sessions);
+
+      // Refresh settings
+      const settings = LocalStorage.getSettings();
+      setDailyGoal(settings.dailySessionGoal);
+      setIsDarkMode(settings.darkMode);
+      document.documentElement.classList.toggle('dark', settings.darkMode);
+    };
+
     window.addEventListener('settingsUpdated', handleSettingsUpdate as EventListener);
     window.addEventListener('settingsChanged', handleUnsavedSettings as EventListener);
+    window.addEventListener('firebaseDataSynced', handleFirebaseDataSynced as EventListener);
 
     return () => {
       window.removeEventListener('settingsUpdated', handleSettingsUpdate as EventListener);
       window.removeEventListener('settingsChanged', handleUnsavedSettings as EventListener);
+      window.removeEventListener('firebaseDataSynced', handleFirebaseDataSynced as EventListener);
     };
   }, []);
 
   const handleAuthSuccess = useCallback(async () => {
     if (!user) return;
 
-    console.log('🔐 Auth success callback triggered');
-    console.log('👤 User object:', {
-      uid: user.uid,
-      email: user.email,
-      emailVerified: user.emailVerified,
-      isAnonymous: user.isAnonymous
-    });
-
-    // Check if user has a valid auth token
-    try {
-      const token = await user.getIdToken();
-      console.log('🎫 Auth token exists:', !!token);
-      console.log('🎫 Token length:', token?.length || 0);
-    } catch (tokenError) {
-      console.error('❌ Failed to get auth token:', tokenError);
-      toast({
-        title: "Authentication token error",
-        description: "Please try logging out and back in.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
       const localData = LocalStorage.getAllData();
-      console.log('📦 Local data to migrate:', {
-        sessions: localData.sessions?.length || 0,
-        tasks: localData.tasks?.length || 0,
-        breakReminders: localData.breakReminders?.length || 0,
-        breakReminderCompletions: localData.breakReminderCompletions?.length || 0,
-        hasSettings: !!localData.settings,
-        hasStats: !!localData.stats
-      });
 
       // Use the improved migration function
       await FirebaseService.migrateUserData(user, localData);
@@ -151,6 +134,13 @@ export default function Home() {
   useEffect(() => {
     if (user && !loading) {
       handleAuthSuccess();
+
+      // Sync data from Firebase when user is already logged in (non-blocking)
+      LocalStorage.syncFromFirebase().catch(() => {
+        // Silently fail - app works without Firebase sync
+      });
+
+
     }
   }, [user, loading, handleAuthSuccess]);
 

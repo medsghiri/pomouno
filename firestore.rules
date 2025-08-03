@@ -38,7 +38,7 @@ service cloud.firestore {
     }
     
     // Audio collection - public read access for audio metadata
-    match /audio/{audioId} {
+    match /audio/{document=**} {
       allow read: if true; // Audio metadata is public
       allow write: if false; // Only admin can modify audio files
     }

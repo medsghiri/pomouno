@@ -1,13 +1,12 @@
 rules_version = '2';
 
-// Craft rules based on data in your Firestore database
-// allow write: if firestore.get(
-//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
 service firebase.storage {
   match /b/{bucket}/o {
-    // Audio files - temporarily allow all operations for migration
+    // Audio files are public readable.
+    // Only authenticated users can write to prevent unauthorized uploads.
     match /audio/{allPaths=**} {
-      allow read, write: if true; // Temporary: allow all access for migration
+      allow read: if true;
+      allow write: if request.auth != null;
     }
     
     // User-specific files (future use)

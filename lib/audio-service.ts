@@ -89,183 +89,46 @@ class AudioService {
 
         } catch (error) {
             console.error('❌ Failed to initialize audio service:', error);
-            // Even if initialization fails, try to set up basic functionality
-            this.audioMetadata = this.getFallbackAudioMetadata();
-            console.log('🔄 Attempting basic audio setup with fallback data...');
-
-            try {
-                await this.initializeAudioElements();
-                this.isInitialized = true;
-                console.log('✅ Basic audio functionality available');
-            } catch (fallbackError) {
-                console.error('❌ Even fallback audio initialization failed:', fallbackError);
-            }
         } finally {
             this.isLoading = false;
         }
     }
 
     private async loadAudioMetadata() {
-        // Always use fallback metadata for reliability
-        // This ensures audio works for all users without Firebase dependencies
-        console.log('🔍 Loading audio metadata...');
-        this.audioMetadata = this.getFallbackAudioMetadata();
-        console.log(`✅ Loaded ${Object.keys(this.audioMetadata).length} audio files - available to all users`);
+        try {
+            console.log('🔍 Loading audio metadata from Firebase...');
+            const audioCollection = collection(db, 'audio');
+            const q = query(audioCollection, where('active', '==', true), orderBy('createdAt', 'desc'));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                console.warn('⚠️ No active audio files found in Firestore.');
+            } else {
+                querySnapshot.forEach(doc => {
+                    const data = doc.data() as AudioFile;
+                    this.audioMetadata[data.key] = { ...data, id: doc.id };
+                });
+                console.log(`✅ Loaded ${Object.keys(this.audioMetadata).length} audio files from Firebase`);
+            }
+        } catch (error) {
+            console.error('❌ Failed to load audio metadata from Firebase:', error);
+        }
     }
 
-    private getFallbackAudioMetadata(): { [key: string]: AudioFile } {
-        return {
-            'ticking-clock': {
-                id: 'fallback-1',
-                key: 'ticking-clock',
-                name: 'Kitchen Clock Ticking',
-                category: 'focus',
-                type: 'ticking',
-                volume: 0.3,
-                loop: true,
-                storagePath: 'audio/quartz-kitchen-clock-ticking-60-seconds-253100.mp3',
-                fileName: 'quartz-kitchen-clock-ticking-60-seconds-253100.mp3',
-                active: true,
-                createdAt: '2025-01-26T00:00:00.000Z'
-            },
-            'ticking-clock-2': {
-                id: 'fallback-2',
-                key: 'ticking-clock-2',
-                name: 'Classic Clock Ticking',
-                category: 'focus',
-                type: 'ticking',
-                volume: 0.3,
-                loop: true,
-                storagePath: 'audio/ticking-clock-sound-effect-1-mp3-edition-264451.mp3',
-                fileName: 'ticking-clock-sound-effect-1-mp3-edition-264451.mp3',
-                active: true,
-                createdAt: '2025-01-26T00:00:00.000Z'
-            },
-            'clock-ticking': {
-                id: 'fallback-3',
-                key: 'clock-ticking',
-                name: 'Wall Clock Ticking',
-                category: 'focus',
-                type: 'ticking',
-                volume: 0.3,
-                loop: true,
-                storagePath: 'audio/clock-ticking-sound-effect-240503.mp3',
-                fileName: 'clock-ticking-sound-effect-240503.mp3',
-                active: true,
-                createdAt: '2025-01-26T00:00:00.000Z'
-            },
-            'lofi-cozy': {
-                id: 'fallback-4',
-                key: 'lofi-cozy',
-                name: 'Cozy Night Lo-Fi',
-                category: 'focus',
-                type: 'lofi',
-                volume: 0.4,
-                loop: true,
-                storagePath: 'audio/good-night-lofi-cozy-chill-music-160166.mp3',
-                fileName: 'good-night-lofi-cozy-chill-music-160166.mp3',
-                active: true,
-                createdAt: '2025-01-26T00:00:00.000Z'
-            },
-            'notification-ping': {
-                id: 'fallback-5',
-                key: 'notification-ping',
-                name: 'Gentle Ping',
-                category: 'notification',
-                type: 'ping',
-                volume: 0.7,
-                loop: false,
-                storagePath: 'audio/notification-ping.mp3',
-                fileName: 'notification-ping.mp3',
-                active: true,
-                createdAt: '2025-01-26T00:00:00.000Z'
-            },
-            'notification-bell': {
-                id: 'fallback-6',
-                key: 'notification-bell',
-                name: 'Soft Bell',
-                category: 'notification',
-                type: 'bell',
-                volume: 0.6,
-                loop: false,
-                storagePath: 'audio/notification-bell.mp3',
-                fileName: 'notification-bell.mp3',
-                active: true,
-                createdAt: '2025-01-26T00:00:00.000Z'
-            },
-            'notification-chime': {
-                id: 'fallback-7',
-                key: 'notification-chime',
-                name: 'Wind Chime',
-                category: 'notification',
-                type: 'notification',
-                volume: 0.6,
-                storagePath: 'audio/notification-ping-335500.mp3',
-                fileName: 'notification-ping-335500.mp3',
-                active: true,
-                createdAt: '2025-01-26T00:00:00.000Z'
-            },
-            'notification-new': {
-                id: 'fallback-6',
-                key: 'notification-new',
-                name: 'New Notification',
-                category: 'notification',
-                type: 'notification',
-                volume: 0.6,
-                storagePath: 'audio/new-notification-5-352453.mp3',
-                fileName: 'new-notification-5-352453.mp3',
-                active: true,
-                createdAt: '2025-01-26T00:00:00.000Z'
-            },
-            'notification-sounds': {
-                id: 'fallback-7',
-                key: 'notification-sounds',
-                name: 'Classic Notification',
-                category: 'notification',
-                type: 'notification',
-                volume: 0.6,
-                storagePath: 'audio/notification-sounds-351833.mp3',
-                fileName: 'notification-sounds-351833.mp3',
-                active: true,
-                createdAt: '2025-01-26T00:00:00.000Z'
-            }
-        };
-    }
+    
 
     private async initializeAudioElements() {
         const initPromises = Object.entries(this.audioMetadata).map(async ([key, metadata]) => {
             try {
-                let audioUrl: string;
-                let audioLoaded = false;
+                const storageRef = ref(storage, metadata.storagePath);
+                const audioUrl = await getDownloadURL(storageRef);
 
-                // Generate audio programmatically instead of loading from Firebase
-                if (metadata.category === 'notification') {
-                    audioUrl = this.generateNotificationSound(metadata.type);
-                    console.log(`✅ Generated notification sound: ${key}`);
-                    audioLoaded = true;
-                } else if (metadata.type === 'ticking') {
-                    audioUrl = this.generateTickingSound();
-                    console.log(`✅ Generated ticking sound: ${key}`);
-                    audioLoaded = true;
-                } else {
-                    // For other types, use a simple tone
-                    audioUrl = this.generateSimpleTone();
-                    console.log(`✅ Generated simple tone: ${key}`);
-                    audioLoaded = true;
-                }
-
-                // Create audio element
                 const audio = new Audio(audioUrl);
                 audio.preload = 'metadata';
                 audio.loop = metadata.loop || false;
                 audio.volume = metadata.volume;
 
-                // Mark if audio actually loaded
-                (audio as any).isActuallyLoaded = audioLoaded;
-
                 this.audioLibrary[key] = audio;
-
-                // Store download URL in metadata for future reference
                 this.audioMetadata[key].downloadUrl = audioUrl;
             } catch (error) {
                 console.error(`Failed to initialize audio ${key}:`, error);
@@ -277,31 +140,7 @@ class AudioService {
 
 
 
-    // Generate notification sound based on type
-    private generateNotificationSound(type: string): string {
-        if (type === 'ping') {
-            // Generate a pleasant ping sound
-            return 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
-        } else if (type === 'bell') {
-            // Generate a bell sound
-            return 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
-        } else {
-            // Default chime sound
-            return 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
-        }
-    }
-
-    // Generate ticking sound
-    private generateTickingSound(): string {
-        // Generate a simple ticking sound
-        return 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
-    }
-
-    // Generate simple tone
-    private generateSimpleTone(): string {
-        // Generate a simple tone for other audio types
-        return 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
-    }
+    
 
     // Get available audio organized by category and type
     getAvailableAudio() {

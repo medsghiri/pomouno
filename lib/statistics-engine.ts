@@ -1,279 +1,340 @@
-import {
-    LocalStorage,
-    TaskStats,
-    SpacedRepetitionStats,
-    BreakReminderStats,
-    PomodoroStats,
-    CalendarEvent,
-    DateRange,
-    DailyStats,
-    WeeklyStats,
-    MonthlyStats
-} from './storage';
+import { PomodoroSession, Task, DailyStats } from './storage';
 
-/**
- * Comprehensive Statistics Engine for PomoUno
- * Provides unified access to all statistics and analytics data
- */
+export interface AccurateStatistics extends DailyStats {
+    calculatedAt: number;
+    dataQuality: 'high' | 'medium' | 'low';
+    validationErrors: string[];
+}
+
+export interface WeeklyStatistics {
+    totalSessions: number;
+    totalFocusTime: number;
+    totalTasksCompleted: number;
+    averageSessionsPerDay: number;
+    bestDay: string;
+    weekStart: string; // Monday
+    weekEnd: string;   // Sunday
+    dailyBreakdown: DailyStats[];
+    streak: number;
+}
+
 export class StatisticsEngine {
+    // Calculate accurate daily statistics
+    static calculateDailyStats(
+        sessions: PomodoroSession[],
+        tasks: Task[],
+        date: string
+    ): AccurateStatistics {
+        const dayStart = new Date(date).getTime();
+        const dayEnd = dayStart + (24 * 60 * 60 * 1000) - 1;
 
-    /**
-     * Get comprehensive task statistics
-     */
-    static getTaskStats(dateRange?: DateRange): TaskStats {
-        return LocalStorage.getTaskStats(dateRange);
+        // Filter sessions for the day
+        const daySessions = sessions.filter(session => {
+            return session &&
+                session.timestamp &&
+                session.timestamp >= dayStart &&
+                session.timestamp <= dayEnd;
+        });
+
+        // Calculate session counts (only completed sessions)
+        const workSessions = daySessions.filter(s => s.type === 'work' && s.completed).length;
+        const shortBreakSessions = daySessions.filter(s => s.type === 'short-break' && s.completed).length;
+        const longBreakSessions = daySessions.filter(s => s.type === 'long-break' && s.completed).length;
+        const totalSessions = workSessions + shortBreakSessions + longBreakSessions;
+
+        // Calculate focus time (only from completed work sessions, max 25 minutes per session)
+        const focusTime = daySessions
+            .filter(s => s.type === 'work' && s.completed)
+            .reduce((sum, s) => {
+                // Cap individual sessions at 60 minutes to prevent corruption
+                const cappedDuration = Math.min(s.duration, 60);
+                return sum + cappedDuration;
+            }, 0);
+
+        // Calculate tasks completed on this day
+        const dayTasksCompleted = tasks.filter(task => {
+            // Regular completed tasks
+            if (task.completedAt && task.completedAt >= dayStart && task.completedAt <= dayEnd) {
+                return true;
+            }
+
+            // Recurring tasks completed on this day
+            if (task.recurring?.enabled && task.recurring.lastCompleted &&
+                task.recurring.lastCompleted >= dayStart && task.recurring.lastCompleted <= dayEnd) {
+                return true;
+            }
+
+            // Spaced repetition tasks reviewed on this day
+            if (task.spacedRepetition?.enabled && task.spacedRepetition.lastReviewed &&
+                task.spacedRepetition.lastReviewed >= dayStart && task.spacedRepetition.lastReviewed <= dayEnd) {
+                return true;
+            }
+
+            return false;
+        }).length;
+
+        // Calculate break reminders
+        const breakRemindersShown = daySessions.reduce((sum, session) =>
+            sum + (session.breakRemindersShown?.length || 0), 0
+        );
+
+        const breakRemindersCompleted = daySessions.reduce((sum, session) =>
+            sum + (session.breakRemindersCompleted?.length || 0), 0
+        );
+
+        // Determine data quality
+        let dataQuality: 'high' | 'medium' | 'low' = 'high';
+        const validationErrors: string[] = [];
+
+        // Check for suspicious values
+        if (focusTime > 480) { // More than 8 hours
+            dataQuality = 'low';
+            validationErrors.push('Focus time exceeds reasonable daily limit');
+        } else if (focusTime > 240) { // More than 4 hours
+            dataQuality = 'medium';
+            validationErrors.push('Focus time is unusually high');
+        }
+
+        if (totalSessions > 50) { // More than 50 sessions per day
+            dataQuality = 'low';
+            validationErrors.push('Session count exceeds reasonable daily limit');
+        } else if (totalSessions > 20) { // More than 20 sessions per day
+            dataQuality = 'medium';
+            validationErrors.push('Session count is unusually high');
+        }
+
+        return {
+            sessions: totalSessions,
+            focusTime,
+            tasksCompleted: dayTasksCompleted,
+            streak: 0, // Will be calculated separately
+            date,
+            workSessions,
+            shortBreakSessions,
+            longBreakSessions,
+            breakRemindersShown,
+            breakRemindersCompleted,
+            calculatedAt: Date.now(),
+            dataQuality,
+            validationErrors
+        };
     }
 
-    /**
-     * Get spaced repetition learning statistics
-     */
-    static getSpacedRepetitionStats(): SpacedRepetitionStats {
-        return LocalStorage.getSpacedRepetitionStats();
+    // Calculate accurate streak (consecutive active days)
+    static calculateStreakCount(dailyStats: DailyStats[]): number {
+        if (dailyStats.length === 0) return 0;
+
+        // Sort by date descending (most recent first)
+        const sortedStats = dailyStats
+            .filter(stat => stat.workSessions > 0) // Only count days with work sessions
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        if (sortedStats.length === 0) return 0;
+
+        let streak = 0;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Start from today or yesterday if no sessions today
+        let currentDate = new Date(today);
+        const todayString = today.toISOString().split('T')[0];
+        const todayStats = sortedStats.find(stat => stat.date === todayString);
+
+        if (!todayStats || todayStats.workSessions === 0) {
+            // If no sessions today, start from yesterday
+            currentDate.setDate(currentDate.getDate() - 1);
+        }
+
+        // Count consecutive days with sessions
+        while (streak < 365) { // Safety limit
+            const dateString = currentDate.toISOString().split('T')[0];
+            const dayStats = sortedStats.find(stat => stat.date === dateString);
+
+            if (dayStats && dayStats.workSessions > 0) {
+                streak++;
+                currentDate.setDate(currentDate.getDate() - 1);
+            } else {
+                break;
+            }
+        }
+
+        return streak;
     }
 
-    /**
-     * Get break reminder completion statistics
-     */
-    static getBreakReminderStats(dateRange?: DateRange): BreakReminderStats {
-        return LocalStorage.getBreakReminderStats(dateRange);
+    // Calculate weekly statistics with Monday start
+    static calculateWeeklyStats(
+        sessions: PomodoroSession[],
+        tasks: Task[],
+        date: Date = new Date()
+    ): WeeklyStatistics {
+        // Get Monday of the week
+        const monday = new Date(date);
+        const day = monday.getDay();
+        const diff = monday.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+        monday.setDate(diff);
+        monday.setHours(0, 0, 0, 0);
+
+        // Get Sunday of the week
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        sunday.setHours(23, 59, 59, 999);
+
+        const mondayString = monday.toISOString().split('T')[0];
+        const sundayString = sunday.toISOString().split('T')[0];
+
+        const dailyBreakdown: DailyStats[] = [];
+        let totalSessions = 0;
+        let totalFocusTime = 0;
+        let totalTasksCompleted = 0;
+        let bestDay = mondayString;
+        let bestDaySessions = 0;
+
+        // Get stats for each day of the week (Monday to Sunday)
+        for (let i = 0; i < 7; i++) {
+            const currentDate = new Date(monday);
+            currentDate.setDate(monday.getDate() + i);
+            const dateString = currentDate.toISOString().split('T')[0];
+
+            const dayStats = this.calculateDailyStats(sessions, tasks, dateString);
+            dailyBreakdown.push(dayStats);
+
+            totalSessions += dayStats.sessions;
+            totalFocusTime += dayStats.focusTime;
+            totalTasksCompleted += dayStats.tasksCompleted;
+
+            if (dayStats.sessions > bestDaySessions) {
+                bestDaySessions = dayStats.sessions;
+                bestDay = dateString;
+            }
+        }
+
+        // Calculate streak from daily breakdown
+        const streak = this.calculateStreakCount(dailyBreakdown);
+
+        return {
+            totalSessions,
+            totalFocusTime,
+            totalTasksCompleted,
+            averageSessionsPerDay: totalSessions / 7,
+            bestDay,
+            weekStart: mondayString,
+            weekEnd: sundayString,
+            dailyBreakdown,
+            streak
+        };
     }
 
-    /**
-     * Get comprehensive Pomodoro session statistics
-     */
-    static getPomodoroStats(): PomodoroStats {
-        return LocalStorage.getPomodoroStats();
+    // Validate statistics for reasonableness
+    static validateStatistics(stats: DailyStats): boolean {
+        // Check for obviously corrupted values
+        if (stats.focusTime > 1440) return false; // More than 24 hours
+        if (stats.sessions > 100) return false; // More than 100 sessions per day
+        if (stats.workSessions > 50) return false; // More than 50 work sessions per day
+        if (stats.streak > 1000) return false; // Streak longer than 1000 days
+
+        return true;
     }
 
-    /**
-     * Get calendar events for task scheduling
-     */
-    static getCalendarEvents(startDate: string, endDate: string): CalendarEvent[] {
-        return LocalStorage.getCalendarEvents(startDate, endDate);
+    // Sanitize statistics to reasonable values
+    static sanitizeStatistics(stats: DailyStats): DailyStats {
+        return {
+            ...stats,
+            focusTime: Math.min(stats.focusTime, 720), // Cap at 12 hours
+            sessions: Math.min(stats.sessions, 50), // Cap at 50 sessions
+            workSessions: Math.min(stats.workSessions, 30), // Cap at 30 work sessions
+            shortBreakSessions: Math.min(stats.shortBreakSessions, 30), // Cap at 30 break sessions
+            longBreakSessions: Math.min(stats.longBreakSessions, 10), // Cap at 10 long breaks
+            streak: Math.min(stats.streak, 365), // Cap at 1 year
+            breakRemindersShown: Math.min(stats.breakRemindersShown, 100), // Cap at 100
+            breakRemindersCompleted: Math.min(stats.breakRemindersCompleted, 100) // Cap at 100
+        };
     }
 
-    /**
-     * Get daily statistics for a specific date
-     */
-    static getDailyStats(date: string): DailyStats {
-        return LocalStorage.getDailyStats(date);
+    // Get real-time statistics (calculated from current data)
+    static getRealTimeStatistics(
+        sessions: PomodoroSession[],
+        tasks: Task[]
+    ): {
+        today: AccurateStatistics;
+        thisWeek: WeeklyStatistics;
+        streak: number;
+    } {
+        const today = new Date().toISOString().split('T')[0];
+        const todayStats = this.calculateDailyStats(sessions, tasks, today);
+        const weeklyStats = this.calculateWeeklyStats(sessions, tasks);
+
+        // Calculate all daily stats for streak calculation
+        const allDailyStats: DailyStats[] = [];
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        for (let i = 0; i < 30; i++) {
+            const date = new Date(thirtyDaysAgo);
+            date.setDate(thirtyDaysAgo.getDate() + i);
+            const dateString = date.toISOString().split('T')[0];
+            const dayStats = this.calculateDailyStats(sessions, tasks, dateString);
+            allDailyStats.push(dayStats);
+        }
+
+        const streak = this.calculateStreakCount(allDailyStats);
+
+        return {
+            today: todayStats,
+            thisWeek: weeklyStats,
+            streak
+        };
     }
 
-    /**
-     * Get weekly statistics for a specific date
-     */
-    static getWeeklyStats(date: Date = new Date()): WeeklyStats {
-        return LocalStorage.getWeeklyStats(date);
-    }
-
-    /**
-     * Get monthly statistics for a specific month/year
-     */
-    static getMonthlyStats(year: number, month: number): MonthlyStats {
-        return LocalStorage.getMonthlyStats(year, month);
-    }
-
-    /**
-     * Get homepage focus statistics (FOCUS • Sessions Today • Goal Progress)
-     */
+    // Get homepage focus statistics for timer display
     static getHomepageFocusStats(): {
-        currentSessions: number;
         focusLabel: string;
         goalProgress: string;
         completionRate: number;
     } {
-        const todayStats = LocalStorage.getTodaysStats();
-        const settings = LocalStorage.getSettings();
-        const dailyGoal = settings.dailySessionGoal || 4; // Use user's daily goal
+        try {
+            // Import storage dynamically to avoid circular dependencies
+            const { LocalStorage } = require('@/lib/storage');
 
-        // Calculate goal progress
-        const goalProgress = Math.min(todayStats.sessions, dailyGoal);
-        const goalLabel = `Goal ${goalProgress} / ${dailyGoal}`;
+            const sessions = LocalStorage.getAllSessions();
+            const tasks = LocalStorage.getTasks();
+            const settings = LocalStorage.getSettings();
 
-        return {
-            currentSessions: todayStats.sessions,
-            focusLabel: `FOCUS • ${todayStats.sessions} sessions today • ${goalLabel}`,
-            goalProgress: goalLabel,
-            completionRate: Math.round((goalProgress / dailyGoal) * 100)
-        };
+            const today = new Date().toISOString().split('T')[0];
+            const todayStats = this.calculateDailyStats(sessions, tasks, today);
+
+            const dailyGoal = settings.dailySessionGoal || 8;
+            const completionRate = Math.min((todayStats.workSessions / dailyGoal) * 100, 100);
+
+            const focusLabel = `FOCUS • ${todayStats.workSessions} sessions today • Goal ${todayStats.workSessions} / ${dailyGoal}`;
+            const goalProgress = `Goal ${todayStats.workSessions} / ${dailyGoal}`;
+
+            return {
+                focusLabel,
+                goalProgress,
+                completionRate
+            };
+        } catch (error) {
+            console.error('Error calculating homepage focus stats:', error);
+            return {
+                focusLabel: 'FOCUS • 0 sessions today • Goal 0 / 8',
+                goalProgress: 'Goal 0 / 8',
+                completionRate: 0
+            };
+        }
     }
 
-    /**
-     * Get comprehensive dashboard statistics
-     */
-    static getDashboardStats(): {
-        pomodoro: PomodoroStats;
-        tasks: TaskStats;
-        breakReminders: BreakReminderStats;
-        spacedRepetition: SpacedRepetitionStats;
-        today: DailyStats;
-        thisWeek: WeeklyStats;
-        thisMonth: MonthlyStats;
-        homepage: ReturnType<typeof StatisticsEngine.getHomepageFocusStats>;
-    } {
-        const today = new Date().toISOString().split('T')[0];
-        const thisMonth = new Date();
+    // Get dashboard statistics (for backward compatibility)
+    static getDashboardStats(): any {
+        try {
+            const { LocalStorage } = require('@/lib/storage');
 
-        return {
-            pomodoro: this.getPomodoroStats(),
-            tasks: this.getTaskStats(),
-            breakReminders: this.getBreakReminderStats(),
-            spacedRepetition: this.getSpacedRepetitionStats(),
-            today: this.getDailyStats(today),
-            thisWeek: this.getWeeklyStats(),
-            thisMonth: this.getMonthlyStats(thisMonth.getFullYear(), thisMonth.getMonth() + 1),
-            homepage: this.getHomepageFocusStats()
-        };
-    }
+            const sessions = LocalStorage.getAllSessions();
+            const tasks = LocalStorage.getTasks();
 
-    /**
-     * Get statistics for a specific date range
-     */
-    static getStatsForDateRange(startDate: string, endDate: string): {
-        sessions: number;
-        focusTime: number;
-        tasksCompleted: number;
-        breakRemindersCompleted: number;
-        dailyBreakdown: DailyStats[];
-    } {
-        const start = new Date(startDate).getTime();
-        const end = new Date(endDate + 'T23:59:59').getTime();
-        const dateRange: DateRange = { start, end };
-
-        const sessions = LocalStorage.getSessionsByDateRange(startDate, endDate);
-        const taskStats = this.getTaskStats(dateRange);
-        const breakReminderStats = this.getBreakReminderStats(dateRange);
-
-        // Get daily breakdown for the range
-        const dailyBreakdown: DailyStats[] = [];
-        const currentDate = new Date(startDate);
-        const endDateObj = new Date(endDate);
-
-        while (currentDate <= endDateObj) {
-            const dateString = currentDate.toISOString().split('T')[0];
-            dailyBreakdown.push(this.getDailyStats(dateString));
-            currentDate.setDate(currentDate.getDate() + 1);
+            return this.getRealTimeStatistics(sessions, tasks);
+        } catch (error) {
+            console.error('Error calculating dashboard stats:', error);
+            return null;
         }
-
-        const totalFocusTime = sessions
-            .filter(s => s.type === 'work')
-            .reduce((sum, s) => sum + s.duration, 0);
-
-        return {
-            sessions: sessions.length,
-            focusTime: totalFocusTime,
-            tasksCompleted: taskStats.completedTasks,
-            breakRemindersCompleted: breakReminderStats.totalRemindersCompleted,
-            dailyBreakdown
-        };
-    }
-
-    /**
-     * Get productivity insights and recommendations
-     */
-    static getProductivityInsights(): {
-        insights: string[];
-        recommendations: string[];
-        achievements: string[];
-    } {
-        const stats = this.getDashboardStats();
-        const insights: string[] = [];
-        const recommendations: string[] = [];
-        const achievements: string[] = [];
-
-        // Analyze current performance
-        if (stats.pomodoro.sessionsToday >= 4) {
-            achievements.push("🎯 Great productivity today!");
-        }
-
-        if (stats.pomodoro.currentStreak >= 4) {
-            achievements.push(`🔥 ${stats.pomodoro.currentStreak} session streak!`);
-        }
-
-        if (stats.tasks.completionRate >= 80) {
-            achievements.push("✅ High task completion rate!");
-        }
-
-        if (stats.breakReminders.completionRate >= 70) {
-            achievements.push("💪 Great break reminder compliance!");
-        }
-
-        // Generate insights
-        if (stats.pomodoro.averageSessionLength < 20) {
-            insights.push("Your sessions are shorter than the standard 25 minutes");
-        }
-
-        if (stats.tasks.averageSessionsPerTask > 5) {
-            insights.push("Tasks might benefit from being broken into smaller chunks");
-        }
-
-        if (stats.breakReminders.completionRate < 50) {
-            insights.push("Consider taking more breaks to maintain productivity");
-        }
-
-        // Generate recommendations
-        if (stats.pomodoro.sessionsToday < 2) {
-            recommendations.push("Try to complete at least 2 focus sessions today");
-        }
-
-        if (stats.tasks.activeTasks > 10) {
-            recommendations.push("Consider archiving or completing some tasks to reduce overwhelm");
-        }
-
-        if (stats.spacedRepetition.upcomingReviews.length > 5) {
-            recommendations.push("You have several spaced repetition reviews due soon");
-        }
-
-        return {
-            insights,
-            recommendations,
-            achievements
-        };
-    }
-
-    /**
-     * Export all statistics data for backup or analysis
-     */
-    static exportAllStats(): {
-        exportDate: string;
-        pomodoro: PomodoroStats;
-        tasks: TaskStats;
-        breakReminders: BreakReminderStats;
-        spacedRepetition: SpacedRepetitionStats;
-        dailyStats: DailyStats[];
-        rawData: ReturnType<typeof LocalStorage.getAllData>;
-    } {
-        return {
-            exportDate: new Date().toISOString(),
-            pomodoro: this.getPomodoroStats(),
-            tasks: this.getTaskStats(),
-            breakReminders: this.getBreakReminderStats(),
-            spacedRepetition: this.getSpacedRepetitionStats(),
-            dailyStats: LocalStorage.getAllDailyStats(),
-            rawData: LocalStorage.getAllData()
-        };
-    }
-
-    /**
-     * Get statistics summary for quick overview
-     */
-    static getStatsSummary(): {
-        totalSessions: number;
-        totalFocusHours: number;
-        totalTasks: number;
-        completedTasks: number;
-        currentStreak: number;
-        weeklyGoalProgress: number;
-    } {
-        const stats = this.getDashboardStats();
-
-        return {
-            totalSessions: stats.pomodoro.totalSessions,
-            totalFocusHours: Math.round(stats.pomodoro.totalFocusTime / 60 * 10) / 10,
-            totalTasks: stats.tasks.totalTasks,
-            completedTasks: stats.tasks.completedTasks,
-            currentStreak: stats.pomodoro.currentStreak,
-            weeklyGoalProgress: Math.round((stats.thisWeek.totalSessions / 28) * 100)
-        };
     }
 }

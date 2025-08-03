@@ -430,11 +430,37 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                 // Regular completed tasks
                 if (task.completed) return false;
 
-                // Recurring tasks completed today (can't be completed again)
-                if (task.recurring?.enabled && !LocalStorage.canCompleteRecurringTask(task)) return false;
+                // Recurring tasks - show if due today and not completed today
+                if (task.recurring?.enabled) {
+                    const now = Date.now();
+                    const today = new Date(now);
+                    const nextDue = new Date(task.recurring.nextDue);
 
-                // Spaced repetition tasks completed today (can't be completed again)
-                if (task.spacedRepetition?.enabled && !LocalStorage.canCompleteSpacedRepetitionTask(task)) return false;
+                    // Check if task is due today or overdue
+                    const isDueToday = nextDue.getFullYear() === today.getFullYear() &&
+                        nextDue.getMonth() === today.getMonth() &&
+                        nextDue.getDate() === today.getDate();
+                    const isOverdue = nextDue.getTime() < now;
+
+                    // Show if due today/overdue and can be completed
+                    return (isDueToday || isOverdue) && LocalStorage.canCompleteRecurringTask(task);
+                }
+
+                // Spaced repetition tasks - show if due today and not reviewed today
+                if (task.spacedRepetition?.enabled) {
+                    const now = Date.now();
+                    const today = new Date(now);
+                    const nextReview = new Date(task.spacedRepetition.nextReviewDate);
+
+                    // Check if task is due for review today or overdue
+                    const isDueToday = nextReview.getFullYear() === today.getFullYear() &&
+                        nextReview.getMonth() === today.getMonth() &&
+                        nextReview.getDate() === today.getDate();
+                    const isOverdue = nextReview.getTime() < now;
+
+                    // Show if due today/overdue and can be completed
+                    return (isDueToday || isOverdue) && LocalStorage.canCompleteSpacedRepetitionTask(task);
+                }
 
                 return true;
             });

@@ -896,9 +896,12 @@ export class LocalStorage {
     console.log('All local data has been reset');
   }
 
-  // Helper method to sync data to Firebase when user is logged in
-  static async syncToFirebase(dataType: 'sessions' | 'tasks' | 'settings' | 'stats' | 'breakReminders' | 'breakReminderCompletions', data?: any): Promise<void> {
+  // Enhanced Firebase sync with retry logic and conflict resolution
+  static async syncToFirebase(dataType: 'sessions' | 'tasks' | 'settings' | 'stats' | 'breakReminders' | 'breakReminderCompletions', data?: any, retryCount: number = 0): Promise<void> {
     if (typeof window === 'undefined' || this._isLoadingFromFirebase || this._firebaseSyncDisabled) return;
+
+    const maxRetries = 3;
+    const retryDelay = Math.pow(2, retryCount) * 1000; // Exponential backoff
 
     try {
       // Use static imports - Firebase modules are already available
@@ -916,38 +919,74 @@ export class LocalStorage {
         return;
       }
 
+      console.log(`🔄 Syncing ${dataType} to Firebase (attempt ${retryCount + 1})`);
+
       switch (dataType) {
         case 'sessions':
           if (data) {
-            await FirebaseService.saveSessions(user, Array.isArray(data) ? data : [data]);
+            const sessions = Array.isArray(data) ? data : [data];
+            // Validate sessions before syncing
+            const validSessions = sessions.filter(session =>
+              session.id && session.type && typeof session.duration === 'number' && typeof session.timestamp === 'number'
+            );
+            if (validSessions.length > 0) {
+              await FirebaseService.saveSessions(user, validSessions);
+            }
           }
           break;
         case 'tasks':
           const tasks = data || this.getTasks();
-          await FirebaseService.saveTasks(user, tasks);
+          // Validate tasks before syncing
+          const validTasks = tasks.filter((task: any) =>
+            task.id && task.title && typeof task.completed === 'boolean'
+          );
+          if (validTasks.length > 0) {
+            await FirebaseService.saveTasks(user, validTasks);
+          }
           break;
         case 'settings':
           const settings = data || this.getSettings();
-          await FirebaseService.saveSettings(user, settings);
+          if (settings && typeof settings === 'object') {
+            await FirebaseService.saveSettings(user, settings);
+          }
           break;
         case 'stats':
-          if (data) {
+          if (data && data.date) {
             await FirebaseService.saveStats(user, data);
           }
           break;
         case 'breakReminders':
           const breakReminders = data || this.getBreakReminders();
-          await FirebaseService.saveBreakReminders(user, breakReminders);
+          if (Array.isArray(breakReminders) && breakReminders.length > 0) {
+            await FirebaseService.saveBreakReminders(user, breakReminders);
+          }
           break;
         case 'breakReminderCompletions':
           if (data) {
-            await FirebaseService.saveBreakReminderCompletions(user, Array.isArray(data) ? data : [data]);
+            const completions = Array.isArray(data) ? data : [data];
+            const validCompletions = completions.filter(completion =>
+              completion.id && completion.reminderId && completion.completedAt
+            );
+            if (validCompletions.length > 0) {
+              await FirebaseService.saveBreakReminderCompletions(user, validCompletions);
+            }
           }
           break;
       }
+
+      console.log(`✅ Successfully synced ${dataType} to Firebase`);
+
     } catch (error) {
-      // Don't throw errors for Firebase sync failures - just log them
-      console.warn(`⚠️ Firebase sync failed for ${dataType}:`, error);
+      console.warn(`⚠️ Firebase sync failed for ${dataType} (attempt ${retryCount + 1}):`, error);
+
+      // Retry with exponential backoff
+      if (retryCount < maxRetries) {
+        console.log(`🔄 Retrying sync in ${retryDelay}ms...`);
+        setTimeout(() => {
+          this.syncToFirebase(dataType, data, retryCount + 1);
+        }, retryDelay);
+        return;
+      }
 
       // If it's a permission error, disable Firebase sync temporarily
       if (error instanceof Error && error.message.includes('permissions')) {
@@ -959,6 +998,42 @@ export class LocalStorage {
           this._firebaseSyncDisabled = false;
           console.log('Firebase sync re-enabled');
         }, 5 * 60 * 1000);
+      }
+
+      // Store failed sync for later retry
+      this.queueFailedSync(dataType, data);
+    }
+  }
+
+  // Queue failed syncs for retry
+  private static failedSyncs: Array<{ dataType: string; data: any; timestamp: number }> = [];
+
+  private static queueFailedSync(dataType: string, data: any): void {
+    this.failedSyncs.push({
+      dataType,
+      data,
+      timestamp: Date.now()
+    });
+
+    // Limit queue size
+    if (this.failedSyncs.length > 50) {
+      this.failedSyncs = this.failedSyncs.slice(-25);
+    }
+  }
+
+  // Retry failed syncs
+  static async retryFailedSyncs(): Promise<void> {
+    if (this.failedSyncs.length === 0) return;
+
+    console.log(`🔄 Retrying ${this.failedSyncs.length} failed syncs...`);
+
+    const syncsToRetry = [...this.failedSyncs];
+    this.failedSyncs = [];
+
+    for (const sync of syncsToRetry) {
+      // Only retry syncs that are less than 1 hour old
+      if (Date.now() - sync.timestamp < 60 * 60 * 1000) {
+        await this.syncToFirebase(sync.dataType as any, sync.data);
       }
     }
   }

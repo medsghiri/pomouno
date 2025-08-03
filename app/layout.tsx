@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as SonnerToaster } from '@/components/ui/sonner';
+import { ThemeProvider, themeScript } from '@/components/theme-provider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -115,6 +116,12 @@ export default function RootLayout({
         <meta name="msapplication-TileColor" content="#E53935" />
         <meta name="msapplication-config" content="/browserconfig.xml" />
         <script
+          dangerouslySetInnerHTML={{
+            __html: themeScript
+          }}
+        />
+
+        <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
@@ -165,7 +172,9 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className}>
-        {children}
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
         <Toaster />
         <SonnerToaster />
       </body>

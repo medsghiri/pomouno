@@ -118,96 +118,92 @@
   }
 }
 
-/* Custom theme styles - placed outside layers for higher specificity */
-/* Light theme backgrounds */
-.theme-light {
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%) !important;
-  color: #1e293b !important;
-}
-
-/* Clean Dark theme - simple and elegant */
-.theme-dark {
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%) !important;
-  color: #f5f5f5 !important;
-}
+/* Custom theme styles - Simple and fast */
 
 /* Red/Tomato theme - reddish gradient for pomodoro focus */
-.theme-focus-light {
-  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 50%, #fecaca 100%) !important;
-  /* color: #7f1d1d !important; */
+body {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 50%, #fecaca 100%);
+  min-height: 100vh;
 }
 
-.theme-focus-dark {
-  background: linear-gradient(135deg, #1a0a0a 0%, #2a1010 100%) !important;
-  color: #fecaca !important;
+.dark body {
+  background: linear-gradient(135deg, #1a0a0a 0%, #2a1010 100%);
+  color: #fecaca;
 }
 
 /* Ensure proper text contrast in light theme */
-.theme-focus-light .text-gray-900,
-.theme-focus-light .text-foreground {
-  color: #7f1d1d !important;
+.text-gray-900,
+.text-foreground {
+  color: #7f1d1d;
 }
 
-.theme-focus-light .text-gray-700,
-.theme-focus-light .text-muted-foreground {
-  color: #991b1b !important;
+.text-gray-700,
+.text-muted-foreground {
+  color: #991b1b;
 }
 
-.theme-focus-light .text-gray-600 {
-  color: #b91c1c !important;
+.text-gray-600 {
+  color: #b91c1c;
 }
-
-/* 
-.theme-focus-light .text-white {
-  color: #7f1d1d !important;
-} */
 
 /* Dark theme text colors - clean and readable */
-.theme-focus-dark .text-gray-900,
-.theme-focus-dark .text-foreground {
-  color: #f5f5f5 !important;
+.dark .text-gray-900,
+.dark .text-foreground {
+  color: #f5f5f5;
 }
 
-.theme-focus-dark .text-gray-700,
-.theme-focus-dark .text-muted-foreground {
-  color: #e5e5e5 !important;
+.dark .text-gray-700,
+.dark .text-muted-foreground {
+  color: #e5e5e5;
 }
 
-.theme-focus-dark .text-gray-600 {
-  color: #d4d4d4 !important;
+.dark .text-gray-600 {
+  color: #d4d4d4;
 }
 
-.theme-focus-dark .text-gray-500 {
-  color: #a3a3a3 !important;
+.dark .text-gray-500 {
+  color: #a3a3a3;
 }
 
-.theme-focus-dark .text-gray-400 {
-  color: #737373 !important;
+.dark .text-gray-400 {
+  color: #737373;
 }
 
 /* Card backgrounds for better contrast */
-.theme-focus-light .bg-white\/10,
-.theme-focus-light .bg-background {
-  background-color: rgba(255, 255, 255, 0.8) !important;
-  /* color: #7f1d1d !important; */
+.bg-white\/10,
+.bg-background {
+  background-color: rgba(255, 255, 255, 0.95) !important;
 }
 
-.theme-focus-light .bg-white\/20,
-.theme-focus-light .bg-accent {
-  background-color: rgba(255, 255, 255, 0.9) !important;
-  color: #7f1d1d !important;
+.bg-white\/20,
+.bg-accent {
+  background-color: rgba(255, 255, 255, 0.98) !important;
+  color: #7f1d1d;
 }
 
-.theme-focus-dark .bg-white\/10,
-.theme-focus-dark .bg-background {
-  background-color: rgba(255, 255, 255, 0.05) !important;
-  color: #f5f5f5 !important;
+.dark .bg-white\/10,
+.dark .bg-background {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+  color: #f5f5f5;
 }
 
-.theme-focus-dark .bg-white\/20,
-.theme-focus-dark .bg-accent {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  color: #f5f5f5 !important;
+.dark .bg-white\/20,
+.dark .bg-accent {
+  background-color: rgba(0, 0, 0, 0.9) !important;
+  color: #f5f5f5;
+}
+
+/* Fix sheet/dialog backgrounds */
+[data-radix-popper-content-wrapper],
+[role="dialog"] {
+  background-color: rgba(255, 255, 255, 0.98) !important;
+  backdrop-filter: blur(8px);
+}
+
+.dark [data-radix-popper-content-wrapper],
+.dark [role="dialog"] {
+  background-color: rgba(0, 0, 0, 0.9) !important;
+  backdrop-filter: blur(8px);
 }
 
 /*

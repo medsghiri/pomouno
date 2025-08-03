@@ -55,10 +55,7 @@ export default function Home() {
     setIsDarkMode(settings.darkMode);
     setDailyGoal(settings.dailySessionGoal);
 
-    // Apply theme to document
-    document.documentElement.classList.toggle('dark', settings.darkMode);
-
-
+    // Theme is now handled by ThemeManager in ThemeProvider
   }, []);
 
   // Listen for theme changes and unsaved settings
@@ -67,7 +64,7 @@ export default function Home() {
       const settings = event.detail;
       setIsDarkMode(settings.darkMode);
       setDailyGoal(settings.dailySessionGoal);
-      document.documentElement.classList.toggle('dark', settings.darkMode);
+      // Theme is now handled by ThemeManager
       setHasUnsavedSettings(false);
     };
 
@@ -84,15 +81,17 @@ export default function Home() {
       const settings = LocalStorage.getSettings();
       setDailyGoal(settings.dailySessionGoal);
       setIsDarkMode(settings.darkMode);
-      document.documentElement.classList.toggle('dark', settings.darkMode);
+      // Theme is now handled by ThemeManager
     };
 
     window.addEventListener('settingsUpdated', handleSettingsUpdate as EventListener);
+
     window.addEventListener('settingsChanged', handleUnsavedSettings as EventListener);
     window.addEventListener('firebaseDataSynced', handleFirebaseDataSynced as EventListener);
 
     return () => {
       window.removeEventListener('settingsUpdated', handleSettingsUpdate as EventListener);
+
       window.removeEventListener('settingsChanged', handleUnsavedSettings as EventListener);
       window.removeEventListener('firebaseDataSynced', handleFirebaseDataSynced as EventListener);
     };

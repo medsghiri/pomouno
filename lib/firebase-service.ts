@@ -74,31 +74,68 @@ export class FirebaseService {
     await setDoc(userRef, cleanProfile, { merge: true });
   }
 
-  // Optimized sessions management with batch writes
+  // Enhanced sessions management with duplicate prevention
   static async saveSessions(user: User, sessions: PomodoroSession[]) {
     if (sessions.length === 0) return;
 
-    const batch = writeBatch(db);
-    const sessionsRef = collection(db, 'sessions');
+    try {
+      // First, get existing sessions to check for duplicates
+      const existingSessionsQuery = query(
+        collection(db, 'sessions'),
+        where('userId', '==', user.uid)
+      );
+      const existingSessionsSnapshot = await getDocs(existingSessionsQuery);
+      const existingSessionIds = new Set(
+        existingSessionsSnapshot.docs.map(doc => doc.data().id)
+      );
 
-    sessions.forEach(session => {
-      const docRef = doc(sessionsRef);
-      const cleanSession = removeUndefinedFields({
-        ...session,
-        userId: user.uid,
-        // Add proper timestamps for better querying
-        createdAt: serverTimestamp(),
-        timestamp: Timestamp.fromMillis(session.timestamp),
-        // Add date string for easier daily queries
-        dateString: new Date(session.timestamp).toISOString().split('T')[0],
-        // Add month/year for analytics
-        month: new Date(session.timestamp).getMonth() + 1,
-        year: new Date(session.timestamp).getFullYear()
+      // Filter out sessions that already exist
+      const newSessions = sessions.filter(session => !existingSessionIds.has(session.id));
+
+      if (newSessions.length === 0) {
+        console.log('No new sessions to save - all already exist');
+        return;
+      }
+
+      console.log(`Saving ${newSessions.length} new sessions (${sessions.length - newSessions.length} duplicates skipped)`);
+
+      const batch = writeBatch(db);
+      const sessionsRef = collection(db, 'sessions');
+
+      newSessions.forEach(session => {
+        // Validate session data before saving
+        if (!session.id || !session.type || typeof session.duration !== 'number' || typeof session.timestamp !== 'number') {
+          console.warn('Skipping invalid session:', session);
+          return;
+        }
+
+        // Use session ID as document ID to prevent duplicates
+        const docRef = doc(sessionsRef, `${user.uid}_${session.id}`);
+        const cleanSession = removeUndefinedFields({
+          ...session,
+          userId: user.uid,
+          // Add proper timestamps for better querying
+          createdAt: serverTimestamp(),
+          timestamp: Timestamp.fromMillis(session.timestamp),
+          // Add date string for easier daily queries
+          dateString: new Date(session.timestamp).toISOString().split('T')[0],
+          // Add month/year for analytics
+          month: new Date(session.timestamp).getMonth() + 1,
+          year: new Date(session.timestamp).getFullYear(),
+          // Add validation metadata
+          validated: true,
+          syncedAt: serverTimestamp()
+        });
+        batch.set(docRef, cleanSession);
       });
-      batch.set(docRef, cleanSession);
-    });
 
-    await batch.commit();
+      await batch.commit();
+      console.log(`✅ Successfully saved ${newSessions.length} sessions to Firebase`);
+
+    } catch (error) {
+      console.error('❌ Error saving sessions to Firebase:', error);
+      throw error;
+    }
   }
 
   static async getRecentSessions(user: User, limitCount: number = 10): Promise<PomodoroSession[]> {

@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Clock, Target, CheckCircle, Flame, TrendingUp, Calendar, ChevronLeft, ChevronRight, BarChart3, Coffee, Brain, Users, Activity, Zap } from 'lucide-react';
 import { LocalStorage, DailyStats, WeeklyStats, MonthlyStats } from '@/lib/storage';
-import { StatisticsEngine } from '@/lib/statistics-engine';
+import { StatisticsEngine, AccurateStatistics } from '@/lib/statistics-engine';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, PieChart, Pie, Cell, ResponsiveContainer, Area, AreaChart } from 'recharts';
 
@@ -99,24 +99,46 @@ export function StatsDisplay() {
   }, [selectedDate]);
 
   const loadStats = () => {
-    // Today's stats - use same method as homepage for consistency
-    const currentTodayStats = LocalStorage.getTodaysStats();
-    setTodayStats(currentTodayStats);
+    // Use local storage for statistics
+    const sessions = LocalStorage.getAllSessions();
+    const tasks = LocalStorage.getTasks();
 
-    // Weekly stats
-    const currentWeeklyStats = LocalStorage.getWeeklyStats(selectedDate);
+    // Today's stats - use accurate calculation
+    const today = new Date().toISOString().split('T')[0];
+    const accurateToday = StatisticsEngine.calculateDailyStats(sessions, tasks, today);
+
+    // Add accurate streak calculation
+    const allDailyStats: DailyStats[] = [];
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(thirtyDaysAgo);
+      date.setDate(thirtyDaysAgo.getDate() + i);
+      const dateString = date.toISOString().split('T')[0];
+      const dayStats = StatisticsEngine.calculateDailyStats(sessions, tasks, dateString);
+      allDailyStats.push(dayStats);
+    }
+
+    const accurateStreak = StatisticsEngine.calculateStreakCount(allDailyStats);
+    accurateToday.streak = accurateStreak;
+
+    setTodayStats(accurateToday);
+
+    // Weekly stats - use accurate calculation with Monday start
+    const currentWeeklyStats = StatisticsEngine.calculateWeeklyStats(sessions, tasks, selectedDate);
     setWeeklyStats(currentWeeklyStats);
 
-    // Monthly stats
+    // Monthly stats - fallback to original for now
     const currentMonthlyStats = LocalStorage.getMonthlyStats(
       selectedDate.getFullYear(),
       selectedDate.getMonth() + 1
     );
     setMonthlyStats(currentMonthlyStats);
 
-    // Enhanced statistics
-    const currentDashboardStats = StatisticsEngine.getDashboardStats();
-    setDashboardStats(currentDashboardStats);
+    // Enhanced statistics - get real-time stats
+    const realTimeStats = StatisticsEngine.getRealTimeStatistics(sessions, tasks);
+    setDashboardStats(realTimeStats as any);
   };
 
   const formatTime = (minutes: number) => {
@@ -595,7 +617,7 @@ export function StatsDisplay() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
                   title="Total Sessions"
-                  value={weeklyStats.totalSessions}
+                  value={weeklyStats?.totalSessions || 0}
                   icon={Target}
                   color="text-red-600 dark:text-red-400"
                   bgColor="bg-red-50 dark:bg-red-900/20"
@@ -760,7 +782,7 @@ export function StatsDisplay() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
                   title="Total Sessions"
-                  value={monthlyStats.totalSessions}
+                  value={monthlyStats?.totalSessions || 0}
                   icon={Target}
                   color="text-red-600 dark:text-red-400"
                   bgColor="bg-red-50 dark:bg-red-900/20"
@@ -951,13 +973,13 @@ export function StatsDisplay() {
 
         {/* Overview Tab - Comprehensive Statistics */}
         <TabsContent value="overview" className="space-y-6">
-          {dashboardStats && (
+          {dashboardStats && dashboardStats.pomodoro && (
             <>
               {/* Key Metrics Overview */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
                   title="Total Sessions"
-                  value={dashboardStats.pomodoro.totalSessions}
+                  value={dashboardStats.pomodoro.totalSessions || 0}
                   icon={Target}
                   color="text-red-600 dark:text-red-400"
                   bgColor="bg-red-50 dark:bg-red-900/20"
@@ -966,7 +988,7 @@ export function StatsDisplay() {
                 />
                 <StatCard
                   title="Total Focus Time"
-                  value={formatTime(dashboardStats.pomodoro.totalFocusTime)}
+                  value={formatTime(dashboardStats.pomodoro?.totalFocusTime || 0)}
                   icon={Clock}
                   color="text-orange-600 dark:text-orange-400"
                   bgColor="bg-orange-50 dark:bg-orange-900/20"
@@ -975,7 +997,7 @@ export function StatsDisplay() {
                 />
                 <StatCard
                   title="Tasks Completed"
-                  value={dashboardStats.tasks.completedTasks}
+                  value={dashboardStats.tasks?.completedTasks || 0}
                   icon={CheckCircle}
                   color="text-red-600 dark:text-red-400"
                   bgColor="bg-red-50 dark:bg-red-900/20"
@@ -984,7 +1006,7 @@ export function StatsDisplay() {
                 />
                 <StatCard
                   title="Current Streak"
-                  value={dashboardStats.pomodoro.currentStreak}
+                  value={dashboardStats.pomodoro?.currentStreak || 0}
                   icon={Flame}
                   color="text-orange-600 dark:text-orange-400"
                   bgColor="bg-orange-50 dark:bg-orange-900/20"
@@ -1007,9 +1029,9 @@ export function StatsDisplay() {
                       <PieChart>
                         <Pie
                           data={[
-                            { name: 'Work Sessions', value: dashboardStats.pomodoro.workSessions, color: '#ef4444' },
-                            { name: 'Short Breaks', value: dashboardStats.pomodoro.shortBreakSessions, color: '#3b82f6' },
-                            { name: 'Long Breaks', value: dashboardStats.pomodoro.longBreakSessions, color: '#10b981' },
+                            { name: 'Work Sessions', value: dashboardStats.pomodoro?.workSessions || 0, color: '#ef4444' },
+                            { name: 'Short Breaks', value: dashboardStats.pomodoro?.shortBreakSessions || 0, color: '#3b82f6' },
+                            { name: 'Long Breaks', value: dashboardStats.pomodoro?.longBreakSessions || 0, color: '#10b981' },
                           ]}
                           cx="50%"
                           cy="50%"
@@ -1018,9 +1040,9 @@ export function StatsDisplay() {
                           dataKey="value"
                         >
                           {[
-                            { name: 'Work Sessions', value: dashboardStats.pomodoro.workSessions, color: '#ef4444' },
-                            { name: 'Short Breaks', value: dashboardStats.pomodoro.shortBreakSessions, color: '#3b82f6' },
-                            { name: 'Long Breaks', value: dashboardStats.pomodoro.longBreakSessions, color: '#10b981' },
+                            { name: 'Work Sessions', value: dashboardStats.pomodoro?.workSessions || 0, color: '#ef4444' },
+                            { name: 'Short Breaks', value: dashboardStats.pomodoro?.shortBreakSessions || 0, color: '#3b82f6' },
+                            { name: 'Long Breaks', value: dashboardStats.pomodoro?.longBreakSessions || 0, color: '#10b981' },
                           ].map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
@@ -1044,13 +1066,13 @@ export function StatsDisplay() {
                       <div className="grid grid-cols-2 gap-4">
                         <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
                           <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-                            {Math.round(dashboardStats.tasks.completionRate)}%
+                            {Math.round(dashboardStats.tasks?.completionRate || 0)}%
                           </div>
                           <div className="text-sm text-green-700 dark:text-green-300">Completion Rate</div>
                         </div>
                         <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                           <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                            {Math.round(dashboardStats.tasks.averageSessionsPerTask * 10) / 10}
+                            {Math.round((dashboardStats.tasks?.averageSessionsPerTask || 0) * 10) / 10}
                           </div>
                           <div className="text-sm text-blue-700 dark:text-blue-300">Avg Sessions/Task</div>
                         </div>
@@ -1060,8 +1082,8 @@ export function StatsDisplay() {
                         <PieChart>
                           <Pie
                             data={[
-                              { name: 'Completed', value: dashboardStats.tasks.completedTasks, color: '#10b981' },
-                              { name: 'Active', value: dashboardStats.tasks.activeTasks, color: '#f59e0b' },
+                              { name: 'Completed', value: dashboardStats.tasks?.completedTasks || 0, color: '#10b981' },
+                              { name: 'Active', value: dashboardStats.tasks?.activeTasks || 0, color: '#f59e0b' },
                             ]}
                             cx="50%"
                             cy="50%"
@@ -1071,8 +1093,8 @@ export function StatsDisplay() {
                             dataKey="value"
                           >
                             {[
-                              { name: 'Completed', value: dashboardStats.tasks.completedTasks, color: '#10b981' },
-                              { name: 'Active', value: dashboardStats.tasks.activeTasks, color: '#f59e0b' },
+                              { name: 'Completed', value: dashboardStats.tasks?.completedTasks || 0, color: '#10b981' },
+                              { name: 'Active', value: dashboardStats.tasks?.activeTasks || 0, color: '#f59e0b' },
                             ].map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
@@ -1086,7 +1108,7 @@ export function StatsDisplay() {
               </div>
 
               {/* Break Reminder Details - Only show if there's actual data */}
-              {dashboardStats && dashboardStats.breakReminders.totalRemindersShown > 0 && (
+              {dashboardStats && dashboardStats.breakReminders && dashboardStats.breakReminders.totalRemindersShown > 0 && (
                 <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
                   <div className="space-y-6">
                     <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
@@ -1097,58 +1119,61 @@ export function StatsDisplay() {
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                       <div className="text-center p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
                         <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                          {dashboardStats.breakReminders.totalRemindersCompleted}
+                          {dashboardStats.breakReminders?.totalRemindersCompleted || 0}
                         </div>
                         <div className="text-sm text-amber-700 dark:text-amber-300">Completed</div>
                       </div>
                       <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                         <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                          {dashboardStats.breakReminders.totalRemindersShown}
+                          {dashboardStats.breakReminders?.totalRemindersShown || 0}
                         </div>
                         <div className="text-sm text-blue-700 dark:text-blue-300">Total Shown</div>
                       </div>
                       <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
                         <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                          {Math.round(dashboardStats.breakReminders.completionRate)}%
+                          {Math.round(dashboardStats.breakReminders?.completionRate || 0)}%
                         </div>
                         <div className="text-sm text-green-700 dark:text-green-300">Completion Rate</div>
                       </div>
                       <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                         <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                          {Math.round(dashboardStats.breakReminders.averageCompletionsPerBreak * 10) / 10}
+                          {Math.round((dashboardStats.breakReminders?.averageCompletionsPerBreak || 0) * 10) / 10}
                         </div>
                         <div className="text-sm text-purple-700 dark:text-purple-300">Avg per Break</div>
                       </div>
                     </div>
 
                     {/* Break Reminder Categories */}
-                    {Object.keys(dashboardStats.breakReminders.remindersByCategory).length > 0 && (
+                    {dashboardStats.breakReminders?.remindersByCategory && Object.keys(dashboardStats.breakReminders.remindersByCategory).length > 0 && (
                       <div className="space-y-4">
                         <h4 className="font-medium text-gray-700 dark:text-gray-300">Activity Breakdown</h4>
                         <div className="space-y-3">
-                          {Object.entries(dashboardStats.breakReminders.remindersByCategory).map(([category, stats]) => (
-                            <div key={category} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
-                              <div className="flex items-center gap-3">
-                                <div className="capitalize font-medium text-gray-900 dark:text-gray-100">
-                                  {category === 'hydration' ? '💧 Hydration' :
-                                    category === 'movement' ? '🚶 Movement' :
-                                      category === 'rest' ? '😌 Rest' :
-                                        `✨ ${category}`}
+                          {Object.entries(dashboardStats.breakReminders?.remindersByCategory || {}).map(([category, stats]) => {
+                            const typedStats = stats as { completed: number; shown: number };
+                            return (
+                              <div key={category} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                                <div className="flex items-center gap-3">
+                                  <div className="capitalize font-medium text-gray-900 dark:text-gray-100">
+                                    {category === 'hydration' ? '💧 Hydration' :
+                                      category === 'movement' ? '🚶 Movement' :
+                                        category === 'rest' ? '😌 Rest' :
+                                          `✨ ${category}`}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-4 text-sm">
+                                  <span className="text-green-600 dark:text-green-400">
+                                    {typedStats.completed} completed
+                                  </span>
+                                  <span className="text-gray-500 dark:text-gray-400">
+                                    / {typedStats.shown} shown
+                                  </span>
+                                  <span className="font-medium text-gray-900 dark:text-gray-100">
+                                    {typedStats.shown > 0 ? Math.round((typedStats.completed / typedStats.shown) * 100) : 0}%
+                                  </span>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-4 text-sm">
-                                <span className="text-green-600 dark:text-green-400">
-                                  {stats.completed} completed
-                                </span>
-                                <span className="text-gray-500 dark:text-gray-400">
-                                  / {stats.shown} shown
-                                </span>
-                                <span className="font-medium text-gray-900 dark:text-gray-100">
-                                  {stats.shown > 0 ? Math.round((stats.completed / stats.shown) * 100) : 0}%
-                                </span>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}

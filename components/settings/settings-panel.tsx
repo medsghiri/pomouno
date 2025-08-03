@@ -209,6 +209,15 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
     setHasChanges(true);
     onSettingsChange?.();
 
+    // Handle theme changes immediately
+    if (key === 'darkMode') {
+      if (value) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+
     // Trigger settings changed event
     window.dispatchEvent(new CustomEvent('settingsChanged'));
   };
@@ -408,6 +417,36 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
                 })()} of focused work.
               </p>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      <Separator className="border-gray-300/20 dark:border-gray-700/20" />
+
+      {/* Theme & Appearance */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wide flex items-center gap-2">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
+          Theme & Appearance
+        </h3>
+
+        <div className="space-y-4">
+          <Card className="p-4 bg-white/10 backdrop-blur-sm text-gray-900 dark:text-white dark:bg-gray-800/50">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <Label htmlFor="dark-mode" className="text-gray-900 dark:text-white font-medium">Dark mode</Label>
+                <p className="text-xs text-gray-700 dark:text-gray-400">
+                  Switch between light and dark theme
+                </p>
+              </div>
+              <Switch
+                id="dark-mode"
+                checked={settings.darkMode}
+                onCheckedChange={(checked) => handleSettingChange('darkMode', checked)}
+              />
             </div>
           </Card>
         </div>

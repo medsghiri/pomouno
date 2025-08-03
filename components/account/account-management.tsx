@@ -5,6 +5,7 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '@/lib/firebase';
 import { FirebaseService } from '@/lib/firebase-service';
 import { LocalStorage } from '@/lib/storage';
+
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -169,26 +170,93 @@ export function AccountManagement() {
     const handleResetProgress = async () => {
         if (!user) return;
 
+        // Enhanced confirmation dialog
+        const confirmed = confirm(
+            '⚠️ WARNING: This will permanently delete ALL your progress data including:\n\n' +
+            '• All Pomodoro sessions and statistics\n' +
+            '• All tasks and projects\n' +
+            '• All productivity streaks and achievements\n' +
+            '• All break reminders and completions\n' +
+            '• All settings (except account info)\n\n' +
+            'This action CANNOT be undone!\n\n' +
+            'Are you absolutely sure you want to continue?'
+        );
+
+        if (!confirmed) return;
+
+        const doubleConfirmed = confirm(
+            '🚨 FINAL WARNING 🚨\n\n' +
+            'You are about to permanently delete your entire productivity history.\n' +
+            'This includes all your hard-earned progress and achievements.\n\n' +
+            'Type "DELETE MY PROGRESS" in the next prompt to confirm.'
+        );
+
+        if (!doubleConfirmed) return;
+
+        const finalConfirmation = prompt(
+            'Type "DELETE MY PROGRESS" (exactly as shown) to confirm:'
+        );
+
+        if (finalConfirmation !== 'DELETE MY PROGRESS') {
+            toast({
+                title: "Reset cancelled",
+                description: "Your progress is safe. Reset was cancelled.",
+            });
+            return;
+        }
+
         setIsResettingProgress(true);
         try {
-            // Reset Firebase data
+            console.log('🗑️ Starting comprehensive progress reset...');
+
+            // Reset Firebase data first
+            console.log('🔥 Resetting Firebase data...');
             await FirebaseService.resetUserProgress(user);
 
             // Reset local data
+            console.log('💾 Resetting local storage data...');
             LocalStorage.resetAllData();
 
+            // Clear any cached data
+            console.log('🧹 Clearing cached data...');
+            if (typeof window !== 'undefined') {
+                // Clear any other cached data
+                sessionStorage.clear();
+
+                // Clear specific cache keys that might exist
+                const cacheKeys = [
+                    'pomouono_today_sessions',
+                    'pomouono_all_sessions',
+                    'pomouono_tasks',
+                    'pomouono_daily_stats',
+                    'pomouono_break_reminders',
+                    'pomouono_break_reminder_completions',
+                    'pomouono_task_categories',
+                    'pomouono_break_reminder_categories'
+                ];
+
+                cacheKeys.forEach(key => {
+                    localStorage.removeItem(key);
+                });
+            }
+
             toast({
-                title: "Progress reset",
-                description: "All your progress has been reset successfully.",
+                title: "✅ Progress reset complete",
+                description: "All your progress has been permanently deleted. Starting fresh!",
             });
 
+            console.log('✅ Progress reset completed successfully');
+
             // Refresh the page to reflect changes
-            window.location.reload();
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+
         } catch (error) {
-            console.error('Progress reset error:', error);
+            console.error('❌ Progress reset error:', error);
             toast({
                 title: "Reset failed",
-                description: "Failed to reset your progress. Please try again.",
+                description: `Failed to reset your progress: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
                 variant: "destructive",
             });
         } finally {

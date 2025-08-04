@@ -50,6 +50,7 @@ export function TimerDisplay({
     goalProgress: 'Goal 0 / 4',
     completionRate: 0
   });
+  const [isAudioServiceReady, setIsAudioServiceReady] = useState(false);
   const audioService = AudioService.getInstance();
 
   useEffect(() => {
@@ -85,7 +86,18 @@ export function TimerDisplay({
 
   // Initialize audio service and handle volume changes
   useEffect(() => {
-    audioService.initialize();
+    audioService.initialize().then(() => {
+      // Check if service is truly ready with data
+      const checkReady = () => {
+        if (audioService.isReady()) {
+          setIsAudioServiceReady(true);
+        } else {
+          // Check again in a bit
+          setTimeout(checkReady, 50);
+        }
+      };
+      checkReady();
+    });
     audioService.setVolume(settings.soundVolume);
     audioService.setNotificationVolume(settings.notificationVolume);
   }, [settings.soundVolume, settings.notificationVolume]);
@@ -229,7 +241,7 @@ export function TimerDisplay({
   const currentTrackInfo = audioService.getCurrentTrackInfo();
 
   // Get available audio for current session type
-  const availableAudio = audioService.getAvailableAudio();
+  const availableAudio = isAudioServiceReady ? audioService.getAvailableAudio() : { focus: [], break: [], notification: [] };
   const currentAudioOptions = sessionType === 'work' ? availableAudio.focus : availableAudio.break;
 
   // Handle audio change
@@ -390,18 +402,9 @@ export function TimerDisplay({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Volume Control Popover - only show if audio is selected */}
-          {hasAudioSelected() && (
-            <SoundControlPopover />
-          )}
+          {/* Sound Control Popover - always show for audio selection and volume control */}
+          <SoundControlPopover />
         </div>
-
-        {/* Audio hint when no audio is selected */}
-        {!hasAudioSelected() && (
-          <div className="text-xs text-gray-500 dark:text-gray-400 bg-white/10 dark:bg-gray-800/30 px-3 py-2 rounded-lg inline-block backdrop-blur-sm">
-            Select audio above to enable sound during sessions
-          </div>
-        )}
       </div>
 
       {/* Session Type Selection - Improved with clear active state */}

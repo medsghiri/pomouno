@@ -115,7 +115,7 @@ class AudioService {
         }
     }
 
-    
+
 
     private async initializeAudioElements() {
         const initPromises = Object.entries(this.audioMetadata).map(async ([key, metadata]) => {
@@ -140,7 +140,7 @@ class AudioService {
 
 
 
-    
+
 
     // Get available audio organized by category and type
     getAvailableAudio() {
@@ -481,7 +481,7 @@ class AudioService {
 
     // Check if service is ready
     isReady(): boolean {
-        return this.isInitialized && !this.isLoading;
+        return this.isInitialized && !this.isLoading && Object.keys(this.audioMetadata).length > 0;
     }
 
     // Test audio availability for all users (including non-authenticated)

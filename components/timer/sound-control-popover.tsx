@@ -116,8 +116,8 @@ export function SoundControlPopover({ className }: SoundControlPopoverProps) {
                     className={cn(
                         "transition-all duration-200 backdrop-blur-sm",
                         !isMuted
-                            ? "bg-white/20 hover:bg-white/30 text-gray-900 dark:text-gray-100 dark:bg-gray-700/50 dark:hover:bg-gray-600/50"
-                            : "bg-white/10 hover:bg-white/20 text-gray-600 dark:text-gray-400 dark:bg-gray-800/30 dark:hover:bg-gray-700/40",
+                            ? "bg-white/20 hover:bg-white/30 text-foreground dark:bg-gray-700/50 dark:hover:bg-gray-600/50"
+                            : "bg-white/10 hover:bg-white/20 text-muted-foreground dark:bg-gray-800/30 dark:hover:bg-gray-700/40",
                         className
                     )}
                 >
@@ -127,7 +127,7 @@ export function SoundControlPopover({ className }: SoundControlPopoverProps) {
             <PopoverContent className="w-64 backdrop-blur-md" align="center">
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <h4 className="text-sm font-medium text-foreground">
                             Session Audio
                         </h4>
                         <Button
@@ -138,7 +138,7 @@ export function SoundControlPopover({ className }: SoundControlPopoverProps) {
                                 "h-8 w-8 p-0 transition-all duration-200",
                                 isMuted
                                     ? "bg-red-600 hover:bg-red-700 text-white"
-                                    : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                                    : "text-muted-foreground hover:text-foreground"
                             )}
                         >
                             <VolumeIcon className="w-4 h-4" />
@@ -147,7 +147,7 @@ export function SoundControlPopover({ className }: SoundControlPopoverProps) {
 
                     <div className="space-y-3">
                         <div className="flex items-center space-x-3">
-                            <VolumeX className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                            <VolumeX className="w-4 h-4 text-muted-foreground" />
                             <Slider
                                 value={[volume]}
                                 onValueChange={handleVolumeChange}
@@ -157,17 +157,17 @@ export function SoundControlPopover({ className }: SoundControlPopoverProps) {
                                 className="flex-1"
                                 disabled={isMuted}
                             />
-                            <Volume2 className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                            <Volume2 className="w-4 h-4 text-muted-foreground" />
                         </div>
 
                         <div className="text-center">
-                            <span className="text-xs text-gray-600 dark:text-gray-400">
+                            <span className="text-xs text-muted-foreground">
                                 {isMuted ? "Muted" : `${Math.round(volume * 100)}%`}
                             </span>
                         </div>
                     </div>
 
-                    <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                    <div className="text-xs text-muted-foreground text-center">
                         Controls volume for focus and break session audio
                     </div>
                 </div>

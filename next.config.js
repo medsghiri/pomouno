@@ -3,7 +3,7 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  images: { 
+  images: {
     unoptimized: true,
     // Add domains for external images if needed
     remotePatterns: [

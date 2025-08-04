@@ -114,9 +114,9 @@ export class FirebaseService {
         const cleanSession = removeUndefinedFields({
           ...session,
           userId: user.uid,
-          // Add proper timestamps for better querying
-          createdAt: serverTimestamp(),
-          timestamp: Timestamp.fromMillis(session.timestamp),
+          // Store actual timestamp values, not serverTimestamp objects
+          createdAt: session.timestamp, // Use session timestamp as creation time
+          timestamp: session.timestamp, // Keep original timestamp as number
           // Add date string for easier daily queries
           dateString: new Date(session.timestamp).toISOString().split('T')[0],
           // Add month/year for analytics
@@ -124,7 +124,7 @@ export class FirebaseService {
           year: new Date(session.timestamp).getFullYear(),
           // Add validation metadata
           validated: true,
-          syncedAt: serverTimestamp()
+          syncedAt: Date.now() // Use actual timestamp instead of serverTimestamp
         });
         batch.set(docRef, cleanSession);
       });
@@ -150,7 +150,7 @@ export class FirebaseService {
 
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
-      const { userId, createdAt, dateString, month, year, ...sessionData } = data;
+      const { userId, createdAt, dateString, month, year, syncedAt, validated, ...sessionData } = data;
 
       // Handle both Firestore Timestamp objects and regular numbers
       let timestamp = data.timestamp;
@@ -161,7 +161,6 @@ export class FirebaseService {
       }
 
       return {
-        id: doc.id,
         ...sessionData,
         timestamp
       } as PomodoroSession;
@@ -183,7 +182,7 @@ export class FirebaseService {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
-      const { userId, createdAt, dateString, month, year, ...sessionData } = data;
+      const { userId, createdAt, dateString, month, year, syncedAt, validated, ...sessionData } = data;
 
       // Handle both Firestore Timestamp objects and regular numbers
       let timestamp = data.timestamp;
@@ -194,33 +193,57 @@ export class FirebaseService {
       }
 
       return {
-        id: doc.id,
         ...sessionData,
         timestamp
       } as PomodoroSession;
     });
   }
 
-  // Optimized tasks management with proper structure
+  // Optimized tasks management with proper structure and duplicate prevention
   static async saveTasks(user: User, tasks: Task[]) {
     const batch = writeBatch(db);
     const tasksRef = collection(db, 'tasks');
 
     try {
-      // First, get existing tasks to delete them
+      // First, get existing tasks to check for duplicates by task ID
       const existingTasksQuery = query(tasksRef, where('userId', '==', user.uid));
       const existingTasks = await getDocs(existingTasksQuery);
 
-      // Delete existing tasks in batch (only if they exist)
-      if (existingTasks.docs.length > 0) {
-        existingTasks.docs.forEach(doc => {
-          batch.delete(doc.ref);
-        });
-      }
+      // Create a map of existing task IDs to document IDs
+      const existingTaskIds = new Set();
+      const existingDocIds = new Map(); // task.id -> firestore doc id
 
-      // Add new tasks in batch
+      existingTasks.docs.forEach(doc => {
+        const taskData = doc.data();
+        if (taskData.id) {
+          existingTaskIds.add(taskData.id);
+          existingDocIds.set(taskData.id, doc.id);
+        }
+      });
+
+      // Filter out tasks that already exist and delete duplicates
+      const newTasks = [];
+      const tasksToUpdate = [];
+
       tasks.forEach(task => {
-        const docRef = doc(tasksRef);
+        if (existingTaskIds.has(task.id)) {
+          // Task exists, update it instead of creating duplicate
+          tasksToUpdate.push(task);
+        } else {
+          // New task
+          newTasks.push(task);
+        }
+      });
+
+      // Delete all existing tasks first to avoid duplicates
+      existingTasks.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      // Add all tasks (both existing and new) to avoid duplicates
+      tasks.forEach(task => {
+        // Use task ID as document ID to prevent duplicates
+        const docRef = doc(tasksRef, `${user.uid}_${task.id}`);
 
         // Validate and fix createdAt timestamp
         let validCreatedAt = task.createdAt;
@@ -240,8 +263,8 @@ export class FirebaseService {
           ...task,
           createdAt: validCreatedAt, // Use the validated timestamp
           userId: user.uid,
-          firebaseCreatedAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
+          firebaseCreatedAt: Date.now(), // Use actual timestamp
+          updatedAt: Date.now(), // Use actual timestamp
           // Add status for better querying
           status: task.completed ? 'completed' : 'active',
           // Add creation date string
@@ -252,6 +275,7 @@ export class FirebaseService {
       });
 
       await batch.commit();
+      console.log(`✅ Successfully saved ${tasks.length} tasks to Firebase (${newTasks.length} new, ${tasksToUpdate.length} updated)`);
     } catch (error) {
       console.error('Error in saveTasks:', error);
       throw error;
@@ -269,9 +293,8 @@ export class FirebaseService {
 
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
-      const { userId, createdAt, updatedAt, status, createdDateString, ...taskData } = data;
+      const { userId, firebaseCreatedAt, updatedAt, status, createdDateString, ...taskData } = data;
       return {
-        id: doc.id,
         ...taskData
       } as Task;
     });
@@ -290,23 +313,24 @@ export class FirebaseService {
 
   // Settings management with versioning
   static async saveSettings(user: User, settings: Settings) {
-    const settingsRef = doc(db, 'users', user.uid, 'preferences', 'settings');
+    const settingsRef = doc(db, 'settings', user.uid);
     const cleanSettings = removeUndefinedFields({
       ...settings,
-      updatedAt: serverTimestamp(),
+      userId: user.uid,
+      updatedAt: Date.now(), // Use actual timestamp instead of serverTimestamp
       version: 1 // For future migrations
     });
     await setDoc(settingsRef, cleanSettings);
   }
 
   static async getSettings(user: User): Promise<Settings | null> {
-    const settingsRef = doc(db, 'users', user.uid, 'preferences', 'settings');
+    const settingsRef = doc(db, 'settings', user.uid);
     const docSnap = await getDoc(settingsRef);
 
     if (!docSnap.exists()) return null;
 
     const data = docSnap.data();
-    const { updatedAt, version, ...settings } = data;
+    const { userId, updatedAt, version, ...settings } = data;
     return settings as Settings;
   }
 
@@ -716,7 +740,7 @@ export class FirebaseService {
       });
 
       // Reset settings to defaults
-      const settingsRef = doc(db, 'users', user.uid, 'preferences', 'settings');
+      const settingsRef = doc(db, 'settings', user.uid);
       batch.delete(settingsRef);
 
       // Commit all deletions
@@ -739,18 +763,9 @@ export class FirebaseService {
       const userRef = doc(db, 'users', user.uid);
       await deleteDoc(userRef);
 
-      // Delete user preferences collection
-      const preferencesRef = collection(db, 'users', user.uid, 'preferences');
-      const preferencesSnapshot = await getDocs(preferencesRef);
-      const batch = writeBatch(db);
-
-      preferencesSnapshot.docs.forEach(doc => {
-        batch.delete(doc.ref);
-      });
-
-      if (preferencesSnapshot.docs.length > 0) {
-        await batch.commit();
-      }
+      // Delete user settings
+      const settingsRef = doc(db, 'settings', user.uid);
+      await deleteDoc(settingsRef);
 
       console.log('User data deleted successfully');
     } catch (error) {

@@ -1,5 +1,3 @@
-import { auth } from '@/lib/firebase';
-import { FirebaseService } from '@/lib/firebase-service';
 
 export interface PomodoroSession {
   id: string;
@@ -627,7 +625,8 @@ export class LocalStorage {
     const workSessions = daySessions.filter(s => s.type === 'work').length;
     const shortBreakSessions = daySessions.filter(s => s.type === 'short-break').length;
     const longBreakSessions = daySessions.filter(s => s.type === 'long-break').length;
-    const totalSessions = daySessions.length;
+    // For daily stats, only count work sessions as "sessions"
+    const totalSessions = workSessions;
 
     // Calculate focus time (only from work sessions)
     const focusTime = daySessions

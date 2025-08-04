@@ -11,6 +11,7 @@ import { LocalStorage } from '@/lib/storage';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Settings, BarChart3, X } from 'lucide-react';
+import { Footer } from '@/components/layout/footer';
 
 export default function AccountPage() {
     const [isDarkMode, setIsDarkMode] = useState(false);
@@ -142,6 +143,8 @@ export default function AccountPage() {
                     </div>
                 </div>
             )}
+
+            <Footer />
         </div>
     );
 }

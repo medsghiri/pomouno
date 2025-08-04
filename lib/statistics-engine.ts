@@ -40,7 +40,8 @@ export class StatisticsEngine {
         const workSessions = daySessions.filter(s => s.type === 'work' && s.completed).length;
         const shortBreakSessions = daySessions.filter(s => s.type === 'short-break' && s.completed).length;
         const longBreakSessions = daySessions.filter(s => s.type === 'long-break' && s.completed).length;
-        const totalSessions = workSessions + shortBreakSessions + longBreakSessions;
+        // For daily stats, only count work sessions as "sessions"
+        const totalSessions = workSessions;
 
         // Calculate focus time (only from completed work sessions, max 25 minutes per session)
         const focusTime = daySessions

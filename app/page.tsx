@@ -19,6 +19,7 @@ import { Settings, BarChart3, X, Clock, Target, Brain, TrendingUp, Coffee } from
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { Footer } from '@/components/layout/footer';
 
 export default function Home() {
   const [user, loading] = useAuthState(auth);
@@ -300,7 +301,7 @@ export default function Home() {
           {/* Timer Section - Full Width */}
           <div className="w-full flex flex-col items-center justify-center">
             {/* Navigation Bar - Above Timer */}
-            <div className="mb-8 bg-background/80 backdrop-blur-sm border border-gray-200 dark:bg-background/20 dark:border-background/50 rounded-full shadow-lg px-2 py-2">
+            <div className="mb-8 bg-background/80 backdrop-blur-sm border border-accent rounded-full shadow-lg px-2 py-2">
               <div className="flex items-center space-x-2">
                 <Button
                   onClick={() => setShowTasks(!showTasks)}
@@ -375,23 +376,23 @@ export default function Home() {
 
 
         <div className="my-5 bg-linear-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-red-900/20 rounded-xl p-6 text-center">
-          <h3 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">
+          <h3 className="text-xl font-semibold mb-3 text-foreground">
             Ready to boost your focus?
           </h3>
-          <p className="text-gray-700 dark:text-gray-300 mb-4">
+          <p className="text-muted-foreground mb-4">
             Start with just one 25-minute session. Pick a task, hit start, and see how much you can get done when
             you're truly focused. You might surprise yourself!
           </p>
-          <p className="text-sm text-gray-600 dark:text-gray-400 italic">
+          <p className="text-sm text-muted-foreground italic">
             "The secret to getting ahead is getting started." - Mark Twain
           </p>
         </div>
 
         {/* What is PomoUno? Article Section */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-2xl my-5 p-8 text-gray-900 dark:text-white dark:bg-gray-800/50 space-y-6">
+        <div className="bg-background/10 backdrop-blur-sm rounded-2xl my-5 p-8 text-foreground space-y-6">
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold mb-4">What is PomoUno?</h2>
-            <p className="text-lg text-gray-700 dark:text-gray-300">
+            <p className="text-lg text-muted-foreground">
               Your simple, beautiful productivity companion
             </p>
           </div>
@@ -404,11 +405,11 @@ export default function Home() {
                 </div>
                 <h3 className="text-xl font-semibold">The Pomodoro Technique</h3>
               </div>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+              <p className="text-muted-foreground leading-relaxed mb-4">
                 PomoUno is based on the famous Pomodoro Technique - a time management method that breaks work into focused 25-minute sessions.
                 It's like having a study buddy that helps you stay on track!
               </p>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+              <p className="text-muted-foreground leading-relaxed">
                 After each work session, you take a short 5-minute break. After every 4 sessions, you get a longer 15-minute break.
                 This rhythm helps your brain stay fresh and focused all day long.
               </p>
@@ -421,11 +422,11 @@ export default function Home() {
                 </div>
                 <h3 className="text-xl font-semibold">Why It Works</h3>
               </div>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+              <p className="text-muted-foreground leading-relaxed mb-4">
                 Our brains work better with clear boundaries. When you know you only need to focus for 25 minutes,
                 it feels much easier than staring at a huge task with no end in sight.
               </p>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+              <p className="text-muted-foreground leading-relaxed">
                 The regular breaks prevent burnout and actually make you more creative. It's like doing mental push-ups -
                 short bursts of intense focus followed by recovery time.
               </p>
@@ -438,11 +439,11 @@ export default function Home() {
                 </div>
                 <h3 className="text-xl font-semibold">Perfect for Students</h3>
               </div>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+              <p className="text-muted-foreground leading-relaxed mb-4">
                 Whether you're studying for exams, working on projects, or doing homework, PomoUno helps you tackle
                 any task without feeling overwhelmed. Break that huge essay into manageable chunks!
               </p>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+              <p className="text-muted-foreground leading-relaxed">
                 You can track how many sessions each subject needs, see your progress over time, and build a real
                 study habit that actually sticks.
               </p>
@@ -455,11 +456,11 @@ export default function Home() {
                 </div>
                 <h3 className="text-xl font-semibold">Track Your Growth</h3>
               </div>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+              <p className="text-muted-foreground leading-relaxed mb-4">
                 PomoUno shows you exactly how much you've accomplished. See your daily streaks, weekly totals,
                 and watch your focus improve over time. It's like a fitness tracker for your productivity!
               </p>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+              <p className="text-muted-foreground leading-relaxed">
                 Plus, you can customize everything - timer lengths, sounds, themes - to make it work perfectly for you.
                 Some people like ticking clock sounds, others prefer lofi music. You choose!
               </p>
@@ -471,8 +472,8 @@ export default function Home() {
         {showSettings && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white dark:bg-background rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
-              <div className="p-6 border-b border-gray-200/30 dark:border-dark flex items-center justify-between">
-                <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900 dark:text-white">
+              <div className="p-6 border-b border-accent flex items-center justify-between">
+                <h2 className="text-xl font-semibold flex items-center gap-2 text-foreground">
                   <Settings className="w-5 h-5 text-red-600 dark:text-red-400" />
                   Settings
                   {hasUnsavedSettings && (
@@ -483,7 +484,7 @@ export default function Home() {
                 </h2>
                 <button
                   onClick={handleCloseSettings}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+                  className="text-muted-foreground hover:text-foreground transition-colors p-2 hover:bg-accent rounded-lg"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -501,14 +502,14 @@ export default function Home() {
         {showStats && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white dark:bg-background rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-              <div className="p-6 border-b border-gray-200/30 dark:border-gray-700/30 flex items-center justify-between">
-                <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900 dark:text-white">
+              <div className="p-6 border-b border-accent flex items-center justify-between">
+                <h2 className="text-xl font-semibold flex items-center gap-2 text-foreground">
                   <BarChart3 className="w-5 h-5 text-red-600 dark:text-red-400" />
                   Stats
                 </h2>
                 <button
                   onClick={() => setShowStats(false)}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+                  className="text-muted-foreground hover:text-foreground transition-colors p-2 hover:bg-accent rounded-lg"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -523,6 +524,8 @@ export default function Home() {
         )}
 
       </main>
+
+      <Footer />
     </div>
   );
 }

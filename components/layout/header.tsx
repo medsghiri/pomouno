@@ -51,7 +51,7 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
   if (!mounted) {
     return (
       <header className="bg-background/10 backdrop-blur-md border-b border-accent/20">
-        <div className="container mx-auto px-4 py-4">
+        <div className="mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
               <Logo />
@@ -67,7 +67,7 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
 
   return (
     <header className="bg-background/10 backdrop-blur-md border-b border-accent/20">
-      <div className="container mx-auto px-4 py-3 sm:py-4">
+      <div className="mx-auto max-w-7xl px-4 py-3 sm:py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-3">

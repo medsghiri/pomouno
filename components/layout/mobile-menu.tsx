@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Menu, User, LogOut, Settings, BarChart3, UserPlus } from 'lucide-react';
+import { Menu, User, LogOut, Settings, BarChart3, UserPlus, Target, Coffee } from 'lucide-react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -16,9 +16,11 @@ interface MobileMenuProps {
     onAuthClick: () => void;
     onSettingsClick: () => void;
     onStatsClick: () => void;
+    onTasksClick: () => void;
+    onBreakRemindersClick: () => void;
 }
 
-export function MobileMenu({ onAuthClick, onSettingsClick, onStatsClick }: MobileMenuProps) {
+export function MobileMenu({ onAuthClick, onSettingsClick, onStatsClick, onTasksClick, onBreakRemindersClick }: MobileMenuProps) {
     const [user, loading] = useAuthState(auth);
     const [open, setOpen] = useState(false);
     const { toast } = useToast();
@@ -99,6 +101,26 @@ export function MobileMenu({ onAuthClick, onSettingsClick, onStatsClick }: Mobil
 
                             {/* Navigation Items */}
                             <div className="space-y-2 flex-1">
+                                <Button
+                                    onClick={() => handleMenuItemClick(onTasksClick)}
+                                    variant="ghost"
+                                    size="lg"
+                                    className="w-full justify-start h-12 text-foreground hover:text-foreground hover:bg-accent rounded-xl transition-all duration-200"
+                                >
+                                    <Target className="w-5 h-5 mr-4" />
+                                    <span className="font-medium">Tasks</span>
+                                </Button>
+
+                                <Button
+                                    onClick={() => handleMenuItemClick(onBreakRemindersClick)}
+                                    variant="ghost"
+                                    size="lg"
+                                    className="w-full justify-start h-12 text-foreground hover:text-foreground hover:bg-accent rounded-xl transition-all duration-200"
+                                >
+                                    <Coffee className="w-5 h-5 mr-4" />
+                                    <span className="font-medium">Break Reminders</span>
+                                </Button>
+
                                 <Button
                                     onClick={() => handleMenuItemClick(onStatsClick)}
                                     variant="ghost"

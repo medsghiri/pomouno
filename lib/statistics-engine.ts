@@ -305,7 +305,7 @@ export class StatisticsEngine {
             const dailyGoal = settings.dailySessionGoal || 8;
             const completionRate = Math.min((todayStats.workSessions / dailyGoal) * 100, 100);
 
-            const focusLabel = `FOCUS • ${todayStats.workSessions} sessions today • Goal ${todayStats.workSessions} / ${dailyGoal}`;
+            const focusLabel = `Goal ${todayStats.workSessions} / ${dailyGoal}`;
             const goalProgress = `Goal ${todayStats.workSessions} / ${dailyGoal}`;
 
             return {
@@ -316,7 +316,7 @@ export class StatisticsEngine {
         } catch (error) {
             console.error('Error calculating homepage focus stats:', error);
             return {
-                focusLabel: 'FOCUS • 0 sessions today • Goal 0 / 8',
+                focusLabel: 'Goal 0 / 8',
                 goalProgress: 'Goal 0 / 8',
                 completionRate: 0
             };

@@ -258,6 +258,8 @@ export default function Home() {
         onAuthClick={() => router.push('/auth')}
         onSettingsClick={() => setShowSettings(true)}
         onStatsClick={() => setShowStats(true)}
+        onTasksClick={() => setShowTasks(true)}
+        onBreakRemindersClick={() => setShowBreakReminders(true)}
       />
 
       <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-6 max-w-7xl">

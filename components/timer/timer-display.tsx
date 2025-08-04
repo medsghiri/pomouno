@@ -46,7 +46,7 @@ export function TimerDisplay({
 }: TimerDisplayProps) {
   const [mounted, setMounted] = useState(false);
   const [homepageStats, setHomepageStats] = useState({
-    focusLabel: 'FOCUS • 0 sessions today • Goal 0 / 4',
+    focusLabel: 'Goal 0 / 4',
     goalProgress: 'Goal 0 / 4',
     completionRate: 0
   });

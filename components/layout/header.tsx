@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { MobileMenu } from './mobile-menu';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { User, LogOut, Settings, BarChart3 } from 'lucide-react';
+import { User, LogOut, Settings, BarChart3, Target, Coffee } from 'lucide-react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -17,9 +17,11 @@ interface HeaderProps {
   onAuthClick: () => void;
   onSettingsClick: () => void;
   onStatsClick: () => void;
+  onTasksClick: () => void;
+  onBreakRemindersClick: () => void;
 }
 
-export function Header({ onAuthClick, onSettingsClick, onStatsClick }: HeaderProps) {
+export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClick, onBreakRemindersClick }: HeaderProps) {
   const [user, loading] = useAuthState(auth);
   const [mounted, setMounted] = useState(false);
   const { toast } = useToast();
@@ -83,6 +85,28 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick }: HeaderPro
               <>
                 {/* Desktop Navigation */}
                 <div className="hidden md:flex items-center gap-1 sm:gap-3">
+                  {/* Tasks Button */}
+                  <Button
+                    onClick={onTasksClick}
+                    variant="ghost"
+                    size="sm"
+                    className="text-foreground hover:text-foreground hover:bg-accent transition-colors px-2 sm:px-3"
+                  >
+                    <Target className="w-4 h-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Tasks</span>
+                  </Button>
+
+                  {/* Break Reminders Button */}
+                  <Button
+                    onClick={onBreakRemindersClick}
+                    variant="ghost"
+                    size="sm"
+                    className="text-foreground hover:text-foreground hover:bg-accent transition-colors px-2 sm:px-3"
+                  >
+                    <Coffee className="w-4 h-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Breaks</span>
+                  </Button>
+
                   {/* Stats Button */}
                   <Button
                     onClick={onStatsClick}
@@ -160,6 +184,8 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick }: HeaderPro
                   onAuthClick={onAuthClick}
                   onSettingsClick={onSettingsClick}
                   onStatsClick={onStatsClick}
+                  onTasksClick={onTasksClick}
+                  onBreakRemindersClick={onBreakRemindersClick}
                 />
               </>
             )}

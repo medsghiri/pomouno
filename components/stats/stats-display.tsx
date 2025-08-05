@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Clock, Target, CheckCircle, Flame, TrendingUp, Calendar, ChevronLeft, ChevronRight, BarChart3, Coffee, Brain, Users, Activity, Zap } from 'lucide-react';
+import { Clock, Target, CheckCircle, Flame, TrendingUp, Calendar, ChevronLeft, ChevronRight, BarChart3, Coffee, Activity } from 'lucide-react';
 import { LocalStorage, DailyStats, WeeklyStats, MonthlyStats } from '@/lib/storage';
 import { StatisticsEngine, AccurateStatistics } from '@/lib/statistics-engine';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
@@ -71,8 +71,7 @@ export function StatsDisplay() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [activeTab, setActiveTab] = useState('today');
 
-  // Enhanced statistics
-  const [dashboardStats, setDashboardStats] = useState<ReturnType<typeof StatisticsEngine.getDashboardStats> | null>(null);
+
 
   // Task detail modal state
   const [selectedDayTasks, setSelectedDayTasks] = useState<{ date: string, tasks: any[] } | null>(null);
@@ -136,9 +135,7 @@ export function StatsDisplay() {
     );
     setMonthlyStats(currentMonthlyStats);
 
-    // Enhanced statistics - get real-time stats
-    const realTimeStats = StatisticsEngine.getRealTimeStatistics(sessions, tasks);
-    setDashboardStats(realTimeStats as any);
+
   };
 
   const formatTime = (minutes: number) => {
@@ -335,11 +332,10 @@ export function StatsDisplay() {
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="today">Today</TabsTrigger>
           <TabsTrigger value="week">This Week</TabsTrigger>
           <TabsTrigger value="month">This Month</TabsTrigger>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
         </TabsList>
 
         {/* Today Tab */}
@@ -971,219 +967,7 @@ export function StatsDisplay() {
           )}
         </TabsContent>
 
-        {/* Overview Tab - Comprehensive Statistics */}
-        <TabsContent value="overview" className="space-y-6">
-          {dashboardStats && dashboardStats.pomodoro && (
-            <>
-              {/* Key Metrics Overview */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard
-                  title="Total Sessions"
-                  value={dashboardStats.pomodoro.totalSessions || 0}
-                  icon={Target}
-                  color="text-red-600 dark:text-red-400"
-                  bgColor="bg-red-50 dark:bg-red-900/20"
-                  borderColor="border-red-200 dark:border-red-800"
-                  description="All completed sessions"
-                />
-                <StatCard
-                  title="Total Focus Time"
-                  value={formatTime(dashboardStats.pomodoro?.totalFocusTime || 0)}
-                  icon={Clock}
-                  color="text-orange-600 dark:text-orange-400"
-                  bgColor="bg-orange-50 dark:bg-orange-900/20"
-                  borderColor="border-orange-200 dark:border-orange-800"
-                  description="Deep work time"
-                />
-                <StatCard
-                  title="Tasks Completed"
-                  value={dashboardStats.tasks?.completedTasks || 0}
-                  icon={CheckCircle}
-                  color="text-red-600 dark:text-red-400"
-                  bgColor="bg-red-50 dark:bg-red-900/20"
-                  borderColor="border-green-200 dark:border-green-800"
-                  description="Successfully finished"
-                />
-                <StatCard
-                  title="Current Streak"
-                  value={dashboardStats.pomodoro?.currentStreak || 0}
-                  icon={Flame}
-                  color="text-orange-600 dark:text-orange-400"
-                  bgColor="bg-orange-50 dark:bg-orange-900/20"
-                  borderColor="border-orange-200 dark:border-orange-800"
-                  description="Consecutive active days"
-                />
-              </div>
 
-              {/* Performance Charts */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Session Type Distribution */}
-                <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                      <Activity className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                      Session Distribution
-                    </h3>
-
-                    <ChartContainer config={chartConfig} className="aspect-square max-h-[250px] w-full">
-                      <PieChart>
-                        <Pie
-                          data={[
-                            { name: 'Work Sessions', value: dashboardStats.pomodoro?.workSessions || 0, color: '#ef4444' },
-                            { name: 'Short Breaks', value: dashboardStats.pomodoro?.shortBreakSessions || 0, color: '#3b82f6' },
-                            { name: 'Long Breaks', value: dashboardStats.pomodoro?.longBreakSessions || 0, color: '#10b981' },
-                          ]}
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={80}
-                          paddingAngle={5}
-                          dataKey="value"
-                        >
-                          {[
-                            { name: 'Work Sessions', value: dashboardStats.pomodoro?.workSessions || 0, color: '#ef4444' },
-                            { name: 'Short Breaks', value: dashboardStats.pomodoro?.shortBreakSessions || 0, color: '#3b82f6' },
-                            { name: 'Long Breaks', value: dashboardStats.pomodoro?.longBreakSessions || 0, color: '#10b981' },
-                          ].map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <ChartLegend content={<ChartLegendContent />} />
-                      </PieChart>
-                    </ChartContainer>
-                  </div>
-                </Card>
-
-                {/* Task Completion Rate */}
-                <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                      <TrendingUp className="w-5 h-5 text-green-600 dark:text-green-400" />
-                      Task Performance
-                    </h3>
-
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                          <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-                            {Math.round(dashboardStats.tasks?.completionRate || 0)}%
-                          </div>
-                          <div className="text-sm text-green-700 dark:text-green-300">Completion Rate</div>
-                        </div>
-                        <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                          <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                            {Math.round((dashboardStats.tasks?.averageSessionsPerTask || 0) * 10) / 10}
-                          </div>
-                          <div className="text-sm text-blue-700 dark:text-blue-300">Avg Sessions/Task</div>
-                        </div>
-                      </div>
-
-                      <ChartContainer config={chartConfig} className="aspect-square max-h-[180px] w-full">
-                        <PieChart>
-                          <Pie
-                            data={[
-                              { name: 'Completed', value: dashboardStats.tasks?.completedTasks || 0, color: '#10b981' },
-                              { name: 'Active', value: dashboardStats.tasks?.activeTasks || 0, color: '#f59e0b' },
-                            ]}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={30}
-                            outerRadius={60}
-                            paddingAngle={5}
-                            dataKey="value"
-                          >
-                            {[
-                              { name: 'Completed', value: dashboardStats.tasks?.completedTasks || 0, color: '#10b981' },
-                              { name: 'Active', value: dashboardStats.tasks?.activeTasks || 0, color: '#f59e0b' },
-                            ].map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
-                          </Pie>
-                          <ChartTooltip content={<ChartTooltipContent />} />
-                        </PieChart>
-                      </ChartContainer>
-                    </div>
-                  </div>
-                </Card>
-              </div>
-
-              {/* Break Reminder Details - Only show if there's actual data */}
-              {dashboardStats && dashboardStats.breakReminders && dashboardStats.breakReminders.totalRemindersShown > 0 && (
-                <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
-                  <div className="space-y-6">
-                    <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                      <Coffee className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                      Break Reminder Details
-                    </h3>
-
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div className="text-center p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                        <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                          {dashboardStats.breakReminders?.totalRemindersCompleted || 0}
-                        </div>
-                        <div className="text-sm text-amber-700 dark:text-amber-300">Completed</div>
-                      </div>
-                      <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                          {dashboardStats.breakReminders?.totalRemindersShown || 0}
-                        </div>
-                        <div className="text-sm text-blue-700 dark:text-blue-300">Total Shown</div>
-                      </div>
-                      <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                          {Math.round(dashboardStats.breakReminders?.completionRate || 0)}%
-                        </div>
-                        <div className="text-sm text-green-700 dark:text-green-300">Completion Rate</div>
-                      </div>
-                      <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                        <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                          {Math.round((dashboardStats.breakReminders?.averageCompletionsPerBreak || 0) * 10) / 10}
-                        </div>
-                        <div className="text-sm text-purple-700 dark:text-purple-300">Avg per Break</div>
-                      </div>
-                    </div>
-
-                    {/* Break Reminder Categories */}
-                    {dashboardStats.breakReminders?.remindersByCategory && Object.keys(dashboardStats.breakReminders.remindersByCategory).length > 0 && (
-                      <div className="space-y-4">
-                        <h4 className="font-medium text-gray-700 dark:text-gray-300">Activity Breakdown</h4>
-                        <div className="space-y-3">
-                          {Object.entries(dashboardStats.breakReminders?.remindersByCategory || {}).map(([category, stats]) => {
-                            const typedStats = stats as { completed: number; shown: number };
-                            return (
-                              <div key={category} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
-                                <div className="flex items-center gap-3">
-                                  <div className="capitalize font-medium text-gray-900 dark:text-gray-100">
-                                    {category === 'hydration' ? '💧 Hydration' :
-                                      category === 'movement' ? '🚶 Movement' :
-                                        category === 'rest' ? '😌 Rest' :
-                                          `✨ ${category}`}
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-4 text-sm">
-                                  <span className="text-green-600 dark:text-green-400">
-                                    {typedStats.completed} completed
-                                  </span>
-                                  <span className="text-gray-500 dark:text-gray-400">
-                                    / {typedStats.shown} shown
-                                  </span>
-                                  <span className="font-medium text-gray-900 dark:text-gray-100">
-                                    {typedStats.shown > 0 ? Math.round((typedStats.completed / typedStats.shown) * 100) : 0}%
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              )}
-
-            </>
-          )}
-        </TabsContent>
       </Tabs>
 
       {/* Task Detail Modal */}

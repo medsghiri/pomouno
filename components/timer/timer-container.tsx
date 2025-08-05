@@ -207,16 +207,21 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
         : "Hope you're refreshed. Let's get back to work!",
     });
 
+    // Always transition to the next session type, but only auto-start if enabled
+    startNextSession();
+
     // Auto-start next session if enabled
     if (
       (sessionType === 'work' && settings.autoStartBreaks) ||
       (sessionType !== 'work' && settings.autoStartWork)
     ) {
-      startNextSession();
+      // Keep the timer active for auto-start
+      setIsActive(true);
+      setIsPaused(false);
     } else {
+      // Stop the timer, user needs to manually start
       setIsActive(false);
       setIsPaused(false);
-      startNextSession();
     }
   }, [sessionType, totalTime, onSessionComplete, toast, settings]);
 
@@ -233,15 +238,24 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
     // Reset session ID for the next session
     setCurrentSessionId('');
 
+    let newSessionType: 'work' | 'shortBreak' | 'longBreak';
+    let duration: number;
+
     if (sessionType === 'work') {
       // Switch to break
       const isLongBreak = currentSession % settings.sessionsUntilLongBreak === 0;
-      setSessionType(isLongBreak ? 'longBreak' : 'shortBreak');
+      newSessionType = isLongBreak ? 'longBreak' : 'shortBreak';
+      duration = isLongBreak ? settings.longBreakDuration * 60 : settings.shortBreakDuration * 60;
     } else {
       // Switch to work
-      setSessionType('work');
+      newSessionType = 'work';
+      duration = settings.workDuration * 60;
       setCurrentSession(prev => prev + 1);
     }
+
+    setSessionType(newSessionType);
+    setTimeLeft(duration);
+    setTotalTime(duration);
   };
 
   const handleSessionTypeChange = (newType: 'work' | 'shortBreak' | 'longBreak') => {

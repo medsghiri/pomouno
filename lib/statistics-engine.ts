@@ -25,15 +25,46 @@ export class StatisticsEngine {
         tasks: Task[],
         date: string
     ): AccurateStatistics {
-        const dayStart = new Date(date).getTime();
-        const dayEnd = dayStart + (24 * 60 * 60 * 1000) - 1;
+        // Create date boundaries in local timezone
+        // Parse the date string (YYYY-MM-DD format) correctly
+        const [year, month, day] = date.split('-').map(Number);
 
-        // Filter sessions for the day
+        // Create precise date boundaries in local timezone (month is 0-indexed in Date constructor)
+        const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0);
+        const dayEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
+
+        const dayStartTime = dayStart.getTime();
+        const dayEndTime = dayEnd.getTime();
+
+        // Filter sessions for the day with better validation
         const daySessions = sessions.filter(session => {
-            return session &&
-                session.timestamp &&
-                session.timestamp >= dayStart &&
-                session.timestamp <= dayEnd;
+            if (!session || !session.timestamp) return false;
+
+            // Handle both timestamp formats (number and Date)
+            const sessionTime = typeof session.timestamp === 'number'
+                ? session.timestamp
+                : new Date(session.timestamp).getTime();
+
+            // Ensure the session is within the day boundaries
+            const isInRange = sessionTime >= dayStartTime && sessionTime <= dayEndTime;
+
+            // Debug logging for today's date only
+            if (date === new Date().toISOString().split('T')[0]) {
+                console.log(`🔍 Session filter for ${date}:`, {
+                    sessionTime: new Date(sessionTime).toISOString(),
+                    sessionLocalTime: new Date(sessionTime).toLocaleString(),
+                    dayStart: dayStart.toISOString(),
+                    dayEnd: dayEnd.toISOString(),
+                    dayStartTime,
+                    dayEndTime,
+                    sessionTimeMs: sessionTime,
+                    isInRange,
+                    sessionType: session.type,
+                    completed: session.completed
+                });
+            }
+
+            return isInRange;
         });
 
         // Calculate session counts (only completed sessions)
@@ -55,19 +86,19 @@ export class StatisticsEngine {
         // Calculate tasks completed on this day
         const dayTasksCompleted = tasks.filter(task => {
             // Regular completed tasks
-            if (task.completedAt && task.completedAt >= dayStart && task.completedAt <= dayEnd) {
+            if (task.completedAt && task.completedAt >= dayStartTime && task.completedAt <= dayEndTime) {
                 return true;
             }
 
             // Recurring tasks completed on this day
             if (task.recurring?.enabled && task.recurring.lastCompleted &&
-                task.recurring.lastCompleted >= dayStart && task.recurring.lastCompleted <= dayEnd) {
+                task.recurring.lastCompleted >= dayStartTime && task.recurring.lastCompleted <= dayEndTime) {
                 return true;
             }
 
             // Spaced repetition tasks reviewed on this day
             if (task.spacedRepetition?.enabled && task.spacedRepetition.lastReviewed &&
-                task.spacedRepetition.lastReviewed >= dayStart && task.spacedRepetition.lastReviewed <= dayEnd) {
+                task.spacedRepetition.lastReviewed >= dayStartTime && task.spacedRepetition.lastReviewed <= dayEndTime) {
                 return true;
             }
 
@@ -304,10 +335,11 @@ export class StatisticsEngine {
             const todayStats = this.calculateDailyStats(sessions, tasks, today);
 
             const dailyGoal = settings.dailySessionGoal || 8;
-            const completionRate = Math.min((todayStats.workSessions / dailyGoal) * 100, 100);
+            // Use sessions (work sessions) instead of workSessions for consistency
+            const completionRate = Math.min((todayStats.sessions / dailyGoal) * 100, 100);
 
-            const focusLabel = `Goal ${todayStats.workSessions} / ${dailyGoal}`;
-            const goalProgress = `Goal ${todayStats.workSessions} / ${dailyGoal}`;
+            const focusLabel = `Goal ${todayStats.sessions} / ${dailyGoal}`;
+            const goalProgress = `Goal ${todayStats.sessions} / ${dailyGoal}`;
 
             return {
                 focusLabel,

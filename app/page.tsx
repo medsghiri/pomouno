@@ -11,6 +11,7 @@ import { AuthPrompt } from '@/components/auth/auth-prompt';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { LocalStorage, PomodoroSession, TodaysStats } from '@/lib/storage';
+import { StatisticsEngine } from '@/lib/statistics-engine';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '@/lib/firebase';
 import { FirebaseService } from '@/lib/firebase-service';
@@ -41,15 +42,43 @@ export default function Home() {
   useEffect(() => {
     // Check and reset daily sessions if it's a new day
     const lastResetDate = localStorage.getItem('pomouono_last_daily_reset');
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    // Use local date instead of UTC date
+    const now = new Date();
+    const today = now.getFullYear() + '-' +
+      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0');
+
+    console.log('Daily reset check:', { lastResetDate, today, needsReset: lastResetDate !== today });
 
     if (lastResetDate !== today) {
+      console.log('Performing daily reset for new day:', today);
       LocalStorage.resetAllDailySessions();
       localStorage.setItem('pomouono_last_daily_reset', today);
     }
 
-    const stats = LocalStorage.getTodaysStats();
-    setSessionsCompleted(stats.sessions);
+    // Calculate today's sessions from all sessions using StatisticsEngine
+    const allSessions = LocalStorage.getAllSessions();
+    const allTasks = LocalStorage.getTasks();
+    const todayStats = StatisticsEngine.calculateDailyStats(allSessions, allTasks, today);
+
+    console.log('=== ALL SESSIONS DEBUG ===');
+    console.log('Total sessions in storage:', allSessions.length);
+    allSessions.forEach((session, index) => {
+      console.log(`Session ${index}:`, {
+        timestamp: session.timestamp,
+        date: new Date(session.timestamp).toISOString(),
+        localDate: new Date(session.timestamp).toLocaleDateString(),
+        type: session.type,
+        completed: session.completed
+      });
+    });
+
+    console.log('=== TODAY STATS RESULT ===');
+    console.log('Today\'s calculated stats:', todayStats);
+    console.log('Sessions counted for today:', todayStats.sessions);
+    console.log('=== END DEBUG ===');
+
+    setSessionsCompleted(todayStats.sessions);
 
     // Load theme settings
     const settings = LocalStorage.getSettings();
@@ -57,6 +86,99 @@ export default function Home() {
     setDailyGoal(settings.dailySessionGoal);
 
     // Theme is now handled by ThemeManager in ThemeProvider
+
+    // Make debug functions available in console (development only)
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      (window as any).pomoDebug = {
+        clearTodaysSessions: LocalStorage.clearTodaysSessions,
+        forceResetTodayData: LocalStorage.forceResetTodayData,
+        forceResetYesterdayData: () => {
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.getFullYear() + '-' +
+            String(yesterday.getMonth() + 1).padStart(2, '0') + '-' +
+            String(yesterday.getDate()).padStart(2, '0');
+
+          console.log('Force resetting yesterday\'s data for:', yesterdayStr);
+
+          const yesterdayStart = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 0, 0, 0, 0).getTime();
+          const yesterdayEnd = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59, 999).getTime();
+
+          // Remove yesterday's sessions from all sessions
+          const allSessions = LocalStorage.getAllSessions();
+          const filteredSessions = allSessions.filter(session => {
+            if (!session.timestamp) return true;
+            const sessionTime = typeof session.timestamp === 'number'
+              ? session.timestamp
+              : new Date(session.timestamp).getTime();
+            return sessionTime < yesterdayStart || sessionTime > yesterdayEnd;
+          });
+
+          localStorage.setItem('pomouono_all_sessions', JSON.stringify(filteredSessions));
+          console.log(`Removed ${allSessions.length - filteredSessions.length} sessions from yesterday`);
+
+          // Dispatch event to refresh UI
+          window.dispatchEvent(new CustomEvent('dataReset'));
+        },
+        resetAllData: LocalStorage.resetAllData,
+        getAllSessions: LocalStorage.getAllSessions,
+        getTodaysSessions: LocalStorage.getTodaysSessions,
+        calculateTodayStats: () => {
+          const now = new Date();
+          const today = now.getFullYear() + '-' +
+            String(now.getMonth() + 1).padStart(2, '0') + '-' +
+            String(now.getDate()).padStart(2, '0');
+          const sessions = LocalStorage.getAllSessions();
+          const tasks = LocalStorage.getTasks();
+          return StatisticsEngine.calculateDailyStats(sessions, tasks, today);
+        },
+        showSessionDates: () => {
+          const sessions = LocalStorage.getAllSessions();
+          return sessions.map(s => ({
+            timestamp: s.timestamp,
+            date: new Date(s.timestamp).toISOString(),
+            localDate: new Date(s.timestamp).toLocaleDateString(),
+            type: s.type,
+            completed: s.completed
+          }));
+        },
+        testDateFiltering: () => {
+          const today = new Date().toISOString().split('T')[0];
+          const sessions = LocalStorage.getAllSessions();
+          console.log('Testing date filtering for:', today);
+          console.log('All sessions:', sessions.length);
+
+          const [year, month, day] = today.split('-').map(Number);
+          const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0);
+          const dayEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
+
+          console.log('Day boundaries:', {
+            dayStart: dayStart.toISOString(),
+            dayEnd: dayEnd.toISOString()
+          });
+
+          const todaySessions = sessions.filter(session => {
+            if (!session.timestamp) return false;
+            const sessionTime = typeof session.timestamp === 'number'
+              ? session.timestamp
+              : new Date(session.timestamp).getTime();
+            const isInRange = sessionTime >= dayStart.getTime() && sessionTime <= dayEnd.getTime();
+
+            console.log('Session:', {
+              sessionTime: new Date(sessionTime).toISOString(),
+              isInRange,
+              type: session.type,
+              completed: session.completed
+            });
+
+            return isInRange;
+          });
+
+          console.log('Today\'s sessions:', todaySessions.length);
+          return todaySessions;
+        }
+      };
+    }
   }, []);
 
   // Listen for theme changes and unsaved settings
@@ -74,9 +196,15 @@ export default function Home() {
     };
 
     const handleFirebaseDataSynced = () => {
-      // Refresh stats when Firebase data is synced
-      const stats = LocalStorage.getTodaysStats();
-      setSessionsCompleted(stats.sessions);
+      // Refresh stats when Firebase data is synced using real-time calculation
+      const now = new Date();
+      const today = now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0');
+      const allSessions = LocalStorage.getAllSessions();
+      const allTasks = LocalStorage.getTasks();
+      const todayStats = StatisticsEngine.calculateDailyStats(allSessions, allTasks, today);
+      setSessionsCompleted(todayStats.sessions);
 
       // Refresh settings
       const settings = LocalStorage.getSettings();
@@ -90,11 +218,26 @@ export default function Home() {
     window.addEventListener('settingsChanged', handleUnsavedSettings as EventListener);
     window.addEventListener('firebaseDataSynced', handleFirebaseDataSynced as EventListener);
 
+    const handleDataReset = () => {
+      // Recalculate today's stats after data reset
+      const now = new Date();
+      const today = now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0');
+      const allSessions = LocalStorage.getAllSessions();
+      const allTasks = LocalStorage.getTasks();
+      const todayStats = StatisticsEngine.calculateDailyStats(allSessions, allTasks, today);
+      setSessionsCompleted(todayStats.sessions);
+      console.log('Data reset - recalculated stats:', todayStats);
+    };
+
+    window.addEventListener('dataReset', handleDataReset as EventListener);
+
     return () => {
       window.removeEventListener('settingsUpdated', handleSettingsUpdate as EventListener);
-
       window.removeEventListener('settingsChanged', handleUnsavedSettings as EventListener);
       window.removeEventListener('firebaseDataSynced', handleFirebaseDataSynced as EventListener);
+      window.removeEventListener('dataReset', handleDataReset as EventListener);
     };
   }, []);
 
@@ -153,19 +296,33 @@ export default function Home() {
     // Save to all sessions for historical tracking
     LocalStorage.addSession(session);
 
-    // Update today's stats
-    const currentStats = LocalStorage.getTodaysStats();
+    // Calculate real-time stats using StatisticsEngine
+    const now = new Date();
+    const today = now.getFullYear() + '-' +
+      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0');
+    const allSessions = LocalStorage.getAllSessions();
+    const allTasks = LocalStorage.getTasks();
+    const todayStats = StatisticsEngine.calculateDailyStats(allSessions, allTasks, today);
+
+    // Update the legacy stats for backward compatibility
     const updatedStats: TodaysStats = {
-      ...currentStats,
-      sessions: currentStats.sessions + 1,
-      focusTime: session.type === 'work' ? currentStats.focusTime + session.duration : currentStats.focusTime,
-      streak: session.type === 'work' ? currentStats.streak + 1 : currentStats.streak,
+      sessions: todayStats.sessions,
+      focusTime: todayStats.focusTime,
+      streak: todayStats.streak,
+      tasksCompleted: todayStats.tasksCompleted,
+      date: today,
+      workSessions: todayStats.workSessions || 0,
+      shortBreakSessions: todayStats.shortBreakSessions || 0,
+      longBreakSessions: todayStats.longBreakSessions || 0,
+      breakRemindersShown: todayStats.breakRemindersShown || 0,
+      breakRemindersCompleted: todayStats.breakRemindersCompleted || 0,
     };
     LocalStorage.saveTodaysStats(updatedStats);
-    setSessionsCompleted(updatedStats.sessions);
+    setSessionsCompleted(todayStats.sessions);
 
     // Check if daily goal is achieved
-    if (updatedStats.sessions === dailyGoal) {
+    if (todayStats.sessions === dailyGoal) {
       toast({
         title: "🎯 Daily goal achieved!",
         description: `Congratulations! You've completed ${dailyGoal} sessions today. Outstanding work!`,
@@ -178,15 +335,15 @@ export default function Home() {
     }
 
     if (!user) {
-      if (updatedStats.sessions === 3) {
+      if (todayStats.sessions === 3) {
         setAuthPromptTrigger('sessions');
         setShowAuthPrompt(true);
-      } else if (updatedStats.sessions >= 5 && Math.random() < 0.3) {
+      } else if (todayStats.sessions >= 5 && Math.random() < 0.3) {
         setAuthPromptTrigger('endOfDay');
         setShowAuthPrompt(true);
       }
     }
-  }, [user, toast]);
+  }, [user, toast, dailyGoal]);
 
   const handleStartFocusSession = useCallback((taskId: string) => {
     setSelectedTaskId(taskId);

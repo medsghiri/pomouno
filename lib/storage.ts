@@ -305,7 +305,10 @@ function safeJsonParse<T>(jsonString: string | null, defaultValue: T): T {
 }
 
 function getDateString(date: Date = new Date()): string {
-  return date.toISOString().split('T')[0];
+  // Use local date instead of UTC to avoid timezone issues
+  return date.getFullYear() + '-' +
+    String(date.getMonth() + 1).padStart(2, '0') + '-' +
+    String(date.getDate()).padStart(2, '0');
 }
 
 function getWeekStart(date: Date): Date {
@@ -893,6 +896,61 @@ export class LocalStorage {
     });
 
     console.log('All local data has been reset');
+  }
+
+  // Debug function to clear today's sessions (for testing)
+  static clearTodaysSessions(): void {
+    if (typeof window === 'undefined') return;
+
+    const today = new Date().toISOString().split('T')[0];
+    console.log('Clearing today\'s sessions for:', today);
+
+    // Clear today's sessions
+    localStorage.removeItem('pomouono_today_sessions');
+    localStorage.removeItem('pomouono_daily_stats');
+    localStorage.setItem('pomouono_last_daily_reset', today);
+
+    // Also reset task daily sessions
+    this.resetAllDailySessions();
+
+    // Dispatch event to refresh UI
+    window.dispatchEvent(new CustomEvent('dataReset'));
+  }
+
+  // More aggressive reset for debugging - removes sessions from today from all storage
+  static forceResetTodayData(): void {
+    if (typeof window === 'undefined') return;
+
+    const today = new Date().toISOString().split('T')[0];
+    const todayStart = new Date(today + 'T00:00:00.000').getTime();
+    const todayEnd = new Date(today + 'T23:59:59.999').getTime();
+
+    console.log('Force resetting today\'s data for:', today);
+
+    // Remove today's sessions from all sessions
+    const allSessions = this.getAllSessions();
+    const filteredSessions = allSessions.filter(session => {
+      if (!session.timestamp) return true;
+      const sessionTime = typeof session.timestamp === 'number'
+        ? session.timestamp
+        : new Date(session.timestamp).getTime();
+      return sessionTime < todayStart || sessionTime > todayEnd;
+    });
+
+    localStorage.setItem('pomouono_all_sessions', JSON.stringify(filteredSessions));
+
+    // Clear today's sessions
+    localStorage.removeItem('pomouono_today_sessions');
+    localStorage.removeItem('pomouono_daily_stats');
+    localStorage.setItem('pomouono_last_daily_reset', today);
+
+    // Reset task daily sessions
+    this.resetAllDailySessions();
+
+    console.log(`Removed ${allSessions.length - filteredSessions.length} sessions from today`);
+
+    // Dispatch event to refresh UI
+    window.dispatchEvent(new CustomEvent('dataReset'));
   }
 
   // Enhanced Firebase sync with retry logic and conflict resolution
@@ -1866,6 +1924,12 @@ export class LocalStorage {
     }));
 
     this.saveTasks(updatedTasks);
+
+    // Also clear today's sessions storage for a fresh start
+    localStorage.removeItem('pomouono_today_sessions');
+    localStorage.removeItem('pomouono_daily_stats');
+
+    console.log('Daily sessions reset completed for:', today);
   }
 }
 

@@ -2077,19 +2077,54 @@ export class TaskUtils {
     if (frequencyInterval === 0) return true;
 
     // Check if enough time has passed since last shown
+    // Note: lastShown is only stored in Firebase, not locally, so this will
+    // default to showing reminders more frequently rather than less frequently
+    // to avoid permission errors affecting core functionality
     if (!reminder.lastShown) return true;
 
     return (now - reminder.lastShown) >= frequencyInterval;
   }
 
   static updateReminderLastShown(reminderId: string): void {
-    const reminders = LocalStorage.getBreakReminders();
-    const updatedReminders = reminders.map(reminder =>
-      reminder.id === reminderId
-        ? { ...reminder, lastShown: Date.now() }
-        : reminder
-    );
-    LocalStorage.saveBreakReminders(updatedReminders);
+    // Don't save locally - only attempt Firebase sync if user is authenticated
+    // This prevents permission errors from affecting local functionality
+    if (typeof window === 'undefined') return;
+
+    // Only attempt Firebase sync, don't update local storage
+    this.syncReminderLastShownToFirebase(reminderId).catch(() => {
+      // Silently fail - this is just for Firebase tracking, not essential for app functionality
+    });
+  }
+
+  // Helper method to sync lastShown timestamp to Firebase only
+  private static async syncReminderLastShownToFirebase(reminderId: string): Promise<void> {
+    try {
+      const { auth } = await import('@/lib/firebase');
+      const { FirebaseService } = await import('@/lib/firebase-service');
+
+      const user = auth.currentUser;
+      if (!user) return; // No user, no sync needed
+
+      // Check if user has valid authentication
+      try {
+        await user.getIdToken();
+      } catch (tokenError) {
+        return; // Invalid token, skip sync
+      }
+
+      // Get current reminders and update only the specific one
+      const reminders = LocalStorage.getBreakReminders();
+      const updatedReminders = reminders.map(reminder =>
+        reminder.id === reminderId
+          ? { ...reminder, lastShown: Date.now() }
+          : reminder
+      );
+
+      // Only sync to Firebase, don't update local storage
+      await FirebaseService.saveBreakReminders(user, updatedReminders);
+    } catch (error) {
+      // Silently fail - this is not critical functionality
+    }
   }
 
   static createBreakReminderCategory(

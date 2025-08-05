@@ -42,7 +42,7 @@ export function BreakReminderDisplay({ breakType, isVisible, sessionId, onClose,
             setCompletedReminders(new Set(completedReminders));
             setHasReportedShown(false);
 
-            // Update last shown timestamp for displayed reminders
+            // Update last shown timestamp for displayed reminders (Firebase only, no local storage)
             visibleReminders.forEach(reminder => {
                 TaskUtils.updateReminderLastShown(reminder.id);
             });

@@ -493,10 +493,20 @@ export class FirebaseService {
 
   // Break reminder management
   static async saveBreakReminders(user: User, reminders: any[]) {
+    if (reminders.length === 0) return;
+
     const batch = writeBatch(db);
     const remindersRef = collection(db, 'breakReminders');
 
     try {
+      // Check if user has valid authentication
+      try {
+        await user.getIdToken();
+      } catch (tokenError) {
+        console.warn('User token invalid, skipping break reminders sync:', tokenError);
+        return;
+      }
+
       // First, get existing reminders to delete them
       const existingRemindersQuery = query(remindersRef, where('userId', '==', user.uid));
       const existingReminders = await getDocs(existingRemindersQuery);
@@ -508,20 +518,22 @@ export class FirebaseService {
         });
       }
 
-      // Add new reminders in batch
+      // Add new reminders in batch using reminder ID as document ID to prevent duplicates
       reminders.forEach(reminder => {
-        const docRef = doc(remindersRef);
+        // Use reminder ID as document ID to prevent duplicates
+        const docRef = doc(remindersRef, `${user.uid}_${reminder.id}`);
         // Clean the reminder data to remove undefined fields
         const cleanReminder = removeUndefinedFields({
           ...reminder,
           userId: user.uid,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
+          createdAt: Date.now(), // Use actual timestamp instead of serverTimestamp
+          updatedAt: Date.now() // Use actual timestamp instead of serverTimestamp
         });
         batch.set(docRef, cleanReminder);
       });
 
       await batch.commit();
+      console.log(`✅ Successfully saved ${reminders.length} break reminders to Firebase`);
     } catch (error) {
       console.error('Error in saveBreakReminders:', error);
       throw error;

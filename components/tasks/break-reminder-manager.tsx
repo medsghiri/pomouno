@@ -324,6 +324,60 @@ export function BreakReminderManager() {
         return category || { name: 'Custom', icon: '📝', color: '#6B7280' };
     };
 
+    // Show empty state for unauthenticated users
+    if (!user) {
+        return (
+            <div className="h-full flex flex-col">
+                {/* Header */}
+                <div className="p-4 pr-16 border-b flex items-center justify-between">
+                    <h2 className="text-xl font-semibold text-foreground">Break Reminders</h2>
+                </div>
+
+                {/* Empty state content */}
+                <div className="flex-1 flex items-center justify-center p-8">
+                    <div className="text-center max-w-md">
+                        <Coffee className="w-16 h-16 mx-auto mb-6 text-muted-foreground opacity-50" />
+                        <h3 className="text-xl font-semibold text-foreground mb-3">
+                            Healthy Break Habits
+                        </h3>
+                        <p className="text-muted-foreground mb-6 leading-relaxed">
+                            Create custom break reminders for any healthy habit. Get gentle reminders during your breaks to stay hydrated, move around, or practice mindfulness.
+                        </p>
+                        <div className="space-y-3 mb-6">
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                <span className="text-base">💧</span>
+                                <span>Hydration and nutrition (examples)</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                <span className="text-base">🏃</span>
+                                <span>Movement and stretching (examples)</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                <span className="text-base">🧘</span>
+                                <span>Any habit you want to track</span>
+                            </div>
+                        </div>
+                        <div className="space-y-3">
+                            <Button
+                                onClick={() => window.location.href = '/auth/signup'}
+                                className="w-full bg-red-600 hover:bg-red-700 text-white"
+                            >
+                                Sign Up to Create Reminders
+                            </Button>
+                            <Button
+                                onClick={() => window.location.href = '/auth/signin'}
+                                variant="outline"
+                                className="w-full"
+                            >
+                                Already have an account? Sign In
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <FeatureGate feature="break-reminders">
             {/* Header */}

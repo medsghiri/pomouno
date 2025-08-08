@@ -95,13 +95,7 @@ export function MobileMenu({ onAuthClick, onSettingsClick, onStatsClick, onTasks
                             {/* Navigation Items */}
                             <div className="space-y-2 flex-1">
                                 <Button
-                                    onClick={() => handleMenuItemClick(() => {
-                                        if (tasksAccess.canAccess) {
-                                            onTasksClick();
-                                        } else {
-                                            tasksAccess.showUpgradePrompt("Access your task list and track progress across sessions.");
-                                        }
-                                    })}
+                                    onClick={() => handleMenuItemClick(onTasksClick)}
                                     variant="ghost"
                                     size="lg"
                                     className="w-full justify-start h-12 text-foreground hover:text-foreground hover:bg-accent rounded-xl transition-all duration-200"
@@ -114,13 +108,7 @@ export function MobileMenu({ onAuthClick, onSettingsClick, onStatsClick, onTasks
                                 </Button>
 
                                 <Button
-                                    onClick={() => handleMenuItemClick(() => {
-                                        if (breakRemindersAccess.canAccess) {
-                                            onBreakRemindersClick();
-                                        } else {
-                                            breakRemindersAccess.showUpgradePrompt("Create custom break reminders and track healthy habits.");
-                                        }
-                                    })}
+                                    onClick={() => handleMenuItemClick(onBreakRemindersClick)}
                                     variant="ghost"
                                     size="lg"
                                     className="w-full justify-start h-12 text-foreground hover:text-foreground hover:bg-accent rounded-xl transition-all duration-200"
@@ -133,13 +121,7 @@ export function MobileMenu({ onAuthClick, onSettingsClick, onStatsClick, onTasks
                                 </Button>
 
                                 <Button
-                                    onClick={() => handleMenuItemClick(() => {
-                                        if (statisticsAccess.canAccess) {
-                                            onStatsClick();
-                                        } else {
-                                            statisticsAccess.showUpgradePrompt("View detailed productivity analytics and insights.");
-                                        }
-                                    })}
+                                    onClick={() => handleMenuItemClick(onStatsClick)}
                                     variant="ghost"
                                     size="lg"
                                     className="w-full justify-start h-12 text-foreground hover:text-foreground hover:bg-accent rounded-xl transition-all duration-200"

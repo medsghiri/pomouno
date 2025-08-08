@@ -33,15 +33,35 @@ export interface Task {
     estimatedSessions: number;
     createdAt: number;
     completedAt?: number;
+    archivedAt?: number;
 
     // Task type specific fields
     spacedRepetition?: SpacedRepetitionData;
     recurring?: RecurringData;
 
+    // Flattened spaced repetition fields (for Firebase compatibility)
+    spacedRepetitionEnabled?: boolean;
+    spacedRepetitionDifficulty?: 'easy' | 'medium' | 'hard';
+    spacedRepetitionInterval?: number;
+    spacedRepetitionNextReviewDate?: number;
+    spacedRepetitionReviewCount?: number;
+    spacedRepetitionLastReviewed?: number;
+
+    // Flattened recurring fields (for Firebase compatibility)
+    recurringEnabled?: boolean;
+    recurringPattern?: 'daily' | 'weekly' | 'monthly' | 'custom' | 'weekdays' | 'specific-days';
+    recurringInterval?: number;
+    recurringNextDue?: number;
+    recurringLastCompleted?: number;
+    recurringDaysOfWeek?: number[];
+    recurringDayOfMonth?: number;
+    recurringEndDate?: number;
+
     // Organization
     category?: string;
     priority?: 'low' | 'medium' | 'high';
     tags?: string[];
+    autoComplete?: boolean;
 }
 
 export interface SpacedRepetitionData {
@@ -377,11 +397,12 @@ export class AdvancedStorageService {
 
             // Initialize spaced repetition if enabled - store as flattened fields to avoid serialization issues
             if (taskData.spacedRepetition?.enabled) {
-                const spacedData = {
+                const spacedData: SpacedRepetitionData = {
                     ...taskData.spacedRepetition,
                     reviewCount: 0,
                     interval: 1, // Start with 1 day interval
-                    nextReviewDate: now + (24 * 60 * 60 * 1000) // Tomorrow
+                    nextReviewDate: now + (24 * 60 * 60 * 1000), // Tomorrow
+                    lastReviewed: undefined
                 };
 
                 // Store as flattened fields to avoid Firebase serialization issues
@@ -408,7 +429,7 @@ export class AdvancedStorageService {
                 task.recurringPattern = taskData.recurring.pattern;
                 task.recurringInterval = taskData.recurring.interval;
                 task.recurringNextDue = nextDueDate.getTime();
-                task.recurringLastCompleted = taskData.recurring.lastCompleted;
+                task.recurringLastCompleted = undefined;
                 task.recurringDaysOfWeek = taskData.recurring.daysOfWeek;
                 task.recurringDayOfMonth = taskData.recurring.dayOfMonth;
                 task.recurringEndDate = taskData.recurring.endDate;

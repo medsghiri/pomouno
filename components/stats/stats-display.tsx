@@ -586,7 +586,7 @@ export function StatsDisplay() {
                     <div className="flex items-center justify-between mb-6">
                         <h2 className="text-2xl font-bold flex items-center gap-2 text-foreground">
                             <TrendingUp className="w-6 h-6" />
-                            Statistics Dashboard
+                            Statistics
                         </h2>
                     </div>
 
@@ -658,13 +658,67 @@ export function StatsDisplay() {
         );
     }
 
+    // Show empty state for unauthenticated users
+    if (!user) {
+        return (
+            <div className="h-full flex flex-col">
+                {/* Header */}
+                <div className="p-4 pr-16 border-b flex items-center justify-between">
+                    <h2 className="text-xl font-semibold text-foreground">Statistics</h2>
+                </div>
+
+                {/* Empty state content */}
+                <div className="flex-1 flex items-center justify-center p-8">
+                    <div className="text-center max-w-md">
+                        <BarChart3 className="w-16 h-16 mx-auto mb-6 text-muted-foreground opacity-50" />
+                        <h3 className="text-xl font-semibold text-foreground mb-3">
+                            Productivity Analytics
+                        </h3>
+                        <p className="text-muted-foreground mb-6 leading-relaxed">
+                            Track your focus sessions, monitor productivity trends, and gain insights into your work patterns with detailed statistics.
+                        </p>
+                        <div className="space-y-3 mb-6">
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                <Clock className="w-4 h-4 text-blue-500" />
+                                <span>Daily, weekly, and monthly reports</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                <TrendingUp className="w-4 h-4 text-green-500" />
+                                <span>Productivity trends and streaks</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                <Activity className="w-4 h-4 text-purple-500" />
+                                <span>Task completion analytics</span>
+                            </div>
+                        </div>
+                        <div className="space-y-3">
+                            <Button
+                                onClick={() => window.location.href = '/auth/signup'}
+                                className="w-full bg-red-600 hover:bg-red-700 text-white"
+                            >
+                                Sign Up to View Analytics
+                            </Button>
+                            <Button
+                                onClick={() => window.location.href = '/auth/signin'}
+                                variant="outline"
+                                className="w-full"
+                            >
+                                Already have an account? Sign In
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <FeatureGate feature="statistics">
             <div className="space-y-6">
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-2xl font-bold flex items-center gap-2 text-foreground">
                         <TrendingUp className="w-6 h-6" />
-                        Statistics Dashboard
+                        Statistics
                     </h2>
                     {user && activeTab === 'month' && (
                         <div className="flex items-center gap-2">

@@ -304,13 +304,7 @@ export function TimerApp({
                     <div className="mb-8 bg-background/80 backdrop-blur-sm border border-accent rounded-full shadow-lg px-2 py-2">
                         <div className="flex items-center space-x-2">
                             <Button
-                                onClick={() => {
-                                    if (tasksAccess.canAccess) {
-                                        setShowTasks(!showTasks);
-                                    } else {
-                                        tasksAccess.showUpgradePrompt("Access your task list and track progress across sessions.");
-                                    }
-                                }}
+                                onClick={() => setShowTasks(!showTasks)}
                                 className={cn(
                                     "h-10 sm:h-12 px-3 sm:px-4 rounded-full transition-all duration-300 border text-sm sm:text-base",
                                     showTasks
@@ -327,13 +321,7 @@ export function TimerApp({
                             </Button>
 
                             <Button
-                                onClick={() => {
-                                    if (breakRemindersAccess.canAccess) {
-                                        setShowBreakReminders(!showBreakReminders);
-                                    } else {
-                                        breakRemindersAccess.showUpgradePrompt("Create custom break reminders and track healthy habits.");
-                                    }
-                                }}
+                                onClick={() => setShowBreakReminders(!showBreakReminders)}
                                 className={cn(
                                     "h-10 sm:h-12 px-3 sm:px-4 rounded-full transition-all duration-300 border text-sm sm:text-base",
                                     showBreakReminders

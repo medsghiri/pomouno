@@ -27,27 +27,15 @@ export function ClientHeader({
     };
 
     const handleStatsClick = () => {
-        if (statisticsAccess.canAccess) {
-            onStatsClick?.();
-        } else {
-            statisticsAccess.showUpgradePrompt("View detailed productivity analytics and insights.");
-        }
+        onStatsClick?.();
     };
 
     const handleTasksClick = () => {
-        if (tasksAccess.canAccess) {
-            onTasksClick?.();
-        } else {
-            tasksAccess.showUpgradePrompt("Access your task list and track progress across sessions.");
-        }
+        onTasksClick?.();
     };
 
     const handleBreakRemindersClick = () => {
-        if (breakRemindersAccess.canAccess) {
-            onBreakRemindersClick?.();
-        } else {
-            breakRemindersAccess.showUpgradePrompt("Create custom break reminders and track healthy habits.");
-        }
+        onBreakRemindersClick?.();
     };
 
     return (

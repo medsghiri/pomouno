@@ -23,8 +23,8 @@ export function TaskSelector({ open, onOpenChange, onTaskSelect, sessionType }: 
     useEffect(() => {
         if (open) {
             if (sessionType === 'work') {
-                // For work sessions, show all active tasks due today
-                setTasks(LocalStorage.getTasksDueToday());
+                // Tasks are Firebase-only
+                setTasks([]);
             } else {
                 // For break sessions, don't show any tasks (break reminders will be handled separately)
                 setTasks([]);

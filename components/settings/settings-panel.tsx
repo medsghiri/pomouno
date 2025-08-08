@@ -11,11 +11,12 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { LocalStorage, Settings, TaskCategory, BreakReminderCategory, TaskUtils } from '@/lib/storage';
-import { Save, RotateCcw, Volume2, CheckSquare, Clock, Play, Pause, Music, List, Tag, Plus, Trash2, Edit3 } from 'lucide-react';
+import { LocalStorage, Settings } from '@/lib/storage';
+import { CategoryManagement } from '@/components/settings/category-management';
+import { Save, RotateCcw, Volume2, CheckSquare, Clock, Play, Pause, Music, List } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from '@/lib/firebase';
+import { useAuth } from '@/lib/auth-context';
+import { UpgradePrompt } from '@/components/auth/upgrade-prompt';
 import { FirebaseService } from '@/lib/firebase-service';
 import AudioService from '@/lib/audio-service';
 
@@ -44,113 +45,21 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
-  const [user] = useAuthState(auth);
+  const { user, storageProvider } = useAuth();
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [hasChanges, setHasChanges] = useState(false);
   const [previewingAudio, setPreviewingAudio] = useState<string | null>(null);
 
-  // Category management state
-  const [taskCategories, setTaskCategories] = useState<TaskCategory[]>([]);
-  const [breakReminderCategories, setBreakReminderCategories] = useState<BreakReminderCategory[]>([]);
-  const [editingTaskCategory, setEditingTaskCategory] = useState<TaskCategory | null>(null);
-  const [editingBreakCategory, setEditingBreakCategory] = useState<BreakReminderCategory | null>(null);
-  const [newTaskCategoryName, setNewTaskCategoryName] = useState('');
-  const [newTaskCategoryColor, setNewTaskCategoryColor] = useState('#6B7280');
-  const [newTaskCategoryIcon, setNewTaskCategoryIcon] = useState('');
-  const [newBreakCategoryName, setNewBreakCategoryName] = useState('');
-  const [newBreakCategoryColor, setNewBreakCategoryColor] = useState('#6B7280');
-  const [newBreakCategoryIcon, setNewBreakCategoryIcon] = useState('');
+
   const { toast } = useToast();
   const audioService = AudioService.getInstance();
 
-  const loadCategories = () => {
-    setTaskCategories(LocalStorage.getTaskCategories());
-    setBreakReminderCategories(LocalStorage.getBreakReminderCategories());
-  };
 
-  const createTaskCategory = () => {
-    if (!newTaskCategoryName.trim()) {
-      toast({
-        title: "Category name required",
-        description: "Please enter a name for the task category.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const newCategory = TaskUtils.createTaskCategory(
-      newTaskCategoryName.trim(),
-      newTaskCategoryColor,
-      newTaskCategoryIcon.trim() || undefined
-    );
-
-    LocalStorage.addTaskCategory(newCategory);
-    loadCategories();
-
-    // Reset form
-    setNewTaskCategoryName('');
-    setNewTaskCategoryColor('#6B7280');
-    setNewTaskCategoryIcon('');
-
-    toast({
-      title: "Task category created",
-      description: `"${newCategory.name}" has been added.`,
-    });
-  };
-
-  const deleteTaskCategory = (categoryId: string) => {
-    LocalStorage.deleteTaskCategory(categoryId);
-    loadCategories();
-    toast({
-      title: "Task category deleted",
-      description: "The category has been removed.",
-    });
-  };
-
-  const createBreakReminderCategory = () => {
-    if (!newBreakCategoryName.trim()) {
-      toast({
-        title: "Category name required",
-        description: "Please enter a name for the break reminder category.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const newCategory = TaskUtils.createBreakReminderCategory(
-      newBreakCategoryName.trim(),
-      newBreakCategoryIcon.trim() || '📝',
-      newBreakCategoryColor
-    );
-
-    LocalStorage.addBreakReminderCategory(newCategory);
-    loadCategories();
-
-    // Reset form
-    setNewBreakCategoryName('');
-    setNewBreakCategoryColor('#6B7280');
-    setNewBreakCategoryIcon('');
-
-    toast({
-      title: "Break reminder category created",
-      description: `"${newCategory.name}" has been added.`,
-    });
-  };
-
-  const deleteBreakReminderCategory = (categoryId: string) => {
-    LocalStorage.deleteBreakReminderCategory(categoryId);
-    loadCategories();
-    toast({
-      title: "Break reminder category deleted",
-      description: "The category has been removed.",
-    });
-  };
 
   useEffect(() => {
     const savedSettings = LocalStorage.getSettings();
     setSettings(savedSettings);
     audioService.initialize();
-    loadCategories();
 
     // Listen for settings updates from other components (like sound control popover)
     const handleSettingsUpdate = (event: CustomEvent) => {
@@ -176,7 +85,6 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
     const handleFirebaseDataSynced = () => {
       const savedSettings = LocalStorage.getSettings();
       setSettings(savedSettings);
-      loadCategories();
     };
 
     window.addEventListener('settingsUpdated', handleSettingsUpdate as EventListener);
@@ -327,7 +235,30 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
 
   return (
     <div className="space-y-6">
-
+      {/* Authentication Status */}
+      <div className="bg-accent/10 rounded-lg p-4 border border-accent">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-medium text-foreground">Account Status</h3>
+            <p className="text-sm text-muted-foreground">
+              {user ? (
+                <>Signed in as {user.email} - Advanced features enabled</>
+              ) : (
+                <>Using basic features - Sign up to unlock advanced settings</>
+              )}
+            </p>
+          </div>
+          {!user && (
+            <Button
+              onClick={() => window.location.href = '/auth'}
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Sign Up Free
+            </Button>
+          )}
+        </div>
+      </div>
 
       {/* Timer Durations */}
       <div className="space-y-4">
@@ -761,163 +692,10 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
 
       <Separator className="border-gray-300/20 dark:border-gray-700/20" />
 
-      {/* Task Categories */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wide flex items-center gap-2">
-          <Tag className="w-4 h-4" />
-          Task Categories
-        </h3>
-
-        <Card className="p-4 bg-white/10 backdrop-blur-sm text-gray-900 dark:text-white dark:bg-gray-800/50">
-          <div className="space-y-4">
-            {/* Add new category */}
-            <div className="space-y-3">
-              <Label className="text-gray-900 dark:text-white font-medium">Add New Category</Label>
-              <div className="grid grid-cols-1 gap-2">
-                <Input
-                  placeholder="Category name"
-                  value={newTaskCategoryName}
-                  onChange={(e) => setNewTaskCategoryName(e.target.value)}
-                  className="bg-white/20 dark:bg-gray-700/50"
-                />
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Icon (optional)"
-                    value={newTaskCategoryIcon}
-                    onChange={(e) => setNewTaskCategoryIcon(e.target.value)}
-                    className="bg-white/20 dark:bg-gray-700/50"
-                  />
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={newTaskCategoryColor}
-                      onChange={(e) => setNewTaskCategoryColor(e.target.value)}
-                      className="w-10 h-10 rounded border border-gray-300 cursor-pointer"
-                    />
-                  </div>
-                </div>
-                <Button
-                  onClick={createTaskCategory}
-                  size="sm"
-                  className="bg-red-600 hover:bg-red-700 dark:text-current text-gray-100"
-                >
-                  <Plus className="w-3 h-3 mr-1" />
-                  Add Category
-                </Button>
-              </div>
-            </div>
-
-            {/* Existing categories */}
-            {taskCategories.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-gray-900 dark:text-white font-medium">Existing Categories</Label>
-                <div className="space-y-2">
-                  {taskCategories.map((category) => (
-                    <div key={category.id} className="flex items-center justify-between p-2 bg-white/10 dark:bg-gray-700/30 rounded">
-                      <div className="flex items-center gap-2">
-                        {category.icon && <span>{category.icon}</span>}
-                        <span className="text-sm">{category.name}</span>
-                        <div
-                          className="w-4 h-4 rounded-full border border-gray-300"
-                          style={{ backgroundColor: category.color }}
-                        />
-                      </div>
-                      <Button
-                        onClick={() => deleteTaskCategory(category.id)}
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0 hover:bg-red-100 hover:text-red-600"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </Card>
-      </div>
-
-      <Separator className="border-gray-300/20 dark:border-gray-700/20" />
-
-      {/* Break Reminder Categories */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wide flex items-center gap-2">
-          <Tag className="w-4 h-4" />
-          Break Reminder Categories
-        </h3>
-
-        <Card className="p-4 bg-white/10 backdrop-blur-sm text-gray-900 dark:text-white dark:bg-gray-800/50">
-          <div className="space-y-4">
-            {/* Add new category */}
-            <div className="space-y-3">
-              <Label className="">Add New Category</Label>
-              <div className="grid grid-cols-1 gap-2">
-                <Input
-                  placeholder="Category name"
-                  value={newBreakCategoryName}
-                  onChange={(e) => setNewBreakCategoryName(e.target.value)}
-                  className="bg-white/20 dark:bg-gray-700/50"
-                />
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Icon (optional)"
-                    value={newBreakCategoryIcon}
-                    onChange={(e) => setNewBreakCategoryIcon(e.target.value)}
-                    className="bg-white/20 dark:bg-gray-700/50"
-                  />
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={newBreakCategoryColor}
-                      onChange={(e) => setNewBreakCategoryColor(e.target.value)}
-                      className="w-10 h-10 rounded border border-gray-300 cursor-pointer"
-                    />
-                  </div>
-                </div>
-                <Button
-                  onClick={createBreakReminderCategory}
-                  size="sm"
-                  className="bg-red-600 hover:bg-red-700 dark:text-current text-gray-100"
-                >
-                  <Plus className="w-3 h-3 mr-1" />
-                  Add Category
-                </Button>
-              </div>
-            </div>
-
-            {/* Existing categories */}
-            {breakReminderCategories.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-gray-900 dark:text-white font-medium">Existing Categories</Label>
-                <div className="space-y-2">
-                  {breakReminderCategories.map((category) => (
-                    <div key={category.id} className="flex items-center justify-between p-2 bg-white/10 dark:bg-gray-700/30 rounded">
-                      <div className="flex items-center gap-2">
-                        <span>{category.icon}</span>
-                        <span className="text-sm">{category.name}</span>
-                        <div
-                          className="w-4 h-4 rounded-full border border-gray-300"
-                          style={{ backgroundColor: category.color }}
-                        />
-                      </div>
-                      <Button
-                        onClick={() => deleteBreakReminderCategory(category.id)}
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0 hover:bg-red-100 hover:text-red-600"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </Card>
-      </div>
+      {/* Category Management */}
+      {user && (
+        <CategoryManagement onCategoriesChange={onSettingsChange} />
+      )}
 
       {/* Bottom Action Buttons */}
       <Separator className="border-gray-300/20 dark:border-gray-700/20" />

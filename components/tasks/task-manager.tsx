@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit3, MoreVertical, Eye, EyeOff, Target, Play, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Plus, Trash2, Edit3, MoreVertical, Eye, EyeOff, Target, Play, AlertTriangle, CheckCircle, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,11 +13,35 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { TomatoSelector } from '@/components/ui/tomato-selector';
+import { SessionSelector } from '@/components/ui/session-selector';
 import { DaySelector } from '@/components/ui/day-selector';
-import { LocalStorage, Task, TaskCategory, TaskUtils } from '@/lib/storage';
+import { IconSelector, IconItem } from '@/components/ui/icon-selector';
+import { LocalStorage, Task, TaskUtils } from '@/lib/storage';
+import { AdvancedStorageService } from '@/lib/advanced-storage-service';
+import type { TaskCategory } from '@/lib/advanced-storage-service';
+import { TaskCompletionAnimation } from './task-completion-animation';
+import { DifficultySelectionDialog } from './difficulty-selection-dialog';
+
+import { FeatureGate } from '@/components/auth/feature-gate';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth-context';
+
+// Default color palette for categories (matching settings page)
+const DEFAULT_COLORS = [
+    '#EF4444', // Red
+    '#F97316', // Orange  
+    '#EAB308', // Yellow
+    '#22C55E', // Green
+    '#06B6D4', // Cyan
+    '#3B82F6', // Blue
+    '#8B5CF6', // Purple
+    '#EC4899', // Pink
+    '#6B7280', // Gray
+    '#DC2626', // Dark Red
+    '#EA580C', // Dark Orange
+    '#CA8A04', // Dark Yellow
+];
 
 interface TaskManagerProps {
     onStartFocusSession?: (taskId: string) => void;
@@ -25,7 +49,15 @@ interface TaskManagerProps {
 }
 
 export function TaskManager({ onStartFocusSession, isTimerActive = false }: TaskManagerProps) {
+    const { user, storageProvider } = useAuth();
     const [tasks, setTasks] = useState<Task[]>([]);
+    const [storageService, setStorageService] = useState<AdvancedStorageService | null>(null);
+
+    // Animation states
+    const [showCompletionAnimation, setShowCompletionAnimation] = useState(false);
+    const [completedTask, setCompletedTask] = useState<Task | null>(null);
+    const [showDifficultyDialog, setShowDifficultyDialog] = useState(false);
+    const [pendingSpacedRepetitionTask, setPendingSpacedRepetitionTask] = useState<Task | null>(null);
 
     const [showCompleted, setShowCompleted] = useState(false);
     const [priorityFilter, setPriorityFilter] = useState<'all' | 'high' | 'medium' | 'low' | 'none'>('all');
@@ -55,13 +87,23 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
 
     // Category management states
     const [showCategoryDialog, setShowCategoryDialog] = useState(false);
+    const [showIconSelector, setShowIconSelector] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
-    const [newCategoryColor, setNewCategoryColor] = useState('#6B7280');
-    const [newCategoryIcon, setNewCategoryIcon] = useState('');
-    const [availableCategories, setAvailableCategories] = useState<any[]>([]);
+    const [newCategoryColor, setNewCategoryColor] = useState('#EF4444');
+    const [newCategoryIcon, setNewCategoryIcon] = useState<IconItem | null>(null);
+    const [availableCategories, setAvailableCategories] = useState<TaskCategory[]>([]);
 
     const { toast } = useToast();
     const settings = LocalStorage.getSettings();
+
+    useEffect(() => {
+        if (user) {
+            const service = new AdvancedStorageService(user);
+            setStorageService(service);
+        } else {
+            setStorageService(null);
+        }
+    }, [user]);
 
     useEffect(() => {
         loadTasks();
@@ -78,13 +120,26 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
         return () => {
             window.removeEventListener('firebaseDataSynced', handleFirebaseDataSynced);
         };
-    }, []);
+    }, [storageService]);
 
-    const loadCategories = () => {
-        setAvailableCategories(TaskUtils.getAllTaskCategories());
+    const loadCategories = async () => {
+        if (!storageService) {
+            // Fallback to localStorage for unauthenticated users
+            setAvailableCategories(TaskUtils.getAllTaskCategories());
+            return;
+        }
+
+        try {
+            const categories = await storageService.getTaskCategories();
+            setAvailableCategories(categories);
+        } catch (error) {
+            console.error('Failed to load task categories:', error);
+            // Fallback to localStorage
+            setAvailableCategories(TaskUtils.getAllTaskCategories());
+        }
     };
 
-    const createCategory = () => {
+    const createCategory = async () => {
         if (!newCategoryName.trim()) {
             toast({
                 title: "Category name required",
@@ -94,148 +149,340 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
             return;
         }
 
-        const newCategory = TaskUtils.createTaskCategory(
-            newCategoryName.trim(),
-            newCategoryColor,
-            newCategoryIcon.trim() || undefined
-        );
+        let createdCategory: any = null;
+        const categoryName = newCategoryName.trim();
 
-        LocalStorage.addTaskCategory(newCategory);
-        loadCategories();
+        if (storageService) {
+            // Create category in Firebase
+            try {
+                createdCategory = await storageService.createCategory({
+                    name: categoryName,
+                    color: newCategoryColor,
+                    icon: newCategoryIcon?.emoji,
+                    type: 'task'
+                });
+                await loadCategories();
+            } catch (error) {
+                console.error('Failed to create category:', error);
+                toast({
+                    title: "Failed to create category",
+                    description: "Please try again later.",
+                    variant: "destructive",
+                });
+                return;
+            }
+        } else {
+            // Fallback to localStorage for unauthenticated users
+            createdCategory = TaskUtils.createTaskCategory(
+                categoryName,
+                newCategoryColor,
+                newCategoryIcon?.emoji
+            );
+
+            // Category creation handled by Firebase service
+            loadCategories();
+        }
 
         // Set the new category as selected
-        setEditingCategory(newCategory.name);
+        setEditingCategory(createdCategory.name);
 
         // Reset form
-        setNewCategoryName('');
-        setNewCategoryColor('#6B7280');
-        setNewCategoryIcon('');
-        setShowCategoryDialog(false);
+        resetCategoryForm();
 
         toast({
             title: "Category created",
-            description: `"${newCategory.name}" has been added to your categories.`,
+            description: `"${createdCategory.name}" has been added to your categories.`,
         });
     };
 
-    const loadTasks = () => {
-        setTasks(LocalStorage.getTasks());
+    // Reset category form
+    const resetCategoryForm = () => {
+        setNewCategoryName('');
+        setNewCategoryColor(DEFAULT_COLORS[0]);
+        setNewCategoryIcon(null);
+        setShowCategoryDialog(false);
+    };
+
+    // Handle icon selection
+    const handleIconSelect = (icon: IconItem) => {
+        setNewCategoryIcon(icon);
+    };
+
+    const loadTasks = async () => {
+        if (storageService) {
+            try {
+                console.log('Loading tasks from Firebase...');
+                const firebaseTasks = await storageService.getTasks();
+                console.log('Loaded tasks:', firebaseTasks.length, 'tasks');
+
+
+
+                // Filter and sort tasks properly
+                const activeTasks = firebaseTasks.filter(task => !task.archivedAt);
+                console.log('Active tasks:', activeTasks.length);
+
+                setTasks(activeTasks);
+            } catch (error) {
+                console.error('Failed to load tasks from Firebase:', error);
+                toast({
+                    title: "Failed to load tasks",
+                    description: "Please check your connection and try again.",
+                    variant: "destructive",
+                });
+                // No fallback needed - tasks are Firebase-only
+            }
+        } else {
+            // No tasks for unauthenticated users
+            setTasks([]);
+        }
     };
 
     const saveTasks = (updatedTasks: Task[]) => {
-        LocalStorage.saveTasks(updatedTasks);
+        if (!storageService) {
+            // No tasks for unauthenticated users
+            return;
+        }
         setTasks(updatedTasks);
     };
 
 
 
-    const toggleTask = (taskId: string) => {
+    const toggleTask = async (taskId: string) => {
         const task = tasks.find(t => t.id === taskId);
         if (!task) return;
 
-        if (!task.completed) {
+        // Check if task can be completed
+        const canComplete = task.spacedRepetition?.enabled
+            ? canCompleteSpacedRepetitionTask(task)
+            : task.recurring?.enabled
+                ? canCompleteRecurringTask(task)
+                : !task.completed;
+
+        if (canComplete) {
+            // Handle spaced repetition tasks - show difficulty dialog
             if (task.spacedRepetition?.enabled) {
-                if (!LocalStorage.canCompleteSpacedRepetitionTask(task)) {
-                    toast({
-                        title: "Already completed today",
-                        description: "Spaced repetition tasks can only be completed once per day.",
-                        variant: "destructive",
-                    });
-                    return;
-                }
-
-                LocalStorage.updateTaskAfterCompletion(taskId);
-                setTasks(LocalStorage.getTasks());
-
-                toast({
-                    title: "Spaced repetition task completed!",
-                    description: `Next review scheduled for ${new Date(task.spacedRepetition.nextReviewDate).toLocaleDateString()}`,
-                });
+                setPendingSpacedRepetitionTask(task);
+                setShowDifficultyDialog(true);
                 return;
             }
 
-            if (task.recurring?.enabled) {
-                if (!LocalStorage.canCompleteRecurringTask(task)) {
-                    toast({
-                        title: "Already completed today",
-                        description: "Recurring tasks can only be completed once per day.",
-                        variant: "destructive",
-                    });
-                    return;
+            // Complete the task using Firebase service
+            try {
+                if (storageService) {
+                    const updatedTask = await storageService.completeTask(taskId);
+
+                    // Show completion animation
+                    setCompletedTask(updatedTask);
+                    setShowCompletionAnimation(true);
+
+                    // For recurring tasks, refresh immediately so they disappear
+                    if (updatedTask.recurring?.enabled) {
+                        // Small delay to show the animation, then refresh
+                        setTimeout(async () => {
+                            await loadTasks();
+                        }, 500);
+                    } else {
+                        // For regular tasks, reload after animation
+                        setTimeout(async () => {
+                            await loadTasks();
+                        }, 1300);
+                    }
+                } else {
+                    // Fallback to localStorage for unauthenticated users
+                    if (task.recurring?.enabled) {
+                        if (!canCompleteRecurringTask(task)) {
+                            toast({
+                                title: "Already completed today",
+                                description: "Recurring tasks can only be completed once per day.",
+                                variant: "destructive",
+                            });
+                            return;
+                        }
+                    }
+
+                    // Task completion handled by Firebase service
+                    loadTasks();
+
+                    // Show completion animation
+                    setCompletedTask(task);
+                    setShowCompletionAnimation(true);
                 }
+            } catch (error: any) {
+                toast({
+                    title: "Failed to complete task",
+                    description: error.message || "Please try again.",
+                    variant: "destructive",
+                });
             }
-
-            LocalStorage.updateTaskAfterCompletion(taskId);
-            setTasks(LocalStorage.getTasks());
-
-            let message = 'Task completed!';
-            if (task.recurring?.enabled) message = 'Recurring task completed! Next occurrence scheduled.';
-
-            toast({
-                title: message,
-                description: task.title,
-            });
         } else {
-            // Handle unchecking completed tasks
+            // Show appropriate message for why task can't be completed
             if (task.spacedRepetition?.enabled) {
-                // For spaced repetition tasks, allow unchecking if completed today
-                const updatedTasks = tasks.map(t =>
-                    t.id === taskId ? {
-                        ...t,
-                        completed: false,
-                        completedAt: undefined,
-                        sessionsCompleted: Math.max(0, (t.sessionsCompleted || 1) - 1),
-                        spacedRepetition: t.spacedRepetition ? {
-                            ...t.spacedRepetition,
-                            lastReviewed: undefined,
-                            reviewCount: Math.max(0, (t.spacedRepetition.reviewCount || 1) - 1)
-                        } : undefined
-                    } : t
-                );
-                saveTasks(updatedTasks);
                 toast({
-                    title: "Task unchecked",
-                    description: "Spaced repetition progress has been reverted.",
+                    title: "Already reviewed today",
+                    description: "Spaced repetition tasks can only be reviewed once per day.",
+                    variant: "destructive",
                 });
-                return;
-            }
-
-            if (task.recurring?.enabled) {
-                // For recurring tasks, allow unchecking if completed today
-                const updatedTasks = tasks.map(t =>
-                    t.id === taskId ? {
-                        ...t,
-                        completed: false,
-                        completedAt: undefined,
-                        sessionsCompleted: Math.max(0, (t.sessionsCompleted || 1) - 1),
-                        recurring: t.recurring ? {
-                            ...t.recurring,
-                            lastCompleted: undefined
-                        } : undefined
-                    } : t
-                );
-                saveTasks(updatedTasks);
+            } else if (task.recurring?.enabled) {
                 toast({
-                    title: "Task unchecked",
-                    description: "Recurring task completion has been reverted.",
+                    title: "Already completed today",
+                    description: "Recurring tasks can only be completed once per day.",
+                    variant: "destructive",
                 });
-                return;
+            } else {
+                toast({
+                    title: "Task already completed",
+                    description: "This task has already been completed.",
+                    variant: "destructive",
+                });
             }
+        }
+    };
 
-            // Regular tasks
-            const updatedTasks = tasks.map(t =>
-                t.id === taskId ? {
-                    ...t,
-                    completed: false,
-                    completedAt: undefined,
-                    sessionsCompleted: Math.max(0, (t.sessionsCompleted || 1) - 1)
-                } : t
-            );
-            saveTasks(updatedTasks);
+    const handleDifficultySelect = async (difficulty: 'easy' | 'medium' | 'hard') => {
+        if (!pendingSpacedRepetitionTask) return;
+
+        try {
+            if (storageService) {
+                const updatedTask = await storageService.completeTask(pendingSpacedRepetitionTask.id, difficulty);
+
+                // Show completion animation
+                setCompletedTask(updatedTask);
+                setShowCompletionAnimation(true);
+
+                // Reload tasks to get updated state
+                await loadTasks();
+            } else {
+                // Task completion handled by Firebase service
+                loadTasks();
+
+                setCompletedTask(pendingSpacedRepetitionTask);
+                setShowCompletionAnimation(true);
+            }
+        } catch (error: any) {
             toast({
-                title: "Task unchecked",
-                description: "Task has been marked as incomplete.",
+                title: "Failed to complete task",
+                description: error.message || "Please try again.",
+                variant: "destructive",
             });
+        } finally {
+            setPendingSpacedRepetitionTask(null);
+        }
+    };
+
+    // Helper functions for task completion status
+    const canCompleteSpacedRepetitionTask = (task: Task): boolean => {
+        if (!task.spacedRepetition?.enabled) return true;
+
+        const now = Date.now();
+        const lastReviewed = task.spacedRepetition.lastReviewed;
+
+        if (!lastReviewed) return true; // Never reviewed before
+
+        // Check if last review was today
+        const today = new Date(now);
+        const lastReviewDate = new Date(lastReviewed);
+
+        return !(
+            today.getFullYear() === lastReviewDate.getFullYear() &&
+            today.getMonth() === lastReviewDate.getMonth() &&
+            today.getDate() === lastReviewDate.getDate()
+        );
+    };
+
+    const canCompleteRecurringTask = (task: Task): boolean => {
+        if (!task.recurring?.enabled) return true;
+
+        try {
+            const now = Date.now();
+            const lastCompleted = task.recurring.lastCompleted;
+
+            if (!lastCompleted) return true; // Never completed before
+
+            // Check if last completion was today (using local time)
+            const today = new Date(now);
+            today.setHours(0, 0, 0, 0);
+            const lastCompletedDate = new Date(lastCompleted);
+            lastCompletedDate.setHours(0, 0, 0, 0);
+
+            const canComplete = today.getTime() !== lastCompletedDate.getTime();
+
+            if (task.title === 'duolingo test') {
+                console.log(`Duolingo test canComplete check:`, {
+                    canComplete,
+                    today: today.toISOString(),
+                    lastCompletedDate: lastCompletedDate.toISOString(),
+                    lastCompleted: lastCompleted,
+                    todayTime: today.getTime(),
+                    lastCompletedTime: lastCompletedDate.getTime()
+                });
+            }
+
+            return canComplete;
+        } catch (error) {
+            console.error(`Error checking if recurring task can be completed "${task.title}":`, error, task.recurring);
+            return false;
+        }
+    };
+
+    // Helper function to check if recurring task is due and available
+    const isRecurringTaskDueAndAvailable = (task: Task): boolean => {
+        if (!task.recurring?.enabled) {
+            if (task.title === 'duolingo test') {
+                console.log(`Duolingo test: Not enabled for recurring`, task.recurring);
+            }
+            return false;
+        }
+
+        try {
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
+
+            // Check if nextDue exists and is valid
+            if (!task.recurring.nextDue || typeof task.recurring.nextDue !== 'number') {
+                console.warn(`Invalid nextDue for recurring task "${task.title}":`, task.recurring.nextDue);
+                return false;
+            }
+
+            const nextDue = new Date(task.recurring.nextDue);
+            nextDue.setHours(0, 0, 0, 0);
+
+            // Check if task is due (nextDue is today or in the past)
+            const isDue = nextDue.getTime() <= now.getTime();
+
+            if (task.title === 'duolingo test') {
+                console.log(`Duolingo test due check:`, {
+                    nextDue: nextDue.toISOString(),
+                    now: now.toISOString(),
+                    isDue,
+                    nextDueTime: nextDue.getTime(),
+                    nowTime: now.getTime()
+                });
+            }
+
+            // For daily pattern, always show if due and can be completed
+            if (task.recurring.pattern === 'daily') {
+                return isDue && canCompleteRecurringTask(task);
+            }
+
+            // For specific-days pattern, also check if today matches the pattern
+            if (task.recurring.pattern === 'specific-days' && task.recurring.daysOfWeek) {
+                const todayDay = now.getDay();
+                const isScheduledDay = task.recurring.daysOfWeek.includes(todayDay);
+                return isDue && isScheduledDay && canCompleteRecurringTask(task);
+            }
+
+            // For weekdays pattern, check if today is a weekday
+            if (task.recurring.pattern === 'weekdays') {
+                const todayDay = now.getDay();
+                const isWeekday = todayDay !== 0 && todayDay !== 6; // Not Sunday or Saturday
+                return isDue && isWeekday && canCompleteRecurringTask(task);
+            }
+
+            // For other patterns, just check if due and can be completed
+            return isDue && canCompleteRecurringTask(task);
+        } catch (error) {
+            console.error(`Error checking recurring task "${task.title}":`, error, task.recurring);
+            return false;
         }
     };
 
@@ -262,7 +509,7 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
         setShowEditDialog(true);
     };
 
-    const saveEdit = () => {
+    const saveEdit = async () => {
         if (!editingTitle.trim()) {
             toast({
                 title: "Task title required",
@@ -282,105 +529,205 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
             return;
         }
 
-        if (editingTaskId) {
-            // Editing existing task
-            const updatedTasks = tasks.map(task => {
-                if (task.id === editingTaskId) {
-                    const updatedTask: Task = {
-                        ...task,
+        try {
+            if (editingTaskId) {
+                // Editing existing task
+                if (storageService) {
+                    const updates: Partial<Task> = {
+                        title: editingTitle.trim(),
+                        description: editingDescription.trim() || undefined,
+                        estimatedSessions: editingEstimate,
+                        priority: editingPriorityEnabled ? editingPriority : undefined,
+                        category: editingCategory && editingCategory !== 'none' ? editingCategory.trim() : undefined
+                    };
+
+                    // Handle spaced repetition
+                    if (editingSpacedRepetition) {
+                        const existingTask = tasks.find(t => t.id === editingTaskId);
+                        updates.spacedRepetition = {
+                            enabled: true,
+                            difficulty: editingSpacedDifficulty,
+                            nextReviewDate: existingTask?.spacedRepetition?.nextReviewDate || Date.now(),
+                            reviewCount: existingTask?.spacedRepetition?.reviewCount || 0,
+                            lastReviewed: existingTask?.spacedRepetition?.lastReviewed,
+                            interval: existingTask?.spacedRepetition?.interval || 1
+                        };
+                    } else {
+                        updates.spacedRepetition = undefined;
+                    }
+
+                    // Handle recurring
+                    if (editingRecurring) {
+                        const existingTask = tasks.find(t => t.id === editingTaskId);
+                        const now = new Date();
+                        now.setHours(0, 0, 0, 0);
+
+                        updates.recurring = {
+                            enabled: true,
+                            pattern: editingRecurringPattern,
+                            interval: editingRecurringInterval,
+                            daysOfWeek: editingRecurringPattern === 'specific-days' ? editingRecurringDaysOfWeek : undefined,
+                            nextDue: existingTask?.recurring?.nextDue || now.getTime(),
+                            lastCompleted: existingTask?.recurring?.lastCompleted
+                        };
+                    } else {
+                        updates.recurring = undefined;
+                    }
+
+                    await storageService.updateTask(editingTaskId, updates);
+                    await loadTasks();
+                } else {
+                    // Fallback to localStorage
+                    const updatedTasks = tasks.map(task => {
+                        if (task.id === editingTaskId) {
+                            const updatedTask: Task = {
+                                ...task,
+                                title: editingTitle.trim(),
+                                description: editingDescription.trim() || undefined,
+                                estimatedSessions: editingEstimate,
+                                priority: editingPriorityEnabled ? editingPriority : undefined,
+                                category: editingCategory && editingCategory !== 'none' ? editingCategory.trim() : undefined
+                            };
+
+                            // Handle spaced repetition
+                            if (editingSpacedRepetition) {
+                                updatedTask.spacedRepetition = {
+                                    enabled: true,
+                                    difficulty: editingSpacedDifficulty,
+                                    nextReviewDate: task.spacedRepetition?.nextReviewDate || Date.now(),
+                                    reviewCount: task.spacedRepetition?.reviewCount || 0,
+                                    lastReviewed: task.spacedRepetition?.lastReviewed,
+                                    interval: task.spacedRepetition?.interval || 1
+                                };
+                            } else {
+                                updatedTask.spacedRepetition = undefined;
+                            }
+
+                            // Handle recurring
+                            if (editingRecurring) {
+                                const now = new Date();
+                                now.setHours(0, 0, 0, 0);
+
+                                updatedTask.recurring = {
+                                    enabled: true,
+                                    pattern: editingRecurringPattern,
+                                    interval: editingRecurringInterval,
+                                    daysOfWeek: editingRecurringPattern === 'specific-days' ? editingRecurringDaysOfWeek : undefined,
+                                    nextDue: task.recurring?.nextDue || now.getTime(),
+                                    lastCompleted: task.recurring?.lastCompleted
+                                };
+                            } else {
+                                updatedTask.recurring = undefined;
+                            }
+
+                            return updatedTask;
+                        }
+                        return task;
+                    });
+
+                    saveTasks(updatedTasks);
+                }
+
+                toast({
+                    title: "Task updated successfully!",
+                    description: editingTitle,
+                });
+            } else {
+                // Creating new task
+                if (storageService) {
+                    const taskData: any = {
                         title: editingTitle.trim(),
                         description: editingDescription.trim() || undefined,
                         estimatedSessions: editingEstimate,
                         priority: editingPriorityEnabled ? editingPriority : undefined,
                         category: editingCategory && editingCategory !== 'none' ? editingCategory.trim() : undefined,
-                        autoComplete: editingAutoComplete
+                        tags: []
                     };
 
                     // Handle spaced repetition
                     if (editingSpacedRepetition) {
-                        updatedTask.spacedRepetition = {
+                        taskData.spacedRepetition = {
                             enabled: true,
                             difficulty: editingSpacedDifficulty,
-                            nextReviewDate: task.spacedRepetition?.nextReviewDate || Date.now(),
-                            reviewCount: task.spacedRepetition?.reviewCount || 0,
-                            lastReviewed: task.spacedRepetition?.lastReviewed,
-                            interval: task.spacedRepetition?.interval || 1
+                            interval: 1,
+                            nextReviewDate: Date.now() + (24 * 60 * 60 * 1000) // Tomorrow
                         };
-                    } else {
-                        updatedTask.spacedRepetition = undefined;
                     }
 
                     // Handle recurring
                     if (editingRecurring) {
-                        updatedTask.recurring = {
+                        const now = new Date();
+                        now.setHours(0, 0, 0, 0); // Start of today
+
+                        taskData.recurring = {
                             enabled: true,
                             pattern: editingRecurringPattern,
                             interval: editingRecurringInterval,
                             daysOfWeek: editingRecurringPattern === 'specific-days' ? editingRecurringDaysOfWeek : undefined,
-                            nextDue: task.recurring?.nextDue || Date.now(),
-                            lastCompleted: task.recurring?.lastCompleted
+                            nextDue: now.getTime()
                         };
-                    } else {
-                        updatedTask.recurring = undefined;
                     }
 
-                    return updatedTask;
+                    await storageService.createTask(taskData);
+                    await loadTasks();
+                } else {
+                    // Fallback to localStorage
+                    const newTask: Task = {
+                        id: Date.now().toString(),
+                        title: editingTitle.trim(),
+                        description: editingDescription.trim() || undefined,
+                        completed: false,
+                        sessionsCompleted: 0,
+                        estimatedSessions: editingEstimate,
+                        createdAt: Date.now(),
+                        priority: editingPriorityEnabled ? editingPriority : undefined,
+                        category: editingCategory && editingCategory !== 'none' ? editingCategory.trim() : undefined
+                    };
+
+                    // Handle spaced repetition
+                    if (editingSpacedRepetition) {
+                        newTask.spacedRepetition = {
+                            enabled: true,
+                            difficulty: editingSpacedDifficulty,
+                            nextReviewDate: Date.now(),
+                            reviewCount: 0,
+                            interval: 1,
+                        };
+                    }
+
+                    // Handle recurring
+                    if (editingRecurring) {
+                        const now = new Date();
+                        now.setHours(0, 0, 0, 0); // Start of today
+
+                        newTask.recurring = {
+                            enabled: true,
+                            pattern: editingRecurringPattern,
+                            interval: editingRecurringInterval,
+                            daysOfWeek: editingRecurringPattern === 'specific-days' ? editingRecurringDaysOfWeek : undefined,
+                            nextDue: now.getTime(),
+                        };
+                    }
+
+                    const updatedTasks = [...tasks, newTask];
+                    saveTasks(updatedTasks);
                 }
-                return task;
-            });
 
-            saveTasks(updatedTasks);
-            toast({
-                title: "Task updated successfully!",
-                description: editingTitle,
-            });
-        } else {
-            // Creating new task
-            const newTask: Task = {
-                id: Date.now().toString(),
-                title: editingTitle.trim(),
-                description: editingDescription.trim() || undefined,
-                completed: false,
-                sessionsCompleted: 0,
-                estimatedSessions: editingEstimate,
-                createdAt: Date.now(),
-                priority: editingPriorityEnabled ? editingPriority : undefined,
-                category: editingCategory && editingCategory !== 'none' ? editingCategory.trim() : undefined,
-                autoComplete: editingAutoComplete,
-            };
-
-            // Handle spaced repetition
-            if (editingSpacedRepetition) {
-                newTask.spacedRepetition = {
-                    enabled: true,
-                    difficulty: editingSpacedDifficulty,
-                    nextReviewDate: Date.now(),
-                    reviewCount: 0,
-                    interval: 1,
-                };
+                toast({
+                    title: "Task added successfully!",
+                    description: editingTitle,
+                });
             }
 
-            // Handle recurring
-            if (editingRecurring) {
-                newTask.recurring = {
-                    enabled: true,
-                    pattern: editingRecurringPattern,
-                    interval: editingRecurringInterval,
-                    daysOfWeek: editingRecurringPattern === 'specific-days' ? editingRecurringDaysOfWeek : undefined,
-                    nextDue: Date.now(),
-                };
-            }
-
-            const updatedTasks = [...tasks, newTask];
-            saveTasks(updatedTasks);
+            setEditingTaskId(null);
+            setShowEditDialog(false);
+        } catch (error: any) {
             toast({
-                title: "Task added successfully!",
-                description: editingTitle,
+                title: "Failed to save task",
+                description: error.message || "Please try again.",
+                variant: "destructive",
             });
         }
-
-        setEditingTaskId(null);
-        setShowEditDialog(false);
     };
 
     const cancelEdit = () => {
@@ -388,17 +735,31 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
         setShowEditDialog(false);
     };
 
-    const deleteTask = (taskId: string) => {
+    const deleteTask = async (taskId: string) => {
         const taskToDelete = tasks.find(t => t.id === taskId);
         if (!taskToDelete) return;
 
-        const updatedTasks = tasks.filter(task => task.id !== taskId);
-        saveTasks(updatedTasks);
+        try {
+            if (storageService) {
+                await storageService.deleteTask(taskId);
+                await loadTasks();
+            } else {
+                // Fallback to localStorage
+                const updatedTasks = tasks.filter(task => task.id !== taskId);
+                saveTasks(updatedTasks);
+            }
 
-        toast({
-            title: "Task deleted",
-            description: `"${taskToDelete.title}" has been deleted.`,
-        });
+            toast({
+                title: "Task deleted",
+                description: `"${taskToDelete.title}" has been deleted.`,
+            });
+        } catch (error: any) {
+            toast({
+                title: "Failed to delete task",
+                description: error.message || "Please try again.",
+                variant: "destructive",
+            });
+        }
     };
 
     const handleStartFocusSession = (taskId: string) => {
@@ -425,25 +786,46 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
             // Show all tasks when showing completed
             filtered = tasks;
         } else {
-            // Filter out completed tasks and tasks that are done for today
+            // Filter tasks based on their current state
             filtered = tasks.filter(task => {
-                // Regular completed tasks
-                if (task.completed) return false;
+                // Debug logging for duolingo test
+                if (task.title === 'duolingo test') {
+                    console.log(`Duolingo test initial filter check:`, {
+                        completed: task.completed,
+                        hasRecurring: !!task.recurring?.enabled,
+                        hasSpaced: !!task.spacedRepetition?.enabled
+                    });
+                }
+
+                // Regular completed tasks - hide them
+                if (task.completed && !task.recurring?.enabled && !task.spacedRepetition?.enabled) {
+                    if (task.title === 'duolingo test') {
+                        console.log(`Duolingo test: Filtered out as regular completed task`);
+                    }
+                    return false;
+                }
 
                 // Recurring tasks - show if due today and not completed today
                 if (task.recurring?.enabled) {
-                    const now = new Date();
-                    now.setHours(0, 0, 0, 0);
-                    const nextDue = new Date(task.recurring.nextDue);
-                    nextDue.setHours(0, 0, 0, 0);
+                    const isDueAndAvailable = isRecurringTaskDueAndAvailable(task);
+                    const canComplete = canCompleteRecurringTask(task);
 
-                    const isDue = nextDue.getTime() <= now.getTime();
+                    // Debug logging for duolingo test
+                    if (task.title === 'duolingo test') {
+                        console.log(`Duolingo test filtering:`, {
+                            isDueAndAvailable,
+                            canComplete,
+                            completed: task.completed,
+                            nextDue: task.recurring.nextDue ? new Date(task.recurring.nextDue).toISOString() : 'none',
+                            lastCompleted: task.recurring.lastCompleted ? new Date(task.recurring.lastCompleted).toISOString() : 'never',
+                            willShow: isDueAndAvailable
+                        });
+                    }
 
-                    // Show if due and can be completed
-                    return isDue && LocalStorage.canCompleteRecurringTask(task);
+                    return isDueAndAvailable;
                 }
 
-                // Spaced repetition tasks - show if due today and not reviewed today
+                // Spaced repetition tasks - show if due for review
                 if (task.spacedRepetition?.enabled) {
                     const now = new Date();
                     now.setHours(0, 0, 0, 0);
@@ -451,12 +833,25 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                     nextReview.setHours(0, 0, 0, 0);
 
                     const isDue = nextReview.getTime() <= now.getTime();
-                    
-                    // Show if due and can be completed
-                    return isDue && LocalStorage.canCompleteSpacedRepetitionTask(task);
+                    const canReview = canCompleteSpacedRepetitionTask(task);
+
+                    console.log(`Spaced repetition task "${task.title}":`, {
+                        isDue,
+                        canReview,
+                        nextReviewDate: nextReview.toISOString(),
+                        now: now.toISOString(),
+                        lastReviewed: task.spacedRepetition.lastReviewed ? new Date(task.spacedRepetition.lastReviewed).toISOString() : 'never'
+                    });
+
+                    // Show if due and can be reviewed
+                    return isDue && canReview;
                 }
 
-                return true;
+                // Regular tasks - show if not completed
+                if (task.title === 'duolingo test') {
+                    console.log(`Duolingo test: Treated as regular task, completed=${task.completed}, willShow=${!task.completed}`);
+                }
+                return !task.completed;
             });
         }
 
@@ -534,30 +929,49 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
 
     const completedCount = tasks.filter(task => {
         // Regular completed tasks completed today
-        if (task.completed && task.completedAt && task.completedAt >= todayStart && task.completedAt <= todayEnd) return true;
+        if (task.completed && !task.recurring?.enabled && !task.spacedRepetition?.enabled &&
+            task.completedAt && task.completedAt >= todayStart && task.completedAt <= todayEnd) {
+            return true;
+        }
 
         // Recurring tasks completed today
         if (task.recurring?.enabled && task.recurring.lastCompleted &&
-            task.recurring.lastCompleted >= todayStart && task.recurring.lastCompleted <= todayEnd) return true;
+            task.recurring.lastCompleted >= todayStart && task.recurring.lastCompleted <= todayEnd) {
+            return true;
+        }
 
         // Spaced repetition tasks reviewed today
         if (task.spacedRepetition?.enabled && task.spacedRepetition.lastReviewed &&
-            task.spacedRepetition.lastReviewed >= todayStart && task.spacedRepetition.lastReviewed <= todayEnd) return true;
+            task.spacedRepetition.lastReviewed >= todayStart && task.spacedRepetition.lastReviewed <= todayEnd) {
+            return true;
+        }
 
         return false;
     }).length;
 
-    // Show active tasks count (not all tasks)
-    const totalTasks = tasks.filter(task => !task.completed && !task.archivedAt).length;
+    // Show active tasks count (tasks that are currently available to work on)
+    const activeTasks = showCompleted ? tasks : getFilteredTasks();
+    const totalTasks = activeTasks.length;
 
     // Show today's sessions (not all-time sessions)
     const totalSessions = todayStats.sessions;
 
     return (
-        <>
+        <FeatureGate feature="tasks">
+
+
+            {/* Difficulty Selection Dialog */}
+            <DifficultySelectionDialog
+                open={showDifficultyDialog}
+                onOpenChange={setShowDifficultyDialog}
+                taskTitle={pendingSpacedRepetitionTask?.title || ''}
+                currentInterval={pendingSpacedRepetitionTask?.spacedRepetition?.interval || 1}
+                onDifficultySelect={handleDifficultySelect}
+            />
+
             {/* Sheet Header with 3-dots menu */}
             <div className="p-4 pr-16 border-b flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Tasks</h2>
+                <h2 className="text-xl font-semibold text-foreground">Tasks</h2>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="focus-visible:bg-accent focus-visible:text-accent-foreground">
@@ -642,10 +1056,12 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                     </Select>
                 </div>
 
+
+
                 {/* Task List */}
                 <div className="space-y-4 flex-col">
                     {filteredTasks.length === 0 ? (
-                        <div className="text-center py-8 text-gray-600 dark:text-gray-400">
+                        <div className="text-center py-8 text-muted-foreground">
                             <Target className="w-12 h-12 mx-auto mb-4 opacity-50" />
                             <p>No tasks yet. Add your first task below!</p>
                         </div>
@@ -654,21 +1070,48 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                             <Card
                                 key={task.id}
                                 className={cn(
-                                    "p-3 sm:p-4 rounded-lg border transition-all duration-200 space-y-1",
+                                    "p-3 sm:p-4 rounded-lg border transition-all duration-200 space-y-1 relative",
                                     (task.completed ||
-                                        (task.spacedRepetition?.enabled && !LocalStorage.canCompleteSpacedRepetitionTask(task)) ||
-                                        (task.recurring?.enabled && !LocalStorage.canCompleteRecurringTask(task)))
-                                        ? "bg-white border-gray-200/80 hover:bg-gray-50 dark:bg-background dark:border-gray-600/10 dark:hover:bg-accent/10"
-                                        : "bg-white border-gray-200/80 hover:bg-gray-50 dark:bg-background dark:border-gray-600/10 dark:hover:bg-accent/10"
+                                        (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
+                                        (task.recurring?.enabled && !canCompleteRecurringTask(task)))
+                                        ? "bg-background border-accent hover:bg-accent/50"
+                                        : "bg-background border-accent hover:bg-accent/50"
                                 )}
                             >
+                                {/* Task Completion Animation for this specific task */}
+                                {showCompletionAnimation && completedTask?.id === task.id && (
+                                    <TaskCompletionAnimation
+                                        isVisible={true}
+                                        taskTitle={completedTask?.title || ''}
+                                        taskType={
+                                            completedTask?.spacedRepetition?.enabled ? 'spaced-repetition' :
+                                                completedTask?.recurring?.enabled ? 'recurring' : 'normal'
+                                        }
+                                        nextReviewDate={
+                                            completedTask?.spacedRepetition?.nextReviewDate
+                                                ? new Date(completedTask.spacedRepetition.nextReviewDate)
+                                                : undefined
+                                        }
+                                        nextDueDate={
+                                            completedTask?.recurring?.nextDue
+                                                ? new Date(completedTask.recurring.nextDue)
+                                                : undefined
+                                        }
+                                        onAnimationComplete={() => {
+                                            setShowCompletionAnimation(false);
+                                            setCompletedTask(null);
+                                        }}
+                                    />
+                                )}
                                 <div className="flex gap-3 items-center">
                                     {/* Checkbox - and title */}
                                     <div className="flex-shrink-0 w-5 mt-0.5">
                                         <Checkbox
-                                            checked={task.completed ||
-                                                (task.spacedRepetition?.enabled && !LocalStorage.canCompleteSpacedRepetitionTask(task)) ||
-                                                (task.recurring?.enabled && !LocalStorage.canCompleteRecurringTask(task))}
+                                            checked={
+                                                (task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) ||
+                                                (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
+                                                (task.recurring?.enabled && !canCompleteRecurringTask(task))
+                                            }
                                             onCheckedChange={() => toggleTask(task.id)}
                                             className="data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
                                         />
@@ -677,15 +1120,15 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                         <span
                                             className={cn(
                                                 "cursor-pointer transition-colors block text-sm font-medium",
-                                                (task.completed ||
-                                                    (task.spacedRepetition?.enabled && !LocalStorage.canCompleteSpacedRepetitionTask(task)) ||
-                                                    (task.recurring?.enabled && !LocalStorage.canCompleteRecurringTask(task)))
-                                                    ? "line-through text-gray-500 dark:text-gray-500"
-                                                    : "text-gray-900 dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300"
+                                                ((task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) ||
+                                                    (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
+                                                    (task.recurring?.enabled && !canCompleteRecurringTask(task)))
+                                                    ? "line-through text-muted-foreground"
+                                                    : "text-foreground hover:text-foreground"
                                             )}
-                                            onClick={() => !task.completed &&
-                                                !(task.spacedRepetition?.enabled && !LocalStorage.canCompleteSpacedRepetitionTask(task)) &&
-                                                !(task.recurring?.enabled && !LocalStorage.canCompleteRecurringTask(task)) &&
+                                            onClick={() => !(task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) &&
+                                                !(task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) &&
+                                                !(task.recurring?.enabled && !canCompleteRecurringTask(task)) &&
                                                 startEditing(task)}
                                         >
                                             {task.title}
@@ -699,15 +1142,15 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                     {/* Line 4: Progress (if exists) */}
                                     {settings.showTaskEstimation &&
                                         !(task.completed ||
-                                            (task.spacedRepetition?.enabled && !LocalStorage.canCompleteSpacedRepetitionTask(task)) ||
-                                            (task.recurring?.enabled && !LocalStorage.canCompleteRecurringTask(task))) &&
+                                            (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
+                                            (task.recurring?.enabled && !canCompleteRecurringTask(task))) &&
                                         task.estimatedSessions > 0 && (
                                             <div className="space-y-1">
-                                                <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                                                <div className="flex items-center justify-between text-xs text-muted-foreground">
                                                     <span>Today: {LocalStorage.getTodaysDailySessions(task)}/{task.estimatedSessions} sessions</span>
                                                     <span>Total: {task.sessionsCompleted}</span>
                                                 </div>
-                                                <div className="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
+                                                <div className="w-full bg-accent rounded-full h-1.5">
                                                     <div
                                                         className="bg-red-600 h-1.5 rounded-full transition-all duration-300"
                                                         style={{
@@ -721,7 +1164,7 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                     {/* Line 5: Description (if exists) */}
                                     {task.description && (
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                            <p className="text-sm text-muted-foreground">
                                                 {task.description}
                                             </p>
                                         </div>
@@ -794,7 +1237,7 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                                 </Badge>
                                             )}
                                         </div>
-                                        <div className="text-xs text-gray-500 dark:text-gray-500">
+                                        <div className="text-xs text-muted-foreground">
                                             Created: {task.createdAt && !isNaN(task.createdAt) && task.createdAt > 0
                                                 ? new Date(task.createdAt).toLocaleDateString()
                                                 : 'Unknown'}
@@ -805,9 +1248,9 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                 <div className='flex items-center justify-between w-full mt-2'>
                                     {/* Line 3: Priority badge (if exists) */}
                                     <div className='flex justify-start items-start'>
-                                        {!(task.completed ||
-                                            (task.spacedRepetition?.enabled && !LocalStorage.canCompleteSpacedRepetitionTask(task)) ||
-                                            (task.recurring?.enabled && !LocalStorage.canCompleteRecurringTask(task))) &&
+                                        {!((task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) ||
+                                            (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
+                                            (task.recurring?.enabled && !canCompleteRecurringTask(task))) &&
                                             task.estimatedSessions > 0 && (
                                                 <Button
                                                     size="sm"
@@ -822,14 +1265,14 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                             )}
                                     </div>
                                     <div className='flex float-right gap-1'>
-                                        {!(task.completed ||
-                                            (task.spacedRepetition?.enabled && !LocalStorage.canCompleteSpacedRepetitionTask(task)) ||
-                                            (task.recurring?.enabled && !LocalStorage.canCompleteRecurringTask(task))) && (
+                                        {!((task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) ||
+                                            (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
+                                            (task.recurring?.enabled && !canCompleteRecurringTask(task))) && (
                                                 <Button
                                                     size="sm"
                                                     variant="ghost"
                                                     onClick={() => startEditing(task)}
-                                                    className="h-8 w-8 p-0 hover:bg-red-100 bg-gray-200 dark:bg-accent dark:hover:bg-gray-700 cursor-pointer"
+                                                    className="h-8 w-8 p-0 hover:bg-accent bg-accent cursor-pointer"
                                                 >
                                                     <Edit3 className="w-3 h-3" />
                                                 </Button>
@@ -840,7 +1283,7 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                                 size="sm"
                                                 variant="ghost"
                                                 onClick={() => deleteTask(task.id)}
-                                                className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600 dark:bg-accent dark:hover:bg-red-900/20 bg-gray-200 cursor-pointer"
+                                                className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive bg-accent cursor-pointer"
                                             >
                                                 <Trash2 className="w-3 h-3" />
                                             </Button>
@@ -854,7 +1297,7 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                 </div>
 
                 {/* Add New Task Button */}
-                <Card className="p-4 border-2 border-dashed border-gray-300 dark:border-gray-600">
+                <Card className="p-4 border-2 border-dashed border-accent">
                     <Button
                         onClick={() => {
                             // Reset form for new task
@@ -887,13 +1330,13 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                         <Button
                             variant="ghost"
                             onClick={() => setShowCompleted(true)}
-                            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                            className="text-sm text-muted-foreground hover:text-foreground"
                         >
                             <CheckCircle className="w-4 h-4 mr-2" />
                             Show {completedCount} completed task{completedCount > 1 ? 's' : ''}
                         </Button>
                         {!showCompleted && completedCount > 0 && (
-                            <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            <div className="text-xs text-muted-foreground mt-1">
                                 {completedCount} completed task{completedCount > 1 ? 's' : ''} hidden
                             </div>
                         )}
@@ -933,7 +1376,7 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                         <div>
                             <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Estimated Sessions</Label>
                             <div className="mt-2">
-                                <TomatoSelector
+                                <SessionSelector
                                     value={editingEstimate}
                                     onChange={setEditingEstimate}
                                     max={8}
@@ -1030,10 +1473,23 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                     className="data-[state=checked]:bg-red-600"
                                 />
                                 <Label htmlFor="edit-spaced-repetition" className={cn(
-                                    "text-sm font-medium",
+                                    "text-sm font-medium flex items-center gap-2",
                                     editingRecurring && "text-gray-400 dark:text-gray-500"
                                 )}>
                                     Enable Spaced Repetition
+                                    <div className="group relative">
+                                        <HelpCircle className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help" />
+                                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 w-64">
+                                            <div className="font-medium mb-1">Spaced Repetition Learning</div>
+                                            <div className="space-y-1">
+                                                <div>• Tasks reappear at optimized intervals</div>
+                                                <div>• Rate difficulty after each review</div>
+                                                <div>• Easy items appear less frequently</div>
+                                                <div>• Hard items appear more often</div>
+                                            </div>
+                                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-100"></div>
+                                        </div>
+                                    </div>
                                     {editingRecurring && <span className="text-xs text-gray-400 ml-2">(disabled - task is recurring)</span>}
                                 </Label>
                             </div>
@@ -1188,9 +1644,9 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
 
             {/* Create Category Dialog */}
             <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="bg-background">
                     <DialogHeader>
-                        <DialogTitle>Create New Category</DialogTitle>
+                        <DialogTitle>Create Task Category</DialogTitle>
                     </DialogHeader>
 
                     <div className="space-y-4">
@@ -1198,59 +1654,82 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                             <Label htmlFor="category-name">Category Name</Label>
                             <Input
                                 id="category-name"
-                                placeholder="e.g., Work, Study, Personal"
+                                placeholder="Enter category name"
                                 value={newCategoryName}
                                 onChange={(e) => setNewCategoryName(e.target.value)}
+                                className="mt-1"
                             />
                         </div>
 
                         <div>
-                            <Label htmlFor="category-icon">Icon (Optional)</Label>
-                            <Input
-                                id="category-icon"
-                                placeholder="e.g., 💼, 📚, 🏠"
-                                value={newCategoryIcon}
-                                onChange={(e) => setNewCategoryIcon(e.target.value)}
-                            />
-                        </div>
-
-                        <div>
-                            <Label htmlFor="category-color">Color</Label>
-                            <div className="flex items-center gap-2 mt-2">
-                                <input
-                                    type="color"
-                                    id="category-color"
-                                    value={newCategoryColor}
-                                    onChange={(e) => setNewCategoryColor(e.target.value)}
-                                    className="w-8 h-8 rounded border border-gray-300 cursor-pointer"
-                                />
-                                <Input
-                                    value={newCategoryColor}
-                                    onChange={(e) => setNewCategoryColor(e.target.value)}
-                                    placeholder="#6B7280"
-                                    className="flex-1"
-                                />
+                            <Label>Icon (Optional)</Label>
+                            <div className="flex items-center gap-2 mt-1">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setShowIconSelector(true)}
+                                    className="h-12 w-12 p-0 text-xl"
+                                >
+                                    {newCategoryIcon ? newCategoryIcon.emoji : '+'}
+                                </Button>
+                                {newCategoryIcon && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-muted-foreground">{newCategoryIcon.name}</span>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setNewCategoryIcon(null)}
+                                        >
+                                            Remove
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                         </div>
-                    </div>
 
-                    <div className="flex gap-2 pt-4">
-                        <Button
-                            variant="outline"
-                            onClick={() => setShowCategoryDialog(false)}
-                            className="flex-1"
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={createCategory}
-                            className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-                        >
-                            Create Category
-                        </Button>
+                        <div>
+                            <Label>Color</Label>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                                {DEFAULT_COLORS.map((color) => (
+                                    <button
+                                        key={color}
+                                        type="button"
+                                        className={`w-8 h-8 rounded-full border-2 ${newCategoryColor === color ? 'border-foreground' : 'border-border'
+                                            }`}
+                                        style={{ backgroundColor: color }}
+                                        onClick={() => setNewCategoryColor(color)}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-4">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={resetCategoryForm}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={createCategory}
+                                disabled={!newCategoryName.trim()}
+                            >
+                                Create Category
+                            </Button>
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>
-        </>
+
+            {/* Icon Selector */}
+            <IconSelector
+                selectedIcon={newCategoryIcon?.emoji}
+                onIconSelect={handleIconSelect}
+                open={showIconSelector}
+                onOpenChange={setShowIconSelector}
+            />
+        </FeatureGate>
     );
 }

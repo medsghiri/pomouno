@@ -1,4 +1,5 @@
 
+// Basic interfaces for localStorage-only features
 export interface PomodoroSession {
   id: string;
   type: 'work' | 'short-break' | 'long-break';
@@ -6,105 +7,8 @@ export interface PomodoroSession {
   completed: boolean;
   timestamp: number;
   taskId?: string;
-  selectedBeforeStart?: boolean; // whether task was selected before starting
-  breakRemindersCompleted?: string[]; // IDs of break reminders completed
-  breakRemindersShown?: string[]; // IDs of break reminders that were shown
-}
-
-export interface BreakReminderCategory {
-  id: string;
-  name: string;
-  icon: string;
-  color: string;
-  createdAt: number;
-}
-
-export interface BreakReminderCompletion {
-  id: string;
-  reminderId: string;
-  completedAt: number;
-  sessionId: string;
-  breakType: 'short' | 'long';
-  userInteraction: boolean; // whether user actively completed it
-}
-
-export interface TaskCategory {
-  id: string;
-  name: string;
-  color: string;
-  icon?: string;
-  createdAt: number;
-}
-
-export interface BreakReminder {
-  id: string;
-  title: string;
-  description: string;
-  breakType: 'short' | 'long' | 'both';
-  category: 'hydration' | 'movement' | 'rest' | 'custom';
-  customCategory?: string; // ID of custom category
-  enabled: boolean;
-  frequency: 'every-break' | 'every-30min' | 'hourly' | 'every-2hours' | 'every-3hours' | 'custom';
-  customFrequency?: {
-    interval: number;
-    unit: 'minutes' | 'hours' | 'breaks';
-  };
-  createdAt: number;
-  lastShown?: number;
-  nextScheduled?: number;
-}
-
-export interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  completed: boolean;
-  sessionsCompleted: number;
-  estimatedSessions: number;
-  createdAt: number;
-  autoComplete?: boolean;
-
-  // Daily session tracking
-  dailySessions?: {
-    date: string; // YYYY-MM-DD format
-    count: number;
-  };
-
-  // Spaced repetition for learning/practice tasks
-  spacedRepetition?: {
-    enabled: boolean;
-    difficulty: 'easy' | 'medium' | 'hard';
-    nextReviewDate: number;
-    reviewCount: number;
-    lastReviewed?: number;
-    interval: number; // days until next review
-  };
-
-  // Recurring task settings
-  recurring?: {
-    enabled: boolean;
-    pattern: 'daily' | 'weekly' | 'monthly' | 'custom' | 'weekdays' | 'specific-days';
-    interval: number; // for custom patterns (e.g., every 3 days)
-    daysOfWeek?: number[]; // 0-6, Sunday-Saturday for weekly/specific days
-    dayOfMonth?: number; // 1-31 for monthly
-    endDate?: number; // when to stop recurring
-    lastCompleted?: number;
-    nextDue: number;
-    // New fields for complex patterns
-    weeklyPattern?: 'every-week' | 'every-other-week' | 'custom-weeks';
-    monthlyPattern?: 'same-date' | 'same-weekday' | 'last-weekday';
-  };
-
-
-
-  // Task categorization and priority
-  category?: string;
-  priority?: 'low' | 'medium' | 'high';
-  tags?: string[];
-
-  // Completion tracking
-  completedAt?: number;
-  archivedAt?: number;
+  breakRemindersShown?: string[];
+  breakRemindersCompleted?: string[];
 }
 
 export interface AudioFile {
@@ -122,7 +26,8 @@ export interface AudioFile {
   createdAt: string;
 }
 
-export interface Settings {
+// Basic settings for localStorage (timer, audio, theme)
+export interface BasicSettings {
   workDuration: number;
   shortBreakDuration: number;
   longBreakDuration: number;
@@ -132,9 +37,7 @@ export interface Settings {
   notifications: boolean;
   soundVolume: number;
   notificationVolume: number;
-  autoCompleteTask: boolean;
   darkMode: boolean;
-  showTaskEstimation: boolean;
   // Enhanced audio selection settings
   focusAudio: string;
   breakAudio: string;
@@ -145,130 +48,38 @@ export interface Settings {
   dailySessionGoal: number;
 }
 
-export interface DailyStats {
+// Legacy interface for backward compatibility
+export interface Settings extends BasicSettings {
+  autoCompleteTask: boolean;
+  showTaskEstimation: boolean;
+}
+
+// Basic daily stats for localStorage (timer sessions only)
+export interface BasicDailyStats {
   sessions: number;
   focusTime: number;
-  tasksCompleted: number;
-  streak: number;
   date: string;
-  // Enhanced daily statistics
   workSessions: number;
   shortBreakSessions: number;
   longBreakSessions: number;
+}
+
+// Legacy interfaces for backward compatibility
+export interface DailyStats extends BasicDailyStats {
+  tasksCompleted: number;
+  streak: number;
   breakRemindersShown: number;
   breakRemindersCompleted: number;
 }
 
 export interface TodaysStats extends DailyStats { }
 
-export interface WeeklyStats {
-  totalSessions: number;
-  totalFocusTime: number;
-  totalTasksCompleted: number;
-  averageSessionsPerDay: number;
-  bestDay: string;
-  weekStart: string;
-  weekEnd: string;
-  dailyBreakdown: DailyStats[];
-}
-
-export interface MonthlyStats {
-  totalSessions: number;
-  totalFocusTime: number;
-  totalTasksCompleted: number;
-  averageSessionsPerDay: number;
-  bestDay: string;
-  month: number;
-  year: number;
-  weeklyBreakdown: WeeklyStats[];
-  dailyBreakdown: DailyStats[];
-}
-
-// Enhanced statistics interfaces for comprehensive analytics
-export interface TaskStats {
-  totalTasks: number;
-  completedTasks: number;
-  activeTasks: number;
-  completionRate: number;
-  averageSessionsPerTask: number;
-  tasksByCategory: Record<string, number>;
-  tasksByPriority: Record<string, number>;
-  dailyCompletions: DailyTaskCompletion[];
-  recurringTasksCompleted: number;
-  spacedRepetitionTasksReviewed: number;
-}
-
-export interface DailyTaskCompletion {
-  date: string;
-  completed: number;
-  created: number;
-}
-
-export interface SpacedRepetitionStats {
-  totalReviews: number;
-  streakDays: number;
-  upcomingReviews: SpacedRepetitionTask[];
-  difficultyDistribution: Record<string, number>;
-  retentionRate: number;
-  averageInterval: number;
-  tasksInReview: number;
-}
-
-export interface SpacedRepetitionTask {
-  id: string;
-  title: string;
-  nextReviewDate: number;
-  difficulty: 'easy' | 'medium' | 'hard';
-  interval: number;
-  reviewCount: number;
-}
-
-export interface BreakReminderStats {
-  totalRemindersShown: number;
-  totalRemindersCompleted: number;
-  completionRate: number;
-  remindersByCategory: Record<string, { shown: number; completed: number }>;
-  dailyCompletions: DailyBreakReminderCompletion[];
-  averageCompletionsPerBreak: number;
-}
-
-export interface DailyBreakReminderCompletion {
-  date: string;
-  shown: number;
-  completed: number;
-  completionRate: number;
-}
-
-export interface CalendarEvent {
-  id: string;
-  title: string;
-  date: string;
-  type: 'task' | 'recurring-task' | 'spaced-repetition';
-  taskId: string;
-  priority?: 'low' | 'medium' | 'high';
-  category?: string;
-  isCompleted?: boolean;
-}
-
-export interface PomodoroStats {
-  totalSessions: number;
-  workSessions: number;
-  shortBreakSessions: number;
-  longBreakSessions: number;
-  totalFocusTime: number; // in minutes
-  averageSessionLength: number; // in minutes
-  currentStreak: number;
-  longestStreak: number;
-  sessionsToday: number;
-  sessionsThisWeek: number;
-}
-
 export interface DateRange {
   start: number;
   end: number;
 }
 
-const DEFAULT_SETTINGS: Settings = {
+const DEFAULT_BASIC_SETTINGS: BasicSettings = {
   workDuration: 25,
   shortBreakDuration: 5,
   longBreakDuration: 15,
@@ -278,9 +89,7 @@ const DEFAULT_SETTINGS: Settings = {
   notifications: true,
   soundVolume: 0.5,
   notificationVolume: 0.7,
-  autoCompleteTask: false,
   darkMode: false,
-  showTaskEstimation: true,
   // Enhanced audio defaults - notification sound enabled by default
   focusAudio: 'none',
   breakAudio: 'none',
@@ -289,6 +98,13 @@ const DEFAULT_SETTINGS: Settings = {
   usePlaylistForLofi: true,
   // Daily goal default
   dailySessionGoal: 8,
+};
+
+// Legacy default settings for backward compatibility
+const DEFAULT_SETTINGS: Settings = {
+  ...DEFAULT_BASIC_SETTINGS,
+  autoCompleteTask: false,
+  showTaskEstimation: true,
 };
 
 function safeJsonParse<T>(jsonString: string | null, defaultValue: T): T {
@@ -326,13 +142,7 @@ function getWeekEnd(date: Date): Date {
 }
 
 export class LocalStorage {
-  // Firebase sync flag to prevent infinite loops
-  private static _isLoadingFromFirebase = false;
-
-  // Flag to disable Firebase sync if there are persistent issues
-  private static _firebaseSyncDisabled = false;
-
-  // Session management
+  // Session management (basic timer functionality)
   static getTodaysSessions(): PomodoroSession[] {
     if (typeof window === 'undefined') return [];
     const sessions = localStorage.getItem('pomouono_today_sessions');
@@ -360,11 +170,6 @@ export class LocalStorage {
     const allSessions = this.getAllSessions();
     allSessions.push(session);
     this.saveAllSessions(allSessions);
-
-    // Sync individual session to Firebase (non-blocking)
-    this.syncToFirebase('sessions', session).catch(() => {
-      // Silently fail - local storage is primary
-    });
   }
 
   static getSessionsByDateRange(startDate: string, endDate: string): PomodoroSession[] {
@@ -377,170 +182,31 @@ export class LocalStorage {
     );
   }
 
-  // Task management
-  static getTasks(): Task[] {
-    if (typeof window === 'undefined') return [];
-    const tasks = localStorage.getItem('pomouono_tasks');
-    const parsedTasks = safeJsonParse(tasks, []);
-
-    // Fix any tasks with invalid dates
-    const validTasks = parsedTasks.map((task: any) => ({
-      ...task,
-      createdAt: task.createdAt && !isNaN(task.createdAt) && task.createdAt > 0 ? task.createdAt : Date.now(),
-      completedAt: task.completedAt && !isNaN(task.completedAt) && task.completedAt > 0 ? task.completedAt : undefined
-    }));
-
-    // Save the fixed tasks back if any were invalid
-    if (JSON.stringify(parsedTasks) !== JSON.stringify(validTasks)) {
-      this.saveTasks(validTasks);
-    }
-
-    return validTasks;
+  // Basic settings management (timer, audio, theme)
+  static getBasicSettings(): BasicSettings {
+    if (typeof window === 'undefined') return DEFAULT_BASIC_SETTINGS;
+    const settings = localStorage.getItem('pomouono_settings');
+    const parsedSettings = safeJsonParse(settings, {});
+    return { ...DEFAULT_BASIC_SETTINGS, ...parsedSettings };
   }
 
-  static saveTasks(tasks: Task[]): void {
+  static saveBasicSettings(settings: BasicSettings): void {
     if (typeof window === 'undefined') return;
 
-    // Fix invalid dates before saving
-    const validTasks = tasks.map(task => ({
-      ...task,
-      createdAt: task.createdAt && !isNaN(task.createdAt) && task.createdAt > 0 ? task.createdAt : Date.now(),
-      completedAt: task.completedAt && !isNaN(task.completedAt) && task.completedAt > 0 ? task.completedAt : undefined
-    }));
-
-    localStorage.setItem('pomouono_tasks', JSON.stringify(validTasks));
-
-    // Sync to Firebase (non-blocking)
-    this.syncToFirebase('tasks', validTasks).catch(() => {
-      // Silently fail - local storage is primary
-    });
-  }
-
-  static getActiveTasks(): Task[] {
-    return this.getTasks().filter(task => !task.completed && !task.archivedAt);
-  }
-
-  static getTasksDueToday(): Task[] {
-    const today = new Date().getTime();
-    const todayStart = new Date().setHours(0, 0, 0, 0);
-    const todayEnd = new Date().setHours(23, 59, 59, 999);
-
-    return this.getActiveTasks().filter(task => {
-      // Regular tasks that aren't completed
-      if (!task.recurring && !task.spacedRepetition) return true;
-
-      // Recurring tasks due today
-      if (task.recurring?.enabled && task.recurring.nextDue <= todayEnd) return true;
-
-      // Spaced repetition tasks due for review
-      if (task.spacedRepetition?.enabled && task.spacedRepetition.nextReviewDate <= todayEnd) return true;
-
-      return false;
-    });
-  }
-
-
-
-  static canCompleteSpacedRepetitionTask(task: Task): boolean {
-    if (!task.spacedRepetition?.enabled) return true;
-
-    const now = Date.now();
-    const lastReviewed = task.spacedRepetition.lastReviewed;
-
-    if (!lastReviewed) return true; // Never reviewed before
-
-    // Check if last review was today
-    const today = new Date(now);
-    const lastReviewDate = new Date(lastReviewed);
-
-    return !(
-      today.getFullYear() === lastReviewDate.getFullYear() &&
-      today.getMonth() === lastReviewDate.getMonth() &&
-      today.getDate() === lastReviewDate.getDate()
-    );
-  }
-
-  static canCompleteRecurringTask(task: Task): boolean {
-    if (!task.recurring?.enabled) return true;
-
-    const now = Date.now();
-    const lastCompleted = task.recurring.lastCompleted;
-
-    if (!lastCompleted) return true; // Never completed before
-
-    // Check if last completion was today
-    const today = new Date(now);
-    const lastCompletedDate = new Date(lastCompleted);
-
-    return !(
-      today.getFullYear() === lastCompletedDate.getFullYear() &&
-      today.getMonth() === lastCompletedDate.getMonth() &&
-      today.getDate() === lastCompletedDate.getDate()
-    );
-  }
-
-  static updateTaskAfterCompletion(taskId: string): void {
-    const tasks = this.getTasks();
-    const taskIndex = tasks.findIndex(t => t.id === taskId);
-
-    if (taskIndex === -1) return;
-
-    const task = tasks[taskIndex];
-    const now = Date.now();
-
-    // Increment session count for all task types
-    task.sessionsCompleted = (task.sessionsCompleted || 0) + 1;
-
-    // Handle spaced repetition
-    if (task.spacedRepetition?.enabled) {
-      // Check if already completed today
-      if (!this.canCompleteSpacedRepetitionTask(task)) {
-        return; // Don't allow multiple completions per day
-      }
-
-      const sr = task.spacedRepetition;
-      sr.reviewCount++;
-      sr.lastReviewed = now;
-
-      // Calculate next review interval based on difficulty and performance
-      let multiplier = 1.3; // default for medium
-      if (sr.difficulty === 'easy') multiplier = 2.5;
-      if (sr.difficulty === 'hard') multiplier = 1.0;
-
-      sr.interval = Math.ceil(sr.interval * multiplier);
-      sr.nextReviewDate = now + (sr.interval * 24 * 60 * 60 * 1000);
-
-      // Don't mark as completed for spaced repetition tasks
-      task.completed = false;
+    if (!settings) {
+      localStorage.setItem('pomouono_settings', JSON.stringify(DEFAULT_BASIC_SETTINGS));
+      return;
     }
 
-    // Handle recurring tasks
-    if (task.recurring?.enabled) {
-      // Check if already completed today
-      if (!this.canCompleteRecurringTask(task)) {
-        return; // Don't allow multiple completions per day
-      }
-
-      const recurring = task.recurring;
-      recurring.lastCompleted = now;
-
-      // Calculate next due date using the proper calculation method
-      const nextDue = TaskUtils.calculateNextRecurringDate(now, recurring);
-      recurring.nextDue = nextDue.getTime();
-
-      // Don't mark as completed for recurring tasks
-      task.completed = false;
-    } else if (!task.spacedRepetition?.enabled) {
-      // Only mark as completed if it's not a recurring or spaced repetition task
-      task.completed = true;
-      task.completedAt = now;
+    const settingsJson = JSON.stringify(settings);
+    if (settingsJson === undefined) {
+      localStorage.setItem('pomouono_settings', JSON.stringify(DEFAULT_BASIC_SETTINGS));
+    } else {
+      localStorage.setItem('pomouono_settings', settingsJson);
     }
-
-    tasks[taskIndex] = task;
-    this.saveTasks(tasks);
   }
 
-  // Settings management
+  // Legacy settings management (for backward compatibility)
   static getSettings(): Settings {
     if (typeof window === 'undefined') return DEFAULT_SETTINGS;
     const settings = localStorage.getItem('pomouono_settings');
@@ -551,41 +217,31 @@ export class LocalStorage {
   static saveSettings(settings: Settings): void {
     if (typeof window === 'undefined') return;
 
-    // Ensure settings is not undefined before stringifying
     if (!settings) {
       localStorage.setItem('pomouono_settings', JSON.stringify(DEFAULT_SETTINGS));
       return;
     }
 
     const settingsJson = JSON.stringify(settings);
-    // Check if JSON.stringify returned undefined (which happens if settings was undefined)
     if (settingsJson === undefined) {
       localStorage.setItem('pomouono_settings', JSON.stringify(DEFAULT_SETTINGS));
     } else {
       localStorage.setItem('pomouono_settings', settingsJson);
-      // Sync settings to Firebase (non-blocking)
-      this.syncToFirebase('settings', settings).catch(() => {
-        // Silently fail - local storage is primary
-      });
     }
   }
 
-  // Daily stats management
-  static getDailyStats(date: string): DailyStats {
+  // Basic daily stats management (timer sessions only)
+  static getBasicDailyStats(date: string): BasicDailyStats {
     if (typeof window === 'undefined') return {
       sessions: 0,
       focusTime: 0,
-      tasksCompleted: 0,
-      streak: 0,
       date,
       workSessions: 0,
       shortBreakSessions: 0,
-      longBreakSessions: 0,
-      breakRemindersShown: 0,
-      breakRemindersCompleted: 0
+      longBreakSessions: 0
     };
 
-    // Calculate real-time statistics from actual data
+    // Calculate real-time statistics from session data only
     const dayStart = new Date(date).getTime();
     const dayEnd = dayStart + (24 * 60 * 60 * 1000) - 1;
 
@@ -593,35 +249,6 @@ export class LocalStorage {
     const allSessions = this.getAllSessions();
     const daySessions = allSessions.filter(session =>
       session.timestamp >= dayStart && session.timestamp <= dayEnd
-    );
-
-    // Get tasks completed on this day (including recurring and spaced repetition)
-    const allTasks = this.getTasks();
-    const dayTasksCompleted = allTasks.filter(task => {
-      // Regular completed tasks
-      if (task.completedAt && task.completedAt >= dayStart && task.completedAt <= dayEnd) {
-        return true;
-      }
-
-      // Recurring tasks completed on this day
-      if (task.recurring?.enabled && task.recurring.lastCompleted &&
-        task.recurring.lastCompleted >= dayStart && task.recurring.lastCompleted <= dayEnd) {
-        return true;
-      }
-
-      // Spaced repetition tasks reviewed on this day
-      if (task.spacedRepetition?.enabled && task.spacedRepetition.lastReviewed &&
-        task.spacedRepetition.lastReviewed >= dayStart && task.spacedRepetition.lastReviewed <= dayEnd) {
-        return true;
-      }
-
-      return false;
-    }).length;
-
-    // Get break reminder completions for this day
-    const allBreakCompletions = this.getBreakReminderCompletions();
-    const dayBreakCompletions = allBreakCompletions.filter(completion =>
-      completion.completedAt >= dayStart && completion.completedAt <= dayEnd
     );
 
     // Calculate session statistics
@@ -636,243 +263,34 @@ export class LocalStorage {
       .filter(s => s.type === 'work')
       .reduce((sum, s) => sum + s.duration, 0);
 
-    // Calculate break reminders shown
-    const breakRemindersShown = daySessions.reduce((sum, session) =>
-      sum + (session.breakRemindersShown?.length || 0), 0
-    );
-
-    // Calculate current streak (consecutive work sessions)
-    let streak = 0;
-    const todayWorkSessions = daySessions
-      .filter(s => s.type === 'work' && s.completed)
-      .sort((a, b) => b.timestamp - a.timestamp);
-
-    for (const session of todayWorkSessions) {
-      if (session.completed) {
-        streak++;
-      } else {
-        break;
-      }
-    }
-
     return {
       sessions: totalSessions,
       focusTime,
-      tasksCompleted: dayTasksCompleted,
-      streak,
       date,
       workSessions,
       shortBreakSessions,
-      longBreakSessions,
-      breakRemindersShown,
-      breakRemindersCompleted: dayBreakCompletions.length
+      longBreakSessions
     };
   }
 
-  static getAllDailyStats(): DailyStats[] {
-    if (typeof window === 'undefined') return [];
-    const stats = localStorage.getItem('pomouono_daily_stats');
-    return safeJsonParse(stats, []);
+  // Legacy methods for backward compatibility
+  static getDailyStats(date: string): DailyStats {
+    const basicStats = this.getBasicDailyStats(date);
+    return {
+      ...basicStats,
+      tasksCompleted: 0,
+      streak: 0,
+      breakRemindersShown: 0,
+      breakRemindersCompleted: 0
+    };
   }
 
-  static saveDailyStats(stats: DailyStats): void {
-    if (typeof window === 'undefined') return;
-
-    const allStats = this.getAllDailyStats();
-    const existingIndex = allStats.findIndex(s => s.date === stats.date);
-
-    if (existingIndex >= 0) {
-      allStats[existingIndex] = stats;
-    } else {
-      allStats.push(stats);
-    }
-
-    // Keep only last 90 days
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - 90);
-    const cutoffString = getDateString(cutoffDate);
-
-    const filteredStats = allStats.filter(s => s.date >= cutoffString);
-
-    localStorage.setItem('pomouono_daily_stats', JSON.stringify(filteredStats));
-
-    // TODO: Re-enable Firebase sync when permissions are fixed
-  }
-
-  // Today's stats (backward compatibility)
   static getTodaysStats(): TodaysStats {
     const today = getDateString();
     return this.getDailyStats(today);
   }
 
-  // Firebase sync methods
-  static async syncFromFirebase(): Promise<void> {
-    if (typeof window === 'undefined' || this._isLoadingFromFirebase) return;
-
-    try {
-      this._isLoadingFromFirebase = true;
-
-      // Import Firebase modules dynamically to avoid SSR issues
-      const { auth } = await import('@/lib/firebase');
-      const { FirebaseService } = await import('@/lib/firebase-service');
-
-      const user = auth.currentUser;
-      if (!user) return;
-
-      // Check if user has valid authentication
-      try {
-        await user.getIdToken();
-      } catch (tokenError) {
-        console.warn('User token invalid, skipping Firebase sync:', tokenError);
-        return;
-      }
-
-      // Load settings from Firebase
-      const firebaseSettings = await FirebaseService.getSettings(user);
-      if (firebaseSettings) {
-        // Temporarily disable Firebase sync to prevent loop
-        const originalFlag = this._isLoadingFromFirebase;
-        this._isLoadingFromFirebase = true;
-        this.saveSettings(firebaseSettings);
-        this._isLoadingFromFirebase = originalFlag;
-      }
-
-      // Load tasks from Firebase
-      const firebaseTasks = await FirebaseService.getTasks(user);
-      if (firebaseTasks.length > 0) {
-        // Temporarily disable Firebase sync to prevent loop
-        const originalFlag = this._isLoadingFromFirebase;
-        this._isLoadingFromFirebase = true;
-        this.saveTasks(firebaseTasks);
-        this._isLoadingFromFirebase = originalFlag;
-      }
-
-      // Load recent sessions from Firebase (last 30 days)
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const startDate = thirtyDaysAgo.toISOString().split('T')[0];
-      const endDate = new Date().toISOString().split('T')[0];
-
-      const firebaseSessions = await FirebaseService.getSessionsByDateRange(user, startDate, endDate);
-      if (firebaseSessions.length > 0) {
-        // Merge with existing sessions, avoiding duplicates
-        const existingSessions = this.getAllSessions();
-        const existingIds = new Set(existingSessions.map(s => s.id));
-        const newSessions = firebaseSessions.filter(s => !existingIds.has(s.id));
-
-        if (newSessions.length > 0) {
-          // Temporarily disable Firebase sync to prevent loop
-          const originalFlag = this._isLoadingFromFirebase;
-          this._isLoadingFromFirebase = true;
-          this.saveAllSessions([...existingSessions, ...newSessions]);
-          this._isLoadingFromFirebase = originalFlag;
-        }
-      }
-
-      // Load break reminders from Firebase
-      const firebaseBreakReminders = await FirebaseService.getBreakReminders(user);
-      if (firebaseBreakReminders.length > 0) {
-        // Temporarily disable Firebase sync to prevent loop
-        const originalFlag = this._isLoadingFromFirebase;
-        this._isLoadingFromFirebase = true;
-        this.saveBreakReminders(firebaseBreakReminders);
-        this._isLoadingFromFirebase = originalFlag;
-      }
-
-      // Load break reminder completions from Firebase (last 30 days)
-      const thirtyDaysAgoMs = thirtyDaysAgo.getTime();
-      const nowMs = Date.now();
-      const firebaseBreakCompletions = await FirebaseService.getBreakReminderCompletions(user, {
-        start: thirtyDaysAgoMs,
-        end: nowMs
-      });
-      if (firebaseBreakCompletions.length > 0) {
-        // Merge with existing completions, avoiding duplicates
-        const existingCompletions = this.getBreakReminderCompletions();
-        const existingCompletionIds = new Set(existingCompletions.map(c => c.id));
-        const newCompletions = firebaseBreakCompletions.filter(c => !existingCompletionIds.has(c.id));
-
-        if (newCompletions.length > 0) {
-          // Temporarily disable Firebase sync to prevent loop
-          const originalFlag = this._isLoadingFromFirebase;
-          this._isLoadingFromFirebase = true;
-          this.saveBreakReminderCompletions([...existingCompletions, ...newCompletions]);
-          this._isLoadingFromFirebase = originalFlag;
-          console.log(`✅ ${newCompletions.length} break reminder completions synced from Firebase`);
-        }
-      }
-
-
-
-      // Dispatch event to notify components that data has been synced
-      window.dispatchEvent(new CustomEvent('firebaseDataSynced'));
-
-    } catch (error) {
-      console.error('❌ Firebase sync failed:', error);
-    } finally {
-      this._isLoadingFromFirebase = false;
-    }
-  }
-
-  static isLoadingFromFirebase(): boolean {
-    return this._isLoadingFromFirebase;
-  }
-
-  // Methods to control Firebase sync
-  static disableFirebaseSync(): void {
-    this._firebaseSyncDisabled = true;
-    console.log('Firebase sync disabled');
-  }
-
-  static enableFirebaseSync(): void {
-    this._firebaseSyncDisabled = false;
-    console.log('Firebase sync enabled');
-  }
-
-  static isFirebaseSyncDisabled(): boolean {
-    return this._firebaseSyncDisabled;
-  }
-
-
-  static async manualFirebaseSync(): Promise<void> {
-    if (typeof window === 'undefined') return;
-
-    try {
-      const { auth } = await import('@/lib/firebase');
-      const user = auth.currentUser;
-
-      if (!user) {
-        console.warn('No user logged in for manual sync');
-        return;
-      }
-
-      console.log('🔄 Starting manual Firebase sync...');
-
-      // Get all local data
-      const tasks = this.getTasks();
-      const settings = this.getSettings();
-      const sessions = this.getAllSessions();
-      const breakReminders = this.getBreakReminders();
-
-      console.log('📊 Local data to sync:', {
-        tasks: tasks.length,
-        sessions: sessions.length,
-        breakReminders: breakReminders.length,
-        hasSettings: !!settings
-      });
-
-      // This will be implemented when Firebase permissions are fixed
-
-      console.log('✅ Manual sync completed (local storage only for now)');
-
-    } catch (error) {
-      console.error('❌ Manual sync failed:', error);
-    }
-  }
-
-
-
-  // Reset all local data (for account deletion or progress reset)
+  // Data management utilities
   static resetAllData(): void {
     if (typeof window === 'undefined') return;
 
@@ -880,13 +298,7 @@ export class LocalStorage {
     const keysToRemove = [
       'pomouono_today_sessions',
       'pomouono_all_sessions',
-      'pomouono_tasks',
       'pomouono_settings',
-      'pomouono_daily_stats',
-      'pomouono_break_reminders',
-      'pomouono_break_reminder_categories',
-      'pomouono_break_reminder_completions',
-      'pomouono_task_categories',
       'pomouono_onboarding_shown',
       'pomouono_last_daily_reset'
     ];
@@ -898,6 +310,8 @@ export class LocalStorage {
     console.log('All local data has been reset');
   }
 
+
+
   // Debug function to clear today's sessions (for testing)
   static clearTodaysSessions(): void {
     if (typeof window === 'undefined') return;
@@ -907,298 +321,21 @@ export class LocalStorage {
 
     // Clear today's sessions
     localStorage.removeItem('pomouono_today_sessions');
-    localStorage.removeItem('pomouono_daily_stats');
     localStorage.setItem('pomouono_last_daily_reset', today);
-
-    // Also reset task daily sessions
-    this.resetAllDailySessions();
 
     // Dispatch event to refresh UI
     window.dispatchEvent(new CustomEvent('dataReset'));
   }
 
-  // More aggressive reset for debugging - removes sessions from today from all storage
-  static forceResetTodayData(): void {
+  // Reset daily sessions (for new day)
+  static resetAllDailySessions(): void {
     if (typeof window === 'undefined') return;
 
-    const today = new Date().toISOString().split('T')[0];
-    const todayStart = new Date(today + 'T00:00:00.000').getTime();
-    const todayEnd = new Date(today + 'T23:59:59.999').getTime();
-
-    console.log('Force resetting today\'s data for:', today);
-
-    // Remove today's sessions from all sessions
-    const allSessions = this.getAllSessions();
-    const filteredSessions = allSessions.filter(session => {
-      if (!session.timestamp) return true;
-      const sessionTime = typeof session.timestamp === 'number'
-        ? session.timestamp
-        : new Date(session.timestamp).getTime();
-      return sessionTime < todayStart || sessionTime > todayEnd;
-    });
-
-    localStorage.setItem('pomouono_all_sessions', JSON.stringify(filteredSessions));
-
-    // Clear today's sessions
+    // Clear today's sessions for a fresh start
     localStorage.removeItem('pomouono_today_sessions');
-    localStorage.removeItem('pomouono_daily_stats');
-    localStorage.setItem('pomouono_last_daily_reset', today);
-
-    // Reset task daily sessions
-    this.resetAllDailySessions();
-
-    console.log(`Removed ${allSessions.length - filteredSessions.length} sessions from today`);
 
     // Dispatch event to refresh UI
     window.dispatchEvent(new CustomEvent('dataReset'));
-  }
-
-  // Enhanced Firebase sync with retry logic and conflict resolution
-  static async syncToFirebase(dataType: 'sessions' | 'tasks' | 'settings' | 'stats' | 'breakReminders' | 'breakReminderCompletions', data?: any, retryCount: number = 0): Promise<void> {
-    if (typeof window === 'undefined' || this._isLoadingFromFirebase || this._firebaseSyncDisabled) return;
-
-    const maxRetries = 3;
-    const retryDelay = Math.pow(2, retryCount) * 1000; // Exponential backoff
-
-    try {
-      // Use static imports - Firebase modules are already available
-      const { auth } = require('@/lib/firebase');
-      const { FirebaseService } = require('@/lib/firebase-service');
-
-      const user = auth.currentUser;
-      if (!user) return;
-
-      // Check if user is properly authenticated with a valid token
-      try {
-        await user.getIdToken();
-      } catch (tokenError) {
-        console.warn('User token invalid, skipping Firebase sync:', tokenError);
-        return;
-      }
-
-      console.log(`🔄 Syncing ${dataType} to Firebase (attempt ${retryCount + 1})`);
-
-      switch (dataType) {
-        case 'sessions':
-          if (data) {
-            const sessions = Array.isArray(data) ? data : [data];
-            // Validate sessions before syncing
-            const validSessions = sessions.filter(session =>
-              session.id && session.type && typeof session.duration === 'number' && typeof session.timestamp === 'number'
-            );
-            if (validSessions.length > 0) {
-              await FirebaseService.saveSessions(user, validSessions);
-            }
-          }
-          break;
-        case 'tasks':
-          const tasks = data || this.getTasks();
-          // Validate tasks before syncing
-          const validTasks = tasks.filter((task: any) =>
-            task.id && task.title && typeof task.completed === 'boolean'
-          );
-          if (validTasks.length > 0) {
-            await FirebaseService.saveTasks(user, validTasks);
-          }
-          break;
-        case 'settings':
-          const settings = data || this.getSettings();
-          if (settings && typeof settings === 'object') {
-            await FirebaseService.saveSettings(user, settings);
-          }
-          break;
-        case 'stats':
-          if (data && data.date) {
-            await FirebaseService.saveStats(user, data);
-          }
-          break;
-        case 'breakReminders':
-          const breakReminders = data || this.getBreakReminders();
-          if (Array.isArray(breakReminders) && breakReminders.length > 0) {
-            await FirebaseService.saveBreakReminders(user, breakReminders);
-          }
-          break;
-        case 'breakReminderCompletions':
-          if (data) {
-            const completions = Array.isArray(data) ? data : [data];
-            const validCompletions = completions.filter(completion =>
-              completion.id && completion.reminderId && completion.completedAt
-            );
-            if (validCompletions.length > 0) {
-              await FirebaseService.saveBreakReminderCompletions(user, validCompletions);
-            }
-          }
-          break;
-      }
-
-      console.log(`✅ Successfully synced ${dataType} to Firebase`);
-
-    } catch (error) {
-      console.warn(`⚠️ Firebase sync failed for ${dataType} (attempt ${retryCount + 1}):`, error);
-
-      // Retry with exponential backoff
-      if (retryCount < maxRetries) {
-        console.log(`🔄 Retrying sync in ${retryDelay}ms...`);
-        setTimeout(() => {
-          this.syncToFirebase(dataType, data, retryCount + 1);
-        }, retryDelay);
-        return;
-      }
-
-      // If it's a permission error, disable Firebase sync temporarily
-      if (error instanceof Error && error.message.includes('permissions')) {
-        console.warn('Firebase permissions issue - disabling sync temporarily');
-        this._firebaseSyncDisabled = true;
-
-        // Re-enable after 5 minutes
-        setTimeout(() => {
-          this._firebaseSyncDisabled = false;
-          console.log('Firebase sync re-enabled');
-        }, 5 * 60 * 1000);
-      }
-
-      // Store failed sync for later retry
-      this.queueFailedSync(dataType, data);
-    }
-  }
-
-  // Queue failed syncs for retry
-  private static failedSyncs: Array<{ dataType: string; data: any; timestamp: number }> = [];
-
-  private static queueFailedSync(dataType: string, data: any): void {
-    this.failedSyncs.push({
-      dataType,
-      data,
-      timestamp: Date.now()
-    });
-
-    // Limit queue size
-    if (this.failedSyncs.length > 50) {
-      this.failedSyncs = this.failedSyncs.slice(-25);
-    }
-  }
-
-  // Retry failed syncs
-  static async retryFailedSyncs(): Promise<void> {
-    if (this.failedSyncs.length === 0) return;
-
-    console.log(`🔄 Retrying ${this.failedSyncs.length} failed syncs...`);
-
-    const syncsToRetry = [...this.failedSyncs];
-    this.failedSyncs = [];
-
-    for (const sync of syncsToRetry) {
-      // Only retry syncs that are less than 1 hour old
-      if (Date.now() - sync.timestamp < 60 * 60 * 1000) {
-        await this.syncToFirebase(sync.dataType as any, sync.data);
-      }
-    }
-  }
-
-
-
-  static saveTodaysStats(stats: TodaysStats): void {
-    this.saveDailyStats(stats);
-  }
-
-  // Weekly stats calculation
-  static getWeeklyStats(date: Date = new Date()): WeeklyStats {
-    const weekStart = getWeekStart(date);
-    const weekEnd = getWeekEnd(date);
-    const weekStartString = getDateString(weekStart);
-    const weekEndString = getDateString(weekEnd);
-
-    const dailyBreakdown: DailyStats[] = [];
-    let totalSessions = 0;
-    let totalFocusTime = 0;
-    let totalTasksCompleted = 0;
-    let bestDay = weekStartString;
-    let bestDaySessions = 0;
-
-    // Get stats for each day of the week
-    for (let i = 0; i < 7; i++) {
-      const currentDate = new Date(weekStart);
-      currentDate.setDate(weekStart.getDate() + i);
-      const dateString = getDateString(currentDate);
-
-      const dayStats = this.getDailyStats(dateString);
-      dailyBreakdown.push(dayStats);
-
-      totalSessions += dayStats.sessions;
-      totalFocusTime += dayStats.focusTime;
-      totalTasksCompleted += dayStats.tasksCompleted;
-
-      if (dayStats.sessions > bestDaySessions) {
-        bestDaySessions = dayStats.sessions;
-        bestDay = dateString;
-      }
-    }
-
-    return {
-      totalSessions,
-      totalFocusTime,
-      totalTasksCompleted,
-      averageSessionsPerDay: totalSessions / 7,
-      bestDay,
-      weekStart: weekStartString,
-      weekEnd: weekEndString,
-      dailyBreakdown
-    };
-  }
-
-  // Monthly stats calculation
-  static getMonthlyStats(year: number, month: number): MonthlyStats {
-    const monthStart = new Date(year, month - 1, 1);
-    const monthEnd = new Date(year, month, 0);
-    const daysInMonth = monthEnd.getDate();
-
-    const dailyBreakdown: DailyStats[] = [];
-    const weeklyBreakdown: WeeklyStats[] = [];
-    let totalSessions = 0;
-    let totalFocusTime = 0;
-    let totalTasksCompleted = 0;
-    let bestDay = getDateString(monthStart);
-    let bestDaySessions = 0;
-
-    // Get stats for each day of the month
-    for (let i = 1; i <= daysInMonth; i++) {
-      const currentDate = new Date(year, month - 1, i);
-      const dateString = getDateString(currentDate);
-
-      const dayStats = this.getDailyStats(dateString);
-      dailyBreakdown.push(dayStats);
-
-      totalSessions += dayStats.sessions;
-      totalFocusTime += dayStats.focusTime;
-      totalTasksCompleted += dayStats.tasksCompleted;
-
-      if (dayStats.sessions > bestDaySessions) {
-        bestDaySessions = dayStats.sessions;
-        bestDay = dateString;
-      }
-    }
-
-
-
-    // Calculate weekly breakdown
-    const weeksInMonth = Math.ceil(daysInMonth / 7);
-    for (let week = 0; week < weeksInMonth; week++) {
-      const weekStartDay = week * 7 + 1;
-      const weekDate = new Date(year, month - 1, weekStartDay);
-      weeklyBreakdown.push(this.getWeeklyStats(weekDate));
-    }
-
-    return {
-      totalSessions,
-      totalFocusTime,
-      totalTasksCompleted,
-      averageSessionsPerDay: totalSessions / daysInMonth,
-      bestDay,
-      month,
-      year,
-      weeklyBreakdown,
-      dailyBreakdown
-    };
   }
 
   // Onboarding
@@ -1212,657 +349,60 @@ export class LocalStorage {
     localStorage.setItem('pomouono_onboarding_shown', 'true');
   }
 
-  // Break reminder management
-  static getBreakReminders(): BreakReminder[] {
-    if (typeof window === 'undefined') return [];
-    const reminders = localStorage.getItem('pomouono_break_reminders');
-    return safeJsonParse(reminders, []);
+
+
+  // Legacy method for backward compatibility
+  static saveTodaysStats(stats: TodaysStats): void {
+    // No-op for basic storage - advanced stats are handled by Firebase
   }
 
-  static saveBreakReminders(reminders: BreakReminder[]): void {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('pomouono_break_reminders', JSON.stringify(reminders));
-
-    // Sync to Firebase (non-blocking)
-    this.syncToFirebase('breakReminders', reminders).catch(() => {
-      // Silently fail - local storage is primary
-    });
+  // Legacy methods for backward compatibility (return empty arrays for advanced features)
+  static getTasks(): any[] {
+    return [];
   }
 
-  static getBreakRemindersForType(breakType: 'short' | 'long'): BreakReminder[] {
-    return this.getBreakReminders().filter(reminder =>
-      reminder.enabled &&
-      (reminder.breakType === breakType || reminder.breakType === 'both')
-    );
+  static saveTasks(tasks: any[]): void {
+    // No-op for basic storage - tasks are handled by Firebase
   }
 
-  // Break reminder category management
-  static getBreakReminderCategories(): BreakReminderCategory[] {
-    if (typeof window === 'undefined') return [];
-    const categories = localStorage.getItem('pomouono_break_reminder_categories');
-    return safeJsonParse(categories, []);
+  static getActiveTasks(): any[] {
+    return [];
   }
 
-  static saveBreakReminderCategories(categories: BreakReminderCategory[]): void {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('pomouono_break_reminder_categories', JSON.stringify(categories));
+  static getTasksDueToday(): any[] {
+    return [];
   }
 
-  static addBreakReminderCategory(category: BreakReminderCategory): void {
-    const categories = this.getBreakReminderCategories();
-    categories.push(category);
-    this.saveBreakReminderCategories(categories);
+  static updateTaskAfterCompletion(taskId: string): void {
+    // No-op for basic storage - tasks are handled by Firebase
   }
 
-  static deleteBreakReminderCategory(categoryId: string): void {
-    const categories = this.getBreakReminderCategories();
-    const updatedCategories = categories.filter(cat => cat.id !== categoryId);
-    this.saveBreakReminderCategories(updatedCategories);
+  static getBreakReminders(): any[] {
+    return [];
   }
 
-  // Break reminder completion tracking
-  static getBreakReminderCompletions(): BreakReminderCompletion[] {
-    if (typeof window === 'undefined') return [];
-    const completions = localStorage.getItem('pomouono_break_reminder_completions');
-    return safeJsonParse(completions, []);
+  static getBreakReminderCategories(): any[] {
+    return [];
   }
 
-  static saveBreakReminderCompletions(completions: BreakReminderCompletion[]): void {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('pomouono_break_reminder_completions', JSON.stringify(completions));
+  static getBreakReminderCompletions(): any[] {
+    return [];
   }
 
-  static addBreakReminderCompletion(completion: BreakReminderCompletion): void {
-    const completions = this.getBreakReminderCompletions();
-    completions.push(completion);
-
-    // Keep only last 30 days of completions
-    const cutoffDate = Date.now() - (30 * 24 * 60 * 60 * 1000);
-    const filteredCompletions = completions.filter(c => c.completedAt >= cutoffDate);
-
-    this.saveBreakReminderCompletions(filteredCompletions);
-
-    // TODO: Re-enable Firebase sync when permissions are fixed
+  static getTaskCategories(): any[] {
+    return [];
   }
 
-  static getBreakReminderCompletionsForSession(sessionId: string): BreakReminderCompletion[] {
-    return this.getBreakReminderCompletions().filter(completion =>
-      completion.sessionId === sessionId
-    );
+  static addTaskCategory(category: any): void {
+    // No-op for basic storage - categories are handled by Firebase
   }
 
-  static getBreakReminderCompletionsForReminder(reminderId: string, dateRange?: { start: number; end: number }): BreakReminderCompletion[] {
-    let completions = this.getBreakReminderCompletions().filter(completion =>
-      completion.reminderId === reminderId
-    );
-
-    if (dateRange) {
-      completions = completions.filter(completion =>
-        completion.completedAt >= dateRange.start && completion.completedAt <= dateRange.end
-      );
-    }
-
-    return completions;
-  }
-
-  // Task category management
-  static getTaskCategories(): TaskCategory[] {
-    if (typeof window === 'undefined') return [];
-    const categories = localStorage.getItem('pomouono_task_categories');
-    return safeJsonParse(categories, []);
-  }
-
-  static saveTaskCategories(categories: TaskCategory[]): void {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('pomouono_task_categories', JSON.stringify(categories));
-  }
-
-  static addTaskCategory(category: TaskCategory): void {
-    const categories = this.getTaskCategories();
-    categories.push(category);
-    this.saveTaskCategories(categories);
-  }
-
-  static deleteTaskCategory(categoryId: string): void {
-    const categories = this.getTaskCategories();
-    const updatedCategories = categories.filter(cat => cat.id !== categoryId);
-    this.saveTaskCategories(updatedCategories);
-  }
-
-  static updateTaskCategory(categoryId: string, updates: Partial<TaskCategory>): void {
-    const categories = this.getTaskCategories();
-    const updatedCategories = categories.map(cat =>
-      cat.id === categoryId ? { ...cat, ...updates } : cat
-    );
-    this.saveTaskCategories(updatedCategories);
-  }
-
-  // Enhanced statistics calculation methods
-  static getTaskStats(dateRange?: DateRange): TaskStats {
-    const tasks = this.getTasks();
-
-    // Count completed tasks including recurring and spaced repetition tasks that were completed today
-    const today = new Date().toISOString().split('T')[0];
-    const todayStart = new Date(today).getTime();
-    const todayEnd = todayStart + (24 * 60 * 60 * 1000) - 1;
-
-    const completedTasks = tasks.filter(task => {
-      // Regular completed tasks
-      if (task.completed) return true;
-
-      // Recurring tasks completed today
-      if (task.recurring?.enabled && task.recurring.lastCompleted) {
-        return task.recurring.lastCompleted >= todayStart && task.recurring.lastCompleted <= todayEnd;
-      }
-
-      // Spaced repetition tasks reviewed today
-      if (task.spacedRepetition?.enabled && task.spacedRepetition.lastReviewed) {
-        return task.spacedRepetition.lastReviewed >= todayStart && task.spacedRepetition.lastReviewed <= todayEnd;
-      }
-
-      return false;
-    });
-
-    const activeTasks = tasks.filter(task => !task.completed && !task.archivedAt);
-
-    // Calculate completion rate (for today's perspective)
-    const completionRate = tasks.length > 0 ? (completedTasks.length / tasks.length) * 100 : 0;
-
-    // Calculate average sessions per task
-    const totalSessions = tasks.reduce((sum, task) => sum + task.sessionsCompleted, 0);
-    const averageSessionsPerTask = tasks.length > 0 ? totalSessions / tasks.length : 0;
-
-    // Group by category
-    const tasksByCategory: Record<string, number> = {};
-    tasks.forEach(task => {
-      const category = task.category || 'Uncategorized';
-      tasksByCategory[category] = (tasksByCategory[category] || 0) + 1;
-    });
-
-    // Group by priority
-    const tasksByPriority: Record<string, number> = {};
-    tasks.forEach(task => {
-      const priority = task.priority || 'None';
-      tasksByPriority[priority] = (tasksByPriority[priority] || 0) + 1;
-    });
-
-    // Calculate daily completions
-    const dailyCompletions: DailyTaskCompletion[] = [];
-    const dailyStats = this.getAllDailyStats();
-    dailyStats.forEach(day => {
-      const dayTasks = tasks.filter(task => {
-        if (!task.completedAt) return false;
-        try {
-          // Validate the timestamp before converting
-          if (isNaN(task.completedAt) || task.completedAt <= 0) return false;
-          const taskDate = new Date(task.completedAt).toISOString().split('T')[0];
-          return taskDate === day.date;
-        } catch (error) {
-          return false;
-        }
-      });
-
-      const dayCreated = tasks.filter(task => {
-        try {
-          // Validate the timestamp before converting
-          if (!task.createdAt || isNaN(task.createdAt) || task.createdAt <= 0) return false;
-          const taskDate = new Date(task.createdAt).toISOString().split('T')[0];
-          return taskDate === day.date;
-        } catch (error) {
-          return false;
-        }
-      });
-
-      dailyCompletions.push({
-        date: day.date,
-        completed: dayTasks.length,
-        created: dayCreated.length
-      });
-    });
-
-    // Count recurring and spaced repetition completions
-    const recurringTasksCompleted = tasks.filter(task =>
-      task.recurring?.enabled && task.recurring.lastCompleted
-    ).length;
-
-    const spacedRepetitionTasksReviewed = tasks.filter(task =>
-      task.spacedRepetition?.enabled && task.spacedRepetition.lastReviewed
-    ).length;
-
-    return {
-      totalTasks: tasks.length,
-      completedTasks: completedTasks.length,
-      activeTasks: activeTasks.length,
-      completionRate,
-      averageSessionsPerTask,
-      tasksByCategory,
-      tasksByPriority,
-      dailyCompletions,
-      recurringTasksCompleted,
-      spacedRepetitionTasksReviewed
-    };
-  }
-
-  static getSpacedRepetitionStats(): SpacedRepetitionStats {
-    const tasks = this.getTasks();
-    const spacedRepetitionTasks = tasks.filter(task => task.spacedRepetition?.enabled);
-
-    const totalReviews = spacedRepetitionTasks.reduce((sum, task) =>
-      sum + (task.spacedRepetition?.reviewCount || 0), 0
-    );
-
-    // Calculate streak days (consecutive days with reviews)
-    const reviewDates = spacedRepetitionTasks
-      .filter(task => task.spacedRepetition?.lastReviewed)
-      .map(task => {
-        try {
-          const timestamp = task.spacedRepetition!.lastReviewed!;
-          if (isNaN(timestamp) || timestamp <= 0) return null;
-          return new Date(timestamp).toISOString().split('T')[0];
-        } catch (error) {
-          return null;
-        }
-      })
-      .filter((date): date is string => date !== null)
-      .sort();
-
-    let streakDays = 0;
-    const today = new Date().toISOString().split('T')[0];
-    const uniqueDates = Array.from(new Set(reviewDates)).sort().reverse();
-
-    for (let i = 0; i < uniqueDates.length; i++) {
-      const date = new Date(uniqueDates[i]);
-      const expectedDate = new Date();
-      expectedDate.setDate(expectedDate.getDate() - i);
-
-      if (date.toISOString().split('T')[0] === expectedDate.toISOString().split('T')[0]) {
-        streakDays++;
-      } else {
-        break;
-      }
-    }
-
-    // Get upcoming reviews
-    const now = Date.now();
-    const upcomingReviews: SpacedRepetitionTask[] = spacedRepetitionTasks
-      .filter(task => task.spacedRepetition!.nextReviewDate <= now + (7 * 24 * 60 * 60 * 1000)) // Next 7 days
-      .map(task => ({
-        id: task.id,
-        title: task.title,
-        nextReviewDate: task.spacedRepetition!.nextReviewDate,
-        difficulty: task.spacedRepetition!.difficulty,
-        interval: task.spacedRepetition!.interval,
-        reviewCount: task.spacedRepetition!.reviewCount
-      }))
-      .sort((a, b) => a.nextReviewDate - b.nextReviewDate);
-
-    // Calculate difficulty distribution
-    const difficultyDistribution: Record<string, number> = {};
-    spacedRepetitionTasks.forEach(task => {
-      const difficulty = task.spacedRepetition!.difficulty;
-      difficultyDistribution[difficulty] = (difficultyDistribution[difficulty] || 0) + 1;
-    });
-
-    // Calculate retention rate (simplified - tasks that have been reviewed more than once)
-    const retainedTasks = spacedRepetitionTasks.filter(task =>
-      (task.spacedRepetition?.reviewCount || 0) > 1
-    ).length;
-    const retentionRate = spacedRepetitionTasks.length > 0 ?
-      (retainedTasks / spacedRepetitionTasks.length) * 100 : 0;
-
-    // Calculate average interval
-    const totalInterval = spacedRepetitionTasks.reduce((sum, task) =>
-      sum + (task.spacedRepetition?.interval || 0), 0
-    );
-    const averageInterval = spacedRepetitionTasks.length > 0 ?
-      totalInterval / spacedRepetitionTasks.length : 0;
-
-    return {
-      totalReviews,
-      streakDays,
-      upcomingReviews,
-      difficultyDistribution,
-      retentionRate,
-      averageInterval,
-      tasksInReview: spacedRepetitionTasks.length
-    };
-  }
-
-  static getBreakReminderStats(dateRange?: DateRange): BreakReminderStats {
-    const completions = this.getBreakReminderCompletions();
-    const sessions = this.getAllSessions();
-
-    // Filter by date range if provided
-    const filteredCompletions = dateRange ?
-      completions.filter(c => c.completedAt >= dateRange.start && c.completedAt <= dateRange.end) :
-      completions;
-
-    const filteredSessions = dateRange ?
-      sessions.filter(s => s.timestamp >= dateRange.start && s.timestamp <= dateRange.end) :
-      sessions;
-
-    // Calculate total reminders shown from sessions
-    const totalRemindersShown = filteredSessions.reduce((sum, session) =>
-      sum + (session.breakRemindersShown?.length || 0), 0
-    );
-
-    const totalRemindersCompleted = filteredCompletions.length;
-    const completionRate = totalRemindersShown > 0 ?
-      (totalRemindersCompleted / totalRemindersShown) * 100 : 0;
-
-    // Group by category
-    const remindersByCategory: Record<string, { shown: number; completed: number }> = {};
-    const reminders = this.getBreakReminders();
-
-    // Count shown reminders by category
-    filteredSessions.forEach(session => {
-      session.breakRemindersShown?.forEach(reminderId => {
-        const reminder = reminders.find(r => r.id === reminderId);
-        if (reminder) {
-          const category = reminder.customCategory || reminder.category;
-          if (!remindersByCategory[category]) {
-            remindersByCategory[category] = { shown: 0, completed: 0 };
-          }
-          remindersByCategory[category].shown++;
-        }
-      });
-    });
-
-    // Count completed reminders by category
-    filteredCompletions.forEach(completion => {
-      const reminder = reminders.find(r => r.id === completion.reminderId);
-      if (reminder) {
-        const category = reminder.customCategory || reminder.category;
-        if (!remindersByCategory[category]) {
-          remindersByCategory[category] = { shown: 0, completed: 0 };
-        }
-        remindersByCategory[category].completed++;
-      }
-    });
-
-    // Calculate daily completions
-    const dailyCompletions: DailyBreakReminderCompletion[] = [];
-    const dailyStats = this.getAllDailyStats();
-
-    dailyStats.forEach(day => {
-      const dayStart = new Date(day.date).getTime();
-      const dayEnd = dayStart + (24 * 60 * 60 * 1000) - 1;
-
-      const dayCompletions = filteredCompletions.filter(c =>
-        c.completedAt >= dayStart && c.completedAt <= dayEnd
-      );
-
-      const daySessions = filteredSessions.filter(s =>
-        s.timestamp >= dayStart && s.timestamp <= dayEnd
-      );
-
-      const dayShown = daySessions.reduce((sum, session) =>
-        sum + (session.breakRemindersShown?.length || 0), 0
-      );
-
-      const dayCompletionRate = dayShown > 0 ? (dayCompletions.length / dayShown) * 100 : 0;
-
-      dailyCompletions.push({
-        date: day.date,
-        shown: dayShown,
-        completed: dayCompletions.length,
-        completionRate: dayCompletionRate
-      });
-    });
-
-    // Calculate average completions per break
-    const breakSessions = filteredSessions.filter(s => s.type === 'short-break' || s.type === 'long-break');
-    const averageCompletionsPerBreak = breakSessions.length > 0 ?
-      totalRemindersCompleted / breakSessions.length : 0;
-
-    return {
-      totalRemindersShown,
-      totalRemindersCompleted,
-      completionRate,
-      remindersByCategory,
-      dailyCompletions,
-      averageCompletionsPerBreak
-    };
-  }
-
-  static calculateConsecutiveActiveDaysStreak(): number {
-    const dailyStats = this.getAllDailyStats();
-    if (dailyStats.length === 0) return 0;
-
-    // Sort by date descending (most recent first)
-    const sortedStats = dailyStats
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    if (sortedStats.length === 0) return 0;
-
-    let streak = 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // Start from today and count backwards
-    let currentDate = new Date(today);
-    let foundToday = false;
-
-    // Check if we should start from today or yesterday
-    const todayString = today.toISOString().split('T')[0];
-    const todayStats = sortedStats.find(stat => stat.date === todayString);
-
-    if (todayStats && todayStats.sessions > 0) {
-      foundToday = true;
-    } else {
-      // If no sessions today, start from yesterday
-      currentDate.setDate(currentDate.getDate() - 1);
-    }
-
-    // Count consecutive days with sessions
-    while (true) {
-      const dateString = currentDate.toISOString().split('T')[0];
-      const dayStats = sortedStats.find(stat => stat.date === dateString);
-
-      if (dayStats && dayStats.sessions > 0) {
-        streak++;
-        currentDate.setDate(currentDate.getDate() - 1);
-      } else {
-        break;
-      }
-
-      // Safety check to prevent infinite loop
-      if (streak > 365) break;
-    }
-
-    return streak;
-  }
-
-  static getPomodoroStats(): PomodoroStats {
-    const sessions = this.getAllSessions();
-    const todayStats = this.getTodaysStats();
-    const settings = this.getSettings();
-
-    const workSessions = sessions.filter(s => s.type === 'work').length;
-    const shortBreakSessions = sessions.filter(s => s.type === 'short-break').length;
-    const longBreakSessions = sessions.filter(s => s.type === 'long-break').length;
-
-    const totalFocusTime = sessions
-      .filter(s => s.type === 'work')
-      .reduce((sum, s) => sum + s.duration, 0);
-
-    const averageSessionLength = workSessions > 0 ? totalFocusTime / workSessions : 0;
-
-    // Calculate current streak (consecutive active days)
-    const currentStreak = this.calculateConsecutiveActiveDaysStreak();
-
-    // Calculate longest streak (simplified - max sessions in a day)
-    const dailyStats = this.getAllDailyStats();
-    const longestStreak = Math.max(...dailyStats.map(d => d.sessions), 0);
-
-    // Weekly stats
-    const weeklyStats = this.getWeeklyStats();
-
-    return {
-      totalSessions: sessions.length,
-      workSessions,
-      shortBreakSessions,
-      longBreakSessions,
-      totalFocusTime,
-      averageSessionLength,
-      currentStreak,
-      longestStreak,
-      sessionsToday: todayStats.sessions,
-      sessionsThisWeek: weeklyStats.totalSessions
-    };
-  }
-
-  static getCalendarEvents(startDate: string, endDate: string): CalendarEvent[] {
-    const tasks = this.getTasks();
-    const events: CalendarEvent[] = [];
-
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    tasks.forEach(task => {
-      try {
-        // Regular tasks (show on creation date if not completed)
-        if (!task.recurring?.enabled && !task.spacedRepetition?.enabled) {
-          if (!task.createdAt || isNaN(task.createdAt) || task.createdAt <= 0) return;
-          const taskDate = new Date(task.createdAt);
-          if (taskDate >= start && taskDate <= end && !task.completed) {
-            events.push({
-              id: `task-${task.id}`,
-              title: task.title,
-              date: taskDate.toISOString().split('T')[0],
-              type: 'task',
-              taskId: task.id,
-              priority: task.priority,
-              category: task.category,
-              isCompleted: task.completed
-            });
-          }
-        }
-
-        // Recurring tasks
-        if (task.recurring?.enabled) {
-          const recurringDates = this.calculateRecurringDates(task, start, end);
-          recurringDates.forEach(date => {
-            events.push({
-              id: `recurring-${task.id}-${date}`,
-              title: task.title,
-              date,
-              type: 'recurring-task',
-              taskId: task.id,
-              priority: task.priority,
-              category: task.category,
-              isCompleted: false // Recurring tasks reset daily
-            });
-          });
-        }
-
-        // Spaced repetition tasks
-        if (task.spacedRepetition?.enabled) {
-          const nextReviewDate = task.spacedRepetition.nextReviewDate;
-          if (nextReviewDate && !isNaN(nextReviewDate) && nextReviewDate > 0) {
-            const reviewDate = new Date(nextReviewDate);
-            if (reviewDate >= start && reviewDate <= end) {
-              events.push({
-                id: `spaced-${task.id}`,
-                title: `Review: ${task.title}`,
-                date: reviewDate.toISOString().split('T')[0],
-                type: 'spaced-repetition',
-                taskId: task.id,
-                priority: task.priority,
-                category: task.category,
-                isCompleted: false
-              });
-            }
-          }
-        }
-      } catch (error) {
-        // Skip tasks with invalid data
-        console.warn('Skipping task with invalid data:', task.id, error);
-      }
-    });
-
-    return events.sort((a, b) => a.date.localeCompare(b.date));
-  }
-
-  private static calculateRecurringDates(task: Task, startDate: Date, endDate: Date): string[] {
-    if (!task.recurring?.enabled) return [];
-
-    try {
-      // Validate task.createdAt before using it
-      if (!task.createdAt || isNaN(task.createdAt) || task.createdAt <= 0) {
-        return [];
-      }
-
-      const dates: string[] = [];
-      const current = new Date(Math.max(startDate.getTime(), task.createdAt));
-      const end = new Date(endDate);
-
-      while (current <= end) {
-        const dateString = current.toISOString().split('T')[0];
-
-        switch (task.recurring.pattern) {
-          case 'daily':
-            dates.push(dateString);
-            current.setDate(current.getDate() + (task.recurring.interval || 1));
-            break;
-
-          case 'weekdays':
-            if (current.getDay() >= 1 && current.getDay() <= 5) { // Monday to Friday
-              dates.push(dateString);
-            }
-            current.setDate(current.getDate() + 1);
-            break;
-
-          case 'weekly':
-            if (!task.recurring.daysOfWeek || task.recurring.daysOfWeek.includes(current.getDay())) {
-              dates.push(dateString);
-            }
-            current.setDate(current.getDate() + 1);
-            break;
-
-          case 'specific-days':
-            if (task.recurring.daysOfWeek?.includes(current.getDay())) {
-              dates.push(dateString);
-            }
-            current.setDate(current.getDate() + 1);
-            break;
-
-          case 'monthly':
-            if (current.getDate() === (task.recurring.dayOfMonth || 1)) {
-              dates.push(dateString);
-            }
-            current.setDate(current.getDate() + 1);
-            break;
-
-          default:
-            current.setDate(current.getDate() + 1);
-            break;
-        }
-
-        // Prevent infinite loops
-        if (dates.length > 1000) break;
-      }
-
-      return dates;
-    } catch (error) {
-      console.warn('Error calculating recurring dates for task:', task.id, error);
-      return [];
-    }
-  }
-
-  // Data export
+  // Data export (basic data only)
   static getAllData() {
     return {
       sessions: this.getAllSessions(),
       todaySessions: this.getTodaysSessions(),
-      tasks: this.getTasks(),
       settings: this.getSettings(),
-      dailyStats: this.getAllDailyStats(),
-      stats: this.getTodaysStats(),
-      breakReminders: this.getBreakReminders(),
-      breakReminderCategories: this.getBreakReminderCategories(),
-      breakReminderCompletions: this.getBreakReminderCompletions(),
-      taskCategories: this.getTaskCategories(),
     };
   }
 
@@ -1870,579 +410,102 @@ export class LocalStorage {
     if (typeof window === 'undefined') return;
     localStorage.removeItem('pomouono_today_sessions');
     localStorage.removeItem('pomouono_all_sessions');
-    localStorage.removeItem('pomouono_tasks');
     localStorage.removeItem('pomouono_settings');
-    localStorage.removeItem('pomouono_daily_stats');
-    localStorage.removeItem('pomouono_todays_stats');
-    localStorage.removeItem('pomouono_break_reminders');
-    localStorage.removeItem('pomouono_break_reminder_categories');
-    localStorage.removeItem('pomouono_break_reminder_completions');
-    localStorage.removeItem('pomouono_task_categories');
   }
 
-  // Daily session management
+  // Manual Firebase sync for debug purposes
+  static async manualFirebaseSync(): Promise<void> {
+    // No-op for basic storage - Firebase sync is handled by advanced storage
+    console.log('Manual Firebase sync not available in basic storage mode');
+  }
+
+  // Get today's sessions for a specific task
   static getTodaysDailySessions(task: Task): number {
-    const today = getDateString();
-    if (!task.dailySessions || task.dailySessions.date !== today) {
-      return 0;
-    }
-    return task.dailySessions.count;
+    // Basic storage doesn't track task-specific sessions
+    return 0;
   }
 
-  static incrementDailySession(taskId: string): void {
-    if (typeof window === 'undefined') return;
-
-    const tasks = this.getTasks();
-    const today = getDateString();
-
-    const updatedTasks = tasks.map(task => {
-      if (task.id === taskId) {
-        const currentDailySessions = task.dailySessions?.date === today ? task.dailySessions.count : 0;
-        return {
-          ...task,
-          dailySessions: {
-            date: today,
-            count: currentDailySessions + 1
-          }
-        };
-      }
-      return task;
-    });
-
-    this.saveTasks(updatedTasks);
+  // Firebase sync status for debug purposes
+  static isFirebaseSyncDisabled(): boolean {
+    // Basic storage doesn't have Firebase sync
+    return true;
   }
 
-  static resetAllDailySessions(): void {
-    if (typeof window === 'undefined') return;
+  // Enable Firebase sync for debug purposes
+  static enableFirebaseSync(): void {
+    // No-op for basic storage - Firebase sync is handled by advanced storage
+    console.log('Firebase sync enable not available in basic storage mode');
+  }
 
-    const tasks = this.getTasks();
-    const today = getDateString();
-
-    const updatedTasks = tasks.map(task => ({
-      ...task,
-      dailySessions: task.dailySessions?.date === today ? task.dailySessions : { date: today, count: 0 }
-    }));
-
-    this.saveTasks(updatedTasks);
-
-    // Also clear today's sessions storage for a fresh start
-    localStorage.removeItem('pomouono_today_sessions');
-    localStorage.removeItem('pomouono_daily_stats');
-
-    console.log('Daily sessions reset completed for:', today);
+  // Disable Firebase sync for debug purposes
+  static disableFirebaseSync(): void {
+    // No-op for basic storage - Firebase sync is handled by advanced storage
+    console.log('Firebase sync disable not available in basic storage mode');
   }
 }
 
-// Utility functions for task management
+// Basic utility functions for localStorage
+export class StorageUtils {
+  static getDateString(date: Date = new Date()): string {
+    return date.getFullYear() + '-' +
+      String(date.getMonth() + 1).padStart(2, '0') + '-' +
+      String(date.getDate()).padStart(2, '0');
+  }
+}
+
+// Task interface for backward compatibility
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  completed: boolean;
+  sessionsCompleted: number;
+  estimatedSessions: number;
+  createdAt: number;
+  completedAt?: number;
+  archivedAt?: number;
+  category?: string;
+  priority?: 'low' | 'medium' | 'high';
+  tags?: string[];
+  autoComplete?: boolean;
+  spacedRepetition?: {
+    enabled: boolean;
+    difficulty: 'easy' | 'medium' | 'hard';
+    nextReviewDate: number;
+    reviewCount: number;
+    lastReviewed?: number;
+    interval: number;
+  };
+  recurring?: {
+    enabled: boolean;
+    pattern: 'daily' | 'weekly' | 'monthly' | 'custom' | 'weekdays' | 'specific-days';
+    interval: number;
+    daysOfWeek?: number[];
+    dayOfMonth?: number;
+    endDate?: number;
+    lastCompleted?: number;
+    nextDue: number;
+  };
+}
+
+// Task utilities for backward compatibility
 export class TaskUtils {
-  static createTask(
-    title: string,
-    options: {
-      description?: string;
-      estimatedSessions?: number;
-      priority?: 'low' | 'medium' | 'high';
-      category?: string;
-      tags?: string[];
-      spacedRepetition?: boolean;
-      recurring?: {
-        pattern: 'daily' | 'weekly' | 'monthly' | 'custom' | 'weekdays' | 'specific-days';
-        interval?: number;
-        daysOfWeek?: number[];
-        dayOfMonth?: number;
-        weeklyPattern?: 'every-week' | 'every-other-week' | 'custom-weeks';
-        monthlyPattern?: 'same-date' | 'same-weekday' | 'last-weekday';
-      };
-
-    } = {}
-  ): Task {
-    const now = Date.now();
-    const task: Task = {
-      id: `task_${now}_${Math.random().toString(36).substr(2, 9)}`,
-      title,
-      description: options.description,
-      completed: false,
-      sessionsCompleted: 0,
-      estimatedSessions: options.estimatedSessions || 0,
-      createdAt: now,
-      priority: options.priority,
-      category: options.category,
-      tags: options.tags,
-    };
-
-    // Add spaced repetition if enabled
-    if (options.spacedRepetition) {
-      task.spacedRepetition = {
-        enabled: true,
-        difficulty: 'medium',
-        nextReviewDate: now + (24 * 60 * 60 * 1000), // tomorrow
-        reviewCount: 0,
-        interval: 1, // start with 1 day
-      };
-    }
-
-    // Add recurring settings if provided
-    if (options.recurring) {
-      const nextDue = this.calculateNextRecurringDate(now, options.recurring);
-
-      task.recurring = {
-        enabled: true,
-        pattern: options.recurring.pattern,
-        interval: options.recurring.interval || 1,
-        daysOfWeek: options.recurring.daysOfWeek,
-        dayOfMonth: options.recurring.dayOfMonth,
-        weeklyPattern: options.recurring.weeklyPattern,
-        monthlyPattern: options.recurring.monthlyPattern,
-        nextDue: nextDue.getTime(),
-      };
-    }
-
-
-
-    return task;
+  static getAllTaskCategories(): any[] {
+    return [];
   }
 
-  static createBreakReminder(
-    title: string,
-    description: string,
-    breakType: 'short' | 'long' | 'both',
-    category: 'hydration' | 'movement' | 'rest' | 'custom' = 'custom'
-  ): BreakReminder {
-    return {
-      id: `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      title,
-      description,
-      breakType,
-      category,
-      enabled: true,
-      frequency: 'every-break',
-      createdAt: Date.now(),
-    };
-  }
-
-  static calculateReminderFrequency(reminder: BreakReminder): number {
-    // Returns interval in milliseconds
-    switch (reminder.frequency) {
-      case 'every-break':
-        return 0; // Show on every break
-      case 'every-30min':
-        return 30 * 60 * 1000; // 30 minutes
-      case 'hourly':
-        return 60 * 60 * 1000; // 1 hour
-      case 'every-2hours':
-        return 2 * 60 * 60 * 1000; // 2 hours
-      case 'every-3hours':
-        return 3 * 60 * 60 * 1000; // 3 hours
-      case 'custom':
-        if (reminder.customFrequency) {
-          const { interval, unit } = reminder.customFrequency;
-          switch (unit) {
-            case 'minutes':
-              return interval * 60 * 1000;
-            case 'hours':
-              return interval * 60 * 60 * 1000;
-            case 'breaks':
-              return 0; // Special handling for break-based frequency
-          }
-        }
-        return 0;
-      default:
-        return 0;
-    }
-  }
-
-  static shouldShowBreakReminder(reminder: BreakReminder, breakType: 'short' | 'long'): boolean {
-    if (!reminder.enabled) return false;
-
-    // Check if reminder applies to this break type
-    if (reminder.breakType !== 'both' && reminder.breakType !== breakType) {
-      return false;
-    }
-
-    const now = Date.now();
-
-    // Handle every-break frequency
-    if (reminder.frequency === 'every-break') {
-      return true;
-    }
-
-    // Handle custom frequency with breaks unit
-    if (reminder.frequency === 'custom' && reminder.customFrequency?.unit === 'breaks') {
-      // This would need session tracking to implement properly
-      // For now, treat as every-break
-      return true;
-    }
-
-    // Handle time-based frequencies
-    const frequencyInterval = this.calculateReminderFrequency(reminder);
-    if (frequencyInterval === 0) return true;
-
-    // Check if enough time has passed since last shown
-    // Note: lastShown is only stored in Firebase, not locally, so this will
-    // default to showing reminders more frequently rather than less frequently
-    // to avoid permission errors affecting core functionality
-    if (!reminder.lastShown) return true;
-
-    return (now - reminder.lastShown) >= frequencyInterval;
-  }
-
-  static updateReminderLastShown(reminderId: string): void {
-    // Don't save locally - only attempt Firebase sync if user is authenticated
-    // This prevents permission errors from affecting local functionality
-    if (typeof window === 'undefined') return;
-
-    // Only attempt Firebase sync, don't update local storage
-    this.syncReminderLastShownToFirebase(reminderId).catch(() => {
-      // Silently fail - this is just for Firebase tracking, not essential for app functionality
-    });
-  }
-
-  // Helper method to sync lastShown timestamp to Firebase only
-  private static async syncReminderLastShownToFirebase(reminderId: string): Promise<void> {
-    try {
-      const { auth } = await import('@/lib/firebase');
-      const { FirebaseService } = await import('@/lib/firebase-service');
-
-      const user = auth.currentUser;
-      if (!user) return; // No user, no sync needed
-
-      // Check if user has valid authentication
-      try {
-        await user.getIdToken();
-      } catch (tokenError) {
-        return; // Invalid token, skip sync
-      }
-
-      // Get current reminders and update only the specific one
-      const reminders = LocalStorage.getBreakReminders();
-      const updatedReminders = reminders.map(reminder =>
-        reminder.id === reminderId
-          ? { ...reminder, lastShown: Date.now() }
-          : reminder
-      );
-
-      // Only sync to Firebase, don't update local storage
-      await FirebaseService.saveBreakReminders(user, updatedReminders);
-    } catch (error) {
-      // Silently fail - this is not critical functionality
-    }
-  }
-
-  static createBreakReminderCategory(
-    name: string,
-    icon: string = '📝',
-    color: string = '#6B7280'
-  ): BreakReminderCategory {
-    return {
-      id: `category_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      name,
-      icon,
-      color,
-      createdAt: Date.now(),
-    };
-  }
-
-  static getDefaultBreakReminderCategories(): BreakReminderCategory[] {
-    return [
-      this.createBreakReminderCategory('Hydration', '💧', '#3B82F6'),
-      this.createBreakReminderCategory('Movement', '🏃', '#10B981'),
-      this.createBreakReminderCategory('Rest', '💜', '#8B5CF6'),
-      this.createBreakReminderCategory('Nutrition', '🍎', '#F59E0B'),
-      this.createBreakReminderCategory('Mindfulness', '🧘', '#EC4899'),
-    ];
-  }
-
-  static getAllBreakReminderCategories(): BreakReminderCategory[] {
-    const customCategories = LocalStorage.getBreakReminderCategories();
-    const defaultCategories = this.getDefaultBreakReminderCategories();
-
-    // Combine default and custom categories, avoiding duplicates
-    const allCategories = [...defaultCategories];
-    customCategories.forEach(customCat => {
-      if (!allCategories.some(cat => cat.name.toLowerCase() === customCat.name.toLowerCase())) {
-        allCategories.push(customCat);
-      }
-    });
-
-    return allCategories;
-  }
-
-  static getCategoryDisplayInfo(reminder: BreakReminder): { name: string; icon: string; color: string } {
-    // Handle built-in categories
-    if (reminder.category !== 'custom') {
-      const defaultCategories = this.getDefaultBreakReminderCategories();
-      const builtInCategory = defaultCategories.find(cat =>
-        cat.name.toLowerCase() === reminder.category
-      );
-      if (builtInCategory) {
-        return {
-          name: builtInCategory.name,
-          icon: builtInCategory.icon,
-          color: builtInCategory.color
-        };
-      }
-    }
-
-    // Handle custom categories
-    if (reminder.customCategory) {
-      const customCategories = LocalStorage.getBreakReminderCategories();
-      const customCategory = customCategories.find(cat => cat.id === reminder.customCategory);
-      if (customCategory) {
-        return {
-          name: customCategory.name,
-          icon: customCategory.icon,
-          color: customCategory.color
-        };
-      }
-    }
-
-    // Fallback
-    return {
-      name: 'Custom',
-      icon: '📝',
-      color: '#6B7280'
-    };
-  }
-
-  static createBreakReminderCompletion(
-    reminderId: string,
-    sessionId: string,
-    breakType: 'short' | 'long',
-    userInteraction: boolean = true
-  ): BreakReminderCompletion {
-    return {
-      id: `completion_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      reminderId,
-      completedAt: Date.now(),
-      sessionId,
-      breakType,
-      userInteraction,
-    };
-  }
-
-  static createTaskCategory(
-    name: string,
-    color: string = '#6B7280',
-    icon?: string
-  ): TaskCategory {
+  static createTaskCategory(name: string, color: string, icon?: string): any {
     return {
       id: `category_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       name,
       color,
       icon,
-      createdAt: Date.now(),
+      createdAt: Date.now()
     };
-  }
-
-  static getDefaultTaskCategories(): TaskCategory[] {
-    return [
-      this.createTaskCategory('Work', '#3B82F6', '💼'),
-      this.createTaskCategory('Study', '#10B981', '📚'),
-      this.createTaskCategory('Personal', '#8B5CF6', '🏠'),
-      this.createTaskCategory('Health', '#F59E0B', '🏃'),
-      this.createTaskCategory('Creative', '#EC4899', '🎨'),
-    ];
-  }
-
-  static getAllTaskCategories(): TaskCategory[] {
-    const customCategories = LocalStorage.getTaskCategories();
-    const defaultCategories = this.getDefaultTaskCategories();
-
-    // Combine default and custom categories, avoiding duplicates
-    const allCategories = [...defaultCategories];
-    customCategories.forEach(customCat => {
-      if (!allCategories.some(cat => cat.name.toLowerCase() === customCat.name.toLowerCase())) {
-        allCategories.push(customCat);
-      }
-    });
-
-    return allCategories;
-  }
-
-  static recordBreakReminderCompletion(
-    reminderId: string,
-    sessionId: string,
-    breakType: 'short' | 'long',
-    userInteraction: boolean = true
-  ): void {
-    const completion = this.createBreakReminderCompletion(reminderId, sessionId, breakType, userInteraction);
-    LocalStorage.addBreakReminderCompletion(completion);
-  }
-
-  static getBreakReminderCompletionRate(reminderId: string, days: number = 7): number {
-    const endDate = Date.now();
-    const startDate = endDate - (days * 24 * 60 * 60 * 1000);
-
-    const completions = LocalStorage.getBreakReminderCompletionsForReminder(reminderId, {
-      start: startDate,
-      end: endDate
-    });
-
-    // Get all sessions in the same period to calculate completion rate
-    const sessions = LocalStorage.getAllSessions().filter(session =>
-      session.timestamp >= startDate &&
-      session.timestamp <= endDate &&
-      (session.type === 'short-break' || session.type === 'long-break')
-    );
-
-    if (sessions.length === 0) return 0;
-
-    return (completions.length / sessions.length) * 100;
-  }
-
-  static getTodaysBreakReminderCompletions(reminderId?: string): BreakReminderCompletion[] {
-    const today = new Date();
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-    const endOfDay = startOfDay + (24 * 60 * 60 * 1000) - 1;
-
-    let completions = LocalStorage.getBreakReminderCompletions().filter(completion =>
-      completion.completedAt >= startOfDay && completion.completedAt <= endOfDay
-    );
-
-    if (reminderId) {
-      completions = completions.filter(completion => completion.reminderId === reminderId);
-    }
-
-    return completions;
-  }
-
-  static getDefaultBreakReminders(): BreakReminder[] {
-    return [
-      {
-        ...this.createBreakReminder(
-          'Drink Water',
-          'Stay hydrated! Take a sip of water.',
-          'both',
-          'hydration'
-        ),
-        frequency: 'every-30min'
-      },
-      {
-        ...this.createBreakReminder(
-          'Stretch',
-          'Stand up and do some light stretching.',
-          'short',
-          'movement'
-        ),
-        frequency: 'every-break'
-      },
-      {
-        ...this.createBreakReminder(
-          'Deep Breathing',
-          'Take 5 deep breaths to relax.',
-          'both',
-          'rest'
-        ),
-        frequency: 'hourly'
-      },
-      {
-        ...this.createBreakReminder(
-          'Walk Around',
-          'Take a short walk to get your blood flowing.',
-          'long',
-          'movement'
-        ),
-        frequency: 'every-2hours'
-      },
-    ];
-  }
-
-  static isTaskDueToday(task: Task): boolean {
-    const today = new Date();
-    const todayStart = new Date(today.setHours(0, 0, 0, 0)).getTime();
-    const todayEnd = new Date(today.setHours(23, 59, 59, 999)).getTime();
-
-    // Regular tasks are always "due" if not completed
-    if (!task.recurring && !task.spacedRepetition) {
-      return !task.completed;
-    }
-
-    // Check recurring tasks
-    if (task.recurring?.enabled) {
-      return task.recurring.nextDue >= todayStart && task.recurring.nextDue <= todayEnd;
-    }
-
-    // Check spaced repetition tasks
-    if (task.spacedRepetition?.enabled) {
-      return task.spacedRepetition.nextReviewDate >= todayStart && task.spacedRepetition.nextReviewDate <= todayEnd;
-    }
-
-    return false;
   }
 
   static getTaskProgress(task: Task): number {
-    if (task.estimatedSessions === 0) return task.completed ? 100 : 0;
-    return Math.min(100, (task.sessionsCompleted / task.estimatedSessions) * 100);
-  }
-
-  static canCompleteTaskOnBreak(task: Task): boolean {
-    return task.estimatedSessions === 0;
-  }
-
-  static calculateNextRecurringDate(fromDate: number, recurring: any): Date {
-    const nextDue = new Date(fromDate);
-
-    switch (recurring.pattern) {
-      case 'daily':
-        nextDue.setDate(nextDue.getDate() + (recurring.interval || 1));
-        break;
-
-      case 'weekdays':
-        // Skip to next weekday (Monday-Friday)
-        do {
-          nextDue.setDate(nextDue.getDate() + 1);
-        } while (nextDue.getDay() === 0 || nextDue.getDay() === 6); // Skip Sunday(0) and Saturday(6)
-        break;
-
-      case 'weekly':
-        if (recurring.weeklyPattern === 'every-other-week') {
-          nextDue.setDate(nextDue.getDate() + 14);
-        } else {
-          nextDue.setDate(nextDue.getDate() + (7 * (recurring.interval || 1)));
-        }
-        break;
-
-      case 'specific-days':
-        // Find next occurrence of specified days of week
-        if (recurring.daysOfWeek && recurring.daysOfWeek.length > 0) {
-          const currentDay = nextDue.getDay();
-          const targetDays = recurring.daysOfWeek.sort((a: number, b: number) => a - b);
-
-          // Find next target day
-          let nextTargetDay = targetDays.find((day: number) => day > currentDay);
-          if (!nextTargetDay) {
-            // If no day this week, get first day of next week
-            nextTargetDay = targetDays[0];
-            nextDue.setDate(nextDue.getDate() + (7 - currentDay + nextTargetDay));
-          } else {
-            nextDue.setDate(nextDue.getDate() + (nextTargetDay - currentDay));
-          }
-        }
-        break;
-
-      case 'monthly':
-        if (recurring.monthlyPattern === 'same-date') {
-          nextDue.setMonth(nextDue.getMonth() + (recurring.interval || 1));
-        } else if (recurring.monthlyPattern === 'same-weekday') {
-          // Same weekday of the month (e.g., first Sunday, third Tuesday)
-          const currentWeekday = nextDue.getDay();
-          const currentWeekOfMonth = Math.ceil(nextDue.getDate() / 7);
-
-          nextDue.setMonth(nextDue.getMonth() + (recurring.interval || 1));
-          nextDue.setDate(1);
-
-          // Find the same weekday and week of month
-          while (nextDue.getDay() !== currentWeekday) {
-            nextDue.setDate(nextDue.getDate() + 1);
-          }
-          nextDue.setDate(nextDue.getDate() + ((currentWeekOfMonth - 1) * 7));
-        }
-        break;
-
-      case 'custom':
-        nextDue.setDate(nextDue.getDate() + (recurring.interval || 1));
-        break;
-    }
-
-    return nextDue;
+    if (!task.estimatedSessions || task.estimatedSessions === 0) return 0;
+    return (task.sessionsCompleted / task.estimatedSessions) * 100;
   }
 }

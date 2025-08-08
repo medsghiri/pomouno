@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Coffee, Activity, Heart, Droplets, X, Check } from 'lucide-react';
+import { Coffee, X, Check, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { LocalStorage, BreakReminder, TaskUtils } from '@/lib/storage';
 import { cn } from '@/lib/utils';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth } from '@/lib/firebase';
+import { AdvancedStorageService } from '@/lib/advanced-storage-service';
+import type { BreakReminder } from '@/lib/advanced-storage-service';
 
 interface BreakReminderDisplayProps {
     breakType: 'short' | 'long';
@@ -16,104 +19,102 @@ interface BreakReminderDisplayProps {
     onRemindersCompleted?: (completedIds: string[], shownIds: string[]) => void;
 }
 
-export function BreakReminderDisplay({ breakType, isVisible, sessionId, onClose, onRemindersCompleted }: BreakReminderDisplayProps) {
+// Default categories for break reminders
+const DEFAULT_CATEGORIES = [
+    { id: 'hydration', name: 'Hydration', icon: '💧', color: '#3B82F6' },
+    { id: 'movement', name: 'Movement', icon: '🏃', color: '#10B981' },
+    { id: 'rest', name: 'Rest', icon: '💜', color: '#8B5CF6' },
+    { id: 'nutrition', name: 'Nutrition', icon: '🍎', color: '#F59E0B' },
+    { id: 'mindfulness', name: 'Mindfulness', icon: '🧘', color: '#EC4899' },
+];
+
+export function BreakReminderDisplay({
+    breakType,
+    isVisible,
+    onClose,
+    onRemindersCompleted
+}: BreakReminderDisplayProps) {
     const [reminders, setReminders] = useState<BreakReminder[]>([]);
     const [completedReminders, setCompletedReminders] = useState<Set<string>>(new Set());
-    const [hasReportedShown, setHasReportedShown] = useState(false);
+    const [loading, setLoading] = useState(false);
 
+    const [user] = useAuthState(auth);
+    const [storageService, setStorageService] = useState<AdvancedStorageService | null>(null);
+
+    // Initialize storage service when user is available
     useEffect(() => {
-        if (isVisible) {
-            // Get reminders for this break type
-            const allReminders = LocalStorage.getBreakReminders();
-            const filteredReminders = allReminders.filter(reminder =>
-                reminder.enabled &&
-                (reminder.breakType === breakType || reminder.breakType === 'both')
-            );
-
-            // Apply frequency filter using new logic
-            const visibleReminders = filteredReminders.filter(reminder =>
-                TaskUtils.shouldShowBreakReminder(reminder, breakType)
-            );
-
-            setReminders(visibleReminders);
-
-            // Load already completed reminders from localStorage
-            const completedReminders = JSON.parse(localStorage.getItem('currentBreakRemindersCompleted') || '[]');
-            setCompletedReminders(new Set(completedReminders));
-            setHasReportedShown(false);
-
-            // Update last shown timestamp for displayed reminders (Firebase only, no local storage)
-            visibleReminders.forEach(reminder => {
-                TaskUtils.updateReminderLastShown(reminder.id);
-            });
+        if (user) {
+            setStorageService(new AdvancedStorageService(user));
         } else {
-            setHasReportedShown(false);
+            setStorageService(null);
         }
-    }, [breakType, isVisible]);
+    }, [user]);
 
-    // Separate effect to handle reporting shown reminders
     useEffect(() => {
-        if (isVisible && reminders.length > 0 && !hasReportedShown && onRemindersCompleted) {
-            onRemindersCompleted([], reminders.map(r => r.id));
-            setHasReportedShown(true);
+        if (isVisible && storageService) {
+            loadReminders();
+            setCompletedReminders(new Set());
         }
-    }, [isVisible, reminders, hasReportedShown, onRemindersCompleted]);
+    }, [isVisible, storageService, breakType]);
 
-    // Effect to listen for completion events from Sonner toasts
-    useEffect(() => {
-        if (!isVisible) return;
+    const loadReminders = async () => {
+        if (!storageService) return;
 
-        const handleBreakReminderCompleted = (event: CustomEvent) => {
-            const { reminderId } = event.detail;
+        try {
+            setLoading(true);
+            const allReminders = await storageService.getBreakReminders();
+
+            // Filter for enabled reminders only
+            const enabledReminders = allReminders.filter(reminder => reminder.enabled);
+            setReminders(enabledReminders);
+
+            // Report shown reminders
+            if (onRemindersCompleted && enabledReminders.length > 0) {
+                onRemindersCompleted([], enabledReminders.map(r => r.id));
+            }
+        } catch (error) {
+            console.error('Failed to load reminders:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const getCategoryInfo = (categoryId: string) => {
+        const category = DEFAULT_CATEGORIES.find(cat => cat.id === categoryId || cat.name.toLowerCase() === categoryId);
+        return category || { name: 'Custom', icon: '📝', color: '#6B7280' };
+    };
+
+    const incrementReminderCount = async (reminderId: string) => {
+        if (!storageService) return;
+
+        try {
+            const updatedReminder = await storageService.incrementBreakReminderCount(reminderId);
+
+            // Update local state
+            setReminders(prev => prev.map(r => r.id === reminderId ? updatedReminder : r));
+
+            // Mark as completed in this session
             setCompletedReminders(prev => {
                 const newSet = new Set(prev);
                 newSet.add(reminderId);
                 return newSet;
             });
-        };
 
-        window.addEventListener('breakReminderCompleted', handleBreakReminderCompleted as EventListener);
-
-        return () => {
-            window.removeEventListener('breakReminderCompleted', handleBreakReminderCompleted as EventListener);
-        };
-    }, [isVisible]);
-
-    const getCategoryIcon = (category: BreakReminder['category']) => {
-        switch (category) {
-            case 'hydration': return <Droplets className="w-5 h-5 text-blue-500" />;
-            case 'movement': return <Activity className="w-5 h-5 text-green-500" />;
-            case 'rest': return <Heart className="w-5 h-5 text-purple-500" />;
-            default: return <Coffee className="w-5 h-5 text-gray-500" />;
+            // Report completion
+            if (onRemindersCompleted) {
+                const completedArray = Array.from(completedReminders);
+                completedArray.push(reminderId);
+                onRemindersCompleted(completedArray, reminders.map(r => r.id));
+            }
+        } catch (error) {
+            console.error('Failed to increment reminder count:', error);
         }
     };
 
-    const toggleReminderComplete = (reminderId: string) => {
-        const newCompleted = new Set(completedReminders);
-        const currentSessionId = sessionId || `session_${Date.now()}`;
-
-        if (newCompleted.has(reminderId)) {
-            newCompleted.delete(reminderId);
-        } else {
-            newCompleted.add(reminderId);
-            // Record completion using new tracking system
-            TaskUtils.recordBreakReminderCompletion(reminderId, currentSessionId, breakType, true);
-        }
-        setCompletedReminders(newCompleted);
-
-        // Update localStorage for consistency with Sonner toast completions
-        const completedArray = Array.from(newCompleted);
-        localStorage.setItem('currentBreakRemindersCompleted', JSON.stringify(completedArray));
-
-        // Report completed reminders
-        if (onRemindersCompleted) {
-            onRemindersCompleted(completedArray, reminders.map(r => r.id));
-        }
-    };
-
-    const getBreakTypeTitle = () => {
-        return breakType === 'short' ? 'Short Break Reminders' : 'Long Break Reminders';
-    };
+    // Don't show if user is not authenticated
+    if (!user || !storageService) {
+        return null;
+    }
 
     if (!isVisible || reminders.length === 0) {
         return null;
@@ -126,7 +127,7 @@ export function BreakReminderDisplay({ breakType, isVisible, sessionId, onClose,
                     <div className="flex items-center gap-2">
                         <Coffee className="w-5 h-5 text-orange-500" />
                         <h3 className="font-semibold">
-                            {getBreakTypeTitle()}
+                            Break Reminders
                         </h3>
                     </div>
                     {onClose && (
@@ -142,66 +143,81 @@ export function BreakReminderDisplay({ breakType, isVisible, sessionId, onClose,
                 </div>
 
                 <div className="space-y-3">
-                    {reminders.map((reminder) => (
-                        <div
-                            key={reminder.id}
-                            className={cn(
-                                "flex items-start gap-3 p-3 rounded-lg border transition-all duration-200",
-                                completedReminders.has(reminder.id)
-                                    ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700/50"
-                                    : "bg-gray-50 border-gray-200/20 hover:bg-gray-100 dark:bg-background/50 dark:border-accent/50 dark:hover:bg-gray-700/50"
-                            )}
-                        >
-                            <div className="flex-shrink-0 mt-0.5">
-                                <span className="text-base">
-                                    {TaskUtils.getCategoryDisplayInfo(reminder).icon}
-                                </span>
-                            </div>
+                    {reminders.map((reminder) => {
+                        const categoryInfo = getCategoryInfo(reminder.category);
+                        const isCompleted = completedReminders.has(reminder.id);
 
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <h4 className={cn(
-                                        "font-medium text-sm",
-                                        completedReminders.has(reminder.id)
-                                            ? "line-through text-gray-500 dark:text-gray-400"
-                                            : "text-gray-900 dark:text-white"
-                                    )}>
-                                        {reminder.title}
-                                    </h4>
-                                    <Badge variant="outline" className="text-xs capitalize">
-                                        {TaskUtils.getCategoryDisplayInfo(reminder).name}
-                                    </Badge>
-                                </div>
-
-                                <p className={cn(
-                                    "text-sm",
-                                    completedReminders.has(reminder.id)
-                                        ? "line-through text-gray-400 dark:text-gray-500"
-                                        : "text-gray-600 dark:text-gray-300"
-                                )}>
-                                    {reminder.description}
-                                </p>
-                            </div>
-
-                            <Button
-                                size="sm"
-                                variant={completedReminders.has(reminder.id) ? "default" : "outline"}
-                                onClick={() => toggleReminderComplete(reminder.id)}
+                        return (
+                            <div
+                                key={reminder.id}
                                 className={cn(
-                                    "flex-shrink-0",
-                                    completedReminders.has(reminder.id)
-                                        ? "bg-green-600 hover:bg-green-700 text-white"
-                                        : "hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    "flex items-start gap-3 p-3 rounded-lg border transition-all duration-200",
+                                    isCompleted
+                                        ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700/50"
+                                        : "bg-background/50 border-accent/50 hover:bg-accent/10"
                                 )}
                             >
-                                <Check className="w-4 h-4" />
-                            </Button>
-                        </div>
-                    ))}
+                                <div className="flex-shrink-0 mt-0.5">
+                                    <span className="text-base">
+                                        {categoryInfo.icon}
+                                    </span>
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <h4 className={cn(
+                                            "font-medium text-sm",
+                                            isCompleted
+                                                ? "line-through text-muted-foreground"
+                                                : "text-foreground"
+                                        )}>
+                                            {reminder.title}
+                                        </h4>
+                                        <Badge variant="outline" className="text-xs capitalize">
+                                            {categoryInfo.name}
+                                        </Badge>
+                                    </div>
+
+                                    <p className={cn(
+                                        "text-sm",
+                                        isCompleted
+                                            ? "line-through text-muted-foreground"
+                                            : "text-muted-foreground"
+                                    )}>
+                                        {reminder.description}
+                                    </p>
+
+                                    {/* Show current count */}
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                        Today: {reminder.completionCount || 0} times
+                                    </div>
+                                </div>
+
+                                <Button
+                                    size="sm"
+                                    variant={isCompleted ? "default" : "outline"}
+                                    onClick={() => incrementReminderCount(reminder.id)}
+                                    disabled={loading || isCompleted}
+                                    className={cn(
+                                        "flex-shrink-0",
+                                        isCompleted
+                                            ? "bg-green-600 hover:bg-green-700 text-white"
+                                            : "hover:bg-accent"
+                                    )}
+                                >
+                                    {isCompleted ? (
+                                        <Check className="w-4 h-4" />
+                                    ) : (
+                                        <Plus className="w-4 h-4" />
+                                    )}
+                                </Button>
+                            </div>
+                        );
+                    })}
                 </div>
 
-                <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                    Check off reminders as you complete them during your break
+                <div className="text-xs text-muted-foreground text-center">
+                    Click + to increment your daily count for each activity
                 </div>
             </div>
         </Card>

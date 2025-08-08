@@ -81,8 +81,7 @@ export class FirebaseService {
     try {
       // First, get existing sessions to check for duplicates
       const existingSessionsQuery = query(
-        collection(db, 'sessions'),
-        where('userId', '==', user.uid)
+        collection(db, 'users', user.uid, 'sessions')
       );
       const existingSessionsSnapshot = await getDocs(existingSessionsQuery);
       const existingSessionIds = new Set(
@@ -100,7 +99,7 @@ export class FirebaseService {
       console.log(`Saving ${newSessions.length} new sessions (${sessions.length - newSessions.length} duplicates skipped)`);
 
       const batch = writeBatch(db);
-      const sessionsRef = collection(db, 'sessions');
+      const sessionsRef = collection(db, 'users', user.uid, 'sessions');
 
       newSessions.forEach(session => {
         // Validate session data before saving
@@ -110,10 +109,9 @@ export class FirebaseService {
         }
 
         // Use session ID as document ID to prevent duplicates
-        const docRef = doc(sessionsRef, `${user.uid}_${session.id}`);
+        const docRef = doc(sessionsRef, session.id);
         const cleanSession = removeUndefinedFields({
           ...session,
-          userId: user.uid,
           // Store actual timestamp values, not serverTimestamp objects
           createdAt: session.timestamp, // Use session timestamp as creation time
           timestamp: session.timestamp, // Keep original timestamp as number
@@ -139,10 +137,9 @@ export class FirebaseService {
   }
 
   static async getRecentSessions(user: User, limitCount: number = 10): Promise<PomodoroSession[]> {
-    const sessionsRef = collection(db, 'sessions');
+    const sessionsRef = collection(db, 'users', user.uid, 'sessions');
     const q = query(
       sessionsRef,
-      where('userId', '==', user.uid),
       orderBy('timestamp', 'desc'),
       limit(limitCount)
     );
@@ -150,7 +147,7 @@ export class FirebaseService {
 
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
-      const { userId, createdAt, dateString, month, year, syncedAt, validated, ...sessionData } = data;
+      const { createdAt, dateString, month, year, syncedAt, validated, ...sessionData } = data;
 
       // Handle both Firestore Timestamp objects and regular numbers
       let timestamp = data.timestamp;
@@ -169,10 +166,9 @@ export class FirebaseService {
 
   // Get sessions by date range for analytics
   static async getSessionsByDateRange(user: User, startDate: string, endDate: string): Promise<PomodoroSession[]> {
-    const sessionsRef = collection(db, 'sessions');
+    const sessionsRef = collection(db, 'users', user.uid, 'sessions');
     const q = query(
       sessionsRef,
-      where('userId', '==', user.uid),
       where('dateString', '>=', startDate),
       where('dateString', '<=', endDate),
       orderBy('dateString', 'desc'),
@@ -182,7 +178,7 @@ export class FirebaseService {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
-      const { userId, createdAt, dateString, month, year, syncedAt, validated, ...sessionData } = data;
+      const { createdAt, dateString, month, year, syncedAt, validated, ...sessionData } = data;
 
       // Handle both Firestore Timestamp objects and regular numbers
       let timestamp = data.timestamp;
@@ -202,11 +198,11 @@ export class FirebaseService {
   // Optimized tasks management with proper structure and duplicate prevention
   static async saveTasks(user: User, tasks: Task[]) {
     const batch = writeBatch(db);
-    const tasksRef = collection(db, 'tasks');
+    const tasksRef = collection(db, 'users', user.uid, 'tasks');
 
     try {
       // First, get existing tasks to check for duplicates by task ID
-      const existingTasksQuery = query(tasksRef, where('userId', '==', user.uid));
+      const existingTasksQuery = query(tasksRef);
       const existingTasks = await getDocs(existingTasksQuery);
 
       // Create a map of existing task IDs to document IDs
@@ -243,7 +239,7 @@ export class FirebaseService {
       // Add all tasks (both existing and new) to avoid duplicates
       tasks.forEach(task => {
         // Use task ID as document ID to prevent duplicates
-        const docRef = doc(tasksRef, `${user.uid}_${task.id}`);
+        const docRef = doc(tasksRef, task.id);
 
         // Validate and fix createdAt timestamp
         let validCreatedAt = task.createdAt;
@@ -262,7 +258,6 @@ export class FirebaseService {
         const cleanTask = removeUndefinedFields({
           ...task,
           createdAt: validCreatedAt, // Use the validated timestamp
-          userId: user.uid,
           firebaseCreatedAt: Date.now(), // Use actual timestamp
           updatedAt: Date.now(), // Use actual timestamp
           // Add status for better querying
@@ -283,17 +278,16 @@ export class FirebaseService {
   }
 
   static async getTasks(user: User): Promise<Task[]> {
-    const tasksRef = collection(db, 'tasks');
+    const tasksRef = collection(db, 'users', user.uid, 'tasks');
     const q = query(
       tasksRef,
-      where('userId', '==', user.uid),
       orderBy('createdAt', 'desc')
     );
     const querySnapshot = await getDocs(q);
 
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
-      const { userId, firebaseCreatedAt, updatedAt, status, createdDateString, ...taskData } = data;
+      const { firebaseCreatedAt, updatedAt, status, createdDateString, ...taskData } = data;
       return {
         ...taskData
       } as Task;
@@ -302,7 +296,7 @@ export class FirebaseService {
 
   // Update single task efficiently
   static async updateTask(user: User, taskId: string, updates: Partial<Task>) {
-    const taskRef = doc(db, 'tasks', taskId);
+    const taskRef = doc(db, 'users', user.uid, 'tasks', taskId);
     const cleanUpdates = removeUndefinedFields({
       ...updates,
       updatedAt: serverTimestamp(),
@@ -316,7 +310,6 @@ export class FirebaseService {
     const settingsRef = doc(db, 'settings', user.uid);
     const cleanSettings = removeUndefinedFields({
       ...settings,
-      userId: user.uid,
       updatedAt: Date.now(), // Use actual timestamp instead of serverTimestamp
       version: 1 // For future migrations
     });
@@ -330,16 +323,15 @@ export class FirebaseService {
     if (!docSnap.exists()) return null;
 
     const data = docSnap.data();
-    const { userId, updatedAt, version, ...settings } = data;
+    const { updatedAt, version, ...settings } = data;
     return settings as Settings;
   }
 
   // Optimized stats management with proper indexing
   static async saveStats(user: User, stats: TodaysStats) {
-    const statsRef = doc(db, 'stats', `${user.uid}_${stats.date}`);
+    const statsRef = doc(db, 'users', user.uid, 'statistics', stats.date);
     const cleanStats = removeUndefinedFields({
       ...stats,
-      userId: user.uid,
       updatedAt: serverTimestamp(),
       // Add parsed date for better querying
       dateObject: new Date(stats.date),
@@ -352,13 +344,12 @@ export class FirebaseService {
   }
 
   static async getWeeklyStats(user: User): Promise<TodaysStats[]> {
-    const statsRef = collection(db, 'stats');
+    const statsRef = collection(db, 'users', user.uid, 'statistics');
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
     const q = query(
       statsRef,
-      where('userId', '==', user.uid),
       where('dateObject', '>=', oneWeekAgo),
       orderBy('dateObject', 'desc')
     );
@@ -366,17 +357,16 @@ export class FirebaseService {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
-      const { userId, updatedAt, dateObject, weekOfYear, month, year, ...statsData } = data;
+      const { updatedAt, dateObject, weekOfYear, month, year, ...statsData } = data;
       return statsData as TodaysStats;
     });
   }
 
   // Get monthly stats for analytics
   static async getMonthlyStats(user: User, year: number, month: number): Promise<TodaysStats[]> {
-    const statsRef = collection(db, 'stats');
+    const statsRef = collection(db, 'users', user.uid, 'statistics');
     const q = query(
       statsRef,
-      where('userId', '==', user.uid),
       where('year', '==', year),
       where('month', '==', month),
       orderBy('dateObject', 'desc')
@@ -385,7 +375,7 @@ export class FirebaseService {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
-      const { userId, updatedAt, dateObject, weekOfYear, month, year, ...statsData } = data;
+      const { updatedAt, dateObject, weekOfYear, month, year, ...statsData } = data;
       return statsData as TodaysStats;
     });
   }
@@ -496,7 +486,7 @@ export class FirebaseService {
     if (reminders.length === 0) return;
 
     const batch = writeBatch(db);
-    const remindersRef = collection(db, 'breakReminders');
+    const remindersRef = collection(db, 'users', user.uid, 'breakReminders');
 
     try {
       // Check if user has valid authentication
@@ -508,7 +498,7 @@ export class FirebaseService {
       }
 
       // First, get existing reminders to delete them
-      const existingRemindersQuery = query(remindersRef, where('userId', '==', user.uid));
+      const existingRemindersQuery = query(remindersRef);
       const existingReminders = await getDocs(existingRemindersQuery);
 
       // Delete existing reminders in batch (only if they exist)
@@ -521,11 +511,10 @@ export class FirebaseService {
       // Add new reminders in batch using reminder ID as document ID to prevent duplicates
       reminders.forEach(reminder => {
         // Use reminder ID as document ID to prevent duplicates
-        const docRef = doc(remindersRef, `${user.uid}_${reminder.id}`);
+        const docRef = doc(remindersRef, reminder.id);
         // Clean the reminder data to remove undefined fields
         const cleanReminder = removeUndefinedFields({
           ...reminder,
-          userId: user.uid,
           createdAt: Date.now(), // Use actual timestamp instead of serverTimestamp
           updatedAt: Date.now() // Use actual timestamp instead of serverTimestamp
         });
@@ -541,17 +530,16 @@ export class FirebaseService {
   }
 
   static async getBreakReminders(user: User): Promise<any[]> {
-    const remindersRef = collection(db, 'breakReminders');
+    const remindersRef = collection(db, 'users', user.uid, 'breakReminders');
     const q = query(
       remindersRef,
-      where('userId', '==', user.uid),
       orderBy('createdAt', 'desc')
     );
     const querySnapshot = await getDocs(q);
 
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
-      const { userId, createdAt, updatedAt, ...reminderData } = data;
+      const { createdAt, updatedAt, ...reminderData } = data;
       return {
         id: doc.id,
         ...reminderData
@@ -564,13 +552,12 @@ export class FirebaseService {
     if (completions.length === 0) return;
 
     const batch = writeBatch(db);
-    const completionsRef = collection(db, 'breakReminderCompletions');
+    const completionsRef = collection(db, 'users', user.uid, 'breakReminderCompletions');
 
     completions.forEach(completion => {
       const docRef = doc(completionsRef);
       const cleanCompletion = removeUndefinedFields({
         ...completion,
-        userId: user.uid,
         createdAt: serverTimestamp(),
         completedAtTimestamp: Timestamp.fromMillis(completion.completedAt),
         // Add date string for easier daily queries
@@ -583,17 +570,15 @@ export class FirebaseService {
   }
 
   static async getBreakReminderCompletions(user: User, dateRange?: { start: number; end: number }): Promise<any[]> {
-    const completionsRef = collection(db, 'breakReminderCompletions');
+    const completionsRef = collection(db, 'users', user.uid, 'breakReminderCompletions');
     let q = query(
       completionsRef,
-      where('userId', '==', user.uid),
       orderBy('completedAtTimestamp', 'desc')
     );
 
     if (dateRange) {
       q = query(
         completionsRef,
-        where('userId', '==', user.uid),
         where('completedAtTimestamp', '>=', Timestamp.fromMillis(dateRange.start)),
         where('completedAtTimestamp', '<=', Timestamp.fromMillis(dateRange.end)),
         orderBy('completedAtTimestamp', 'desc')
@@ -603,7 +588,7 @@ export class FirebaseService {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
-      const { userId, createdAt, completedAtTimestamp, dateString, ...completionData } = data;
+      const { createdAt, completedAtTimestamp, dateString, ...completionData } = data;
       return {
         id: doc.id,
         ...completionData,
@@ -618,10 +603,9 @@ export class FirebaseService {
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
     // Clean old sessions
-    const sessionsRef = collection(db, 'sessions');
+    const sessionsRef = collection(db, 'users', user.uid, 'sessions');
     const oldSessionsQuery = query(
       sessionsRef,
-      where('userId', '==', user.uid),
       where('timestamp', '<', Timestamp.fromDate(cutoffDate))
     );
 
@@ -712,40 +696,40 @@ export class FirebaseService {
 
     try {
       // Delete all sessions
-      const sessionsRef = collection(db, 'sessions');
-      const sessionsQuery = query(sessionsRef, where('userId', '==', user.uid));
+      const sessionsRef = collection(db, 'users', user.uid, 'sessions');
+      const sessionsQuery = query(sessionsRef);
       const sessionsSnapshot = await getDocs(sessionsQuery);
       sessionsSnapshot.docs.forEach(doc => {
         batch.delete(doc.ref);
       });
 
       // Delete all tasks
-      const tasksRef = collection(db, 'tasks');
-      const tasksQuery = query(tasksRef, where('userId', '==', user.uid));
+      const tasksRef = collection(db, 'users', user.uid, 'tasks');
+      const tasksQuery = query(tasksRef);
       const tasksSnapshot = await getDocs(tasksQuery);
       tasksSnapshot.docs.forEach(doc => {
         batch.delete(doc.ref);
       });
 
       // Delete all stats
-      const statsRef = collection(db, 'stats');
-      const statsQuery = query(statsRef, where('userId', '==', user.uid));
+      const statsRef = collection(db, 'users', user.uid, 'statistics');
+      const statsQuery = query(statsRef);
       const statsSnapshot = await getDocs(statsQuery);
       statsSnapshot.docs.forEach(doc => {
         batch.delete(doc.ref);
       });
 
       // Delete all break reminders
-      const breakRemindersRef = collection(db, 'breakReminders');
-      const breakRemindersQuery = query(breakRemindersRef, where('userId', '==', user.uid));
+      const breakRemindersRef = collection(db, 'users', user.uid, 'breakReminders');
+      const breakRemindersQuery = query(breakRemindersRef);
       const breakRemindersSnapshot = await getDocs(breakRemindersQuery);
       breakRemindersSnapshot.docs.forEach(doc => {
         batch.delete(doc.ref);
       });
 
       // Delete all break reminder completions
-      const breakCompletionsRef = collection(db, 'breakReminderCompletions');
-      const breakCompletionsQuery = query(breakCompletionsRef, where('userId', '==', user.uid));
+      const breakCompletionsRef = collection(db, 'users', user.uid, 'breakReminderCompletions');
+      const breakCompletionsQuery = query(breakCompletionsRef);
       const breakCompletionsSnapshot = await getDocs(breakCompletionsQuery);
       breakCompletionsSnapshot.docs.forEach(doc => {
         batch.delete(doc.ref);

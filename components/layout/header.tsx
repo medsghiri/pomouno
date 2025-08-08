@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -8,9 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { MobileMenu } from './mobile-menu';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { User, LogOut, Settings, BarChart3, Target, Coffee } from 'lucide-react';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { useAuth, useFeatureAccess } from '@/lib/auth-context';
 import { useToast } from '@/hooks/use-toast';
 
 interface HeaderProps {
@@ -22,7 +21,10 @@ interface HeaderProps {
 }
 
 export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClick, onBreakRemindersClick }: HeaderProps) {
-  const [user, loading] = useAuthState(auth);
+  const { user, loading, logout } = useAuth();
+  const statisticsAccess = useFeatureAccess('statistics');
+  const tasksAccess = useFeatureAccess('tasks');
+  const breakRemindersAccess = useFeatureAccess('break-reminders');
   const [mounted, setMounted] = useState(false);
   const { toast } = useToast();
 
@@ -32,17 +34,9 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
 
   const handleSignOut = async () => {
     try {
-      await signOut(auth);
-      toast({
-        title: "Signed out successfully",
-        description: "Your data is still saved locally. Sign back in anytime to sync.",
-      });
+      await logout();
     } catch (error) {
-      toast({
-        title: "Sign out failed",
-        description: "Please try again.",
-        variant: "destructive",
-      });
+      console.error('Logout error:', error);
     }
   };
 
@@ -55,7 +49,7 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
               <Logo />
-              <h1 className="text-xl font-bold text-white">
+              <h1 className="text-2xl font-bold text-white">
                 PomoUno
               </h1>
             </div>
@@ -71,11 +65,13 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
         <div className="flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <Logo />
+            <Logo clickable />
             <div>
-              <h1 className="text-xl font-bold text-foreground">
-                PomoUno
-              </h1>
+              <Link href="/" className="hover:opacity-80 transition-opacity">
+                <h1 className="text-xl font-bold text-foreground">
+                  PomoUno
+                </h1>
+              </Link>
             </div>
           </div>
 
@@ -91,9 +87,13 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
                     variant="ghost"
                     size="sm"
                     className="text-foreground hover:text-foreground hover:bg-accent transition-colors px-2 sm:px-3"
+                    title={tasksAccess.canAccess ? "Tasks" : "Tasks (Sign up required)"}
                   >
                     <Target className="w-4 h-4 sm:mr-2" />
                     <span className="hidden sm:inline">Tasks</span>
+                    {!tasksAccess.canAccess && (
+                      <span className="ml-1 text-xs opacity-60">*</span>
+                    )}
                   </Button>
 
                   {/* Break Reminders Button */}
@@ -102,9 +102,13 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
                     variant="ghost"
                     size="sm"
                     className="text-foreground hover:text-foreground hover:bg-accent transition-colors px-2 sm:px-3"
+                    title={breakRemindersAccess.canAccess ? "Break Reminders" : "Break Reminders (Sign up required)"}
                   >
                     <Coffee className="w-4 h-4 sm:mr-2" />
                     <span className="hidden sm:inline">Breaks</span>
+                    {!breakRemindersAccess.canAccess && (
+                      <span className="ml-1 text-xs opacity-60">*</span>
+                    )}
                   </Button>
 
                   {/* Stats Button */}
@@ -113,9 +117,13 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
                     variant="ghost"
                     size="sm"
                     className="text-foreground hover:text-foreground hover:bg-accent transition-colors px-2 sm:px-3"
+                    title={statisticsAccess.canAccess ? "Statistics" : "Statistics (Sign up required)"}
                   >
                     <BarChart3 className="w-4 h-4 sm:mr-2" />
                     <span className="hidden sm:inline">Stats</span>
+                    {!statisticsAccess.canAccess && (
+                      <span className="ml-1 text-xs opacity-60">*</span>
+                    )}
                   </Button>
 
                   {/* Settings Button */}
@@ -169,7 +177,7 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
                     </DropdownMenu>
                   ) : (
                     <Button
-                      onClick={onAuthClick}
+                      onClick={() => window.location.href = '/auth/signin'}
                       size="sm"
                       className="bg-red-700 hover:bg-red-600 dark:text-white px-2 sm:px-3"
                     >

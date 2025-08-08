@@ -68,17 +68,17 @@ export function FirebaseDebug() {
     };
 
     const getLocalDataSummary = () => {
-        const tasks = LocalStorage.getTasks();
         const sessions = LocalStorage.getAllSessions();
-        const breakReminders = LocalStorage.getBreakReminders();
         const settings = LocalStorage.getSettings();
+        const tasks = LocalStorage.getTasks();
+        const breakReminders = LocalStorage.getBreakReminders();
 
         return {
             tasks: tasks.length,
             sessions: sessions.length,
             breakReminders: breakReminders.length,
             hasSettings: !!settings,
-            syncDisabled: LocalStorage.isFirebaseSyncDisabled()
+            syncDisabled: false // Basic storage doesn't have Firebase sync
         };
     };
 

@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { SoundControlPopover } from './sound-control-popover';
 import { cn } from '@/lib/utils';
-import { Settings, Task } from '@/lib/storage';
+import { Settings } from '@/lib/storage';
 import { StatisticsEngine } from '@/lib/statistics-engine';
 import AudioService from '@/lib/audio-service';
 
@@ -25,7 +25,7 @@ interface TimerDisplayProps {
   currentSession: number;
   totalSessions: number;
   settings: Settings;
-  currentTask?: Task | null;
+  currentTask?: any | null;
 }
 
 export function TimerDisplay({

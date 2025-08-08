@@ -5,9 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Menu, User, LogOut, Settings, BarChart3, UserPlus, Target, Coffee } from 'lucide-react';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { useAuth, useFeatureAccess } from '@/lib/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Logo } from '@/components/logo';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -21,24 +19,19 @@ interface MobileMenuProps {
 }
 
 export function MobileMenu({ onAuthClick, onSettingsClick, onStatsClick, onTasksClick, onBreakRemindersClick }: MobileMenuProps) {
-    const [user, loading] = useAuthState(auth);
+    const { user, loading, logout } = useAuth();
+    const tasksAccess = useFeatureAccess('tasks');
+    const breakRemindersAccess = useFeatureAccess('break-reminders');
+    const statisticsAccess = useFeatureAccess('statistics');
     const [open, setOpen] = useState(false);
     const { toast } = useToast();
 
     const handleSignOut = async () => {
         try {
-            await signOut(auth);
+            await logout();
             setOpen(false);
-            toast({
-                title: "Signed out successfully",
-                description: "Your data is still saved locally. Sign back in anytime to sync.",
-            });
         } catch (error) {
-            toast({
-                title: "Sign out failed",
-                description: "Please try again.",
-                variant: "destructive",
-            });
+            console.error('Logout error:', error);
         }
     };
 
@@ -102,33 +95,60 @@ export function MobileMenu({ onAuthClick, onSettingsClick, onStatsClick, onTasks
                             {/* Navigation Items */}
                             <div className="space-y-2 flex-1">
                                 <Button
-                                    onClick={() => handleMenuItemClick(onTasksClick)}
+                                    onClick={() => handleMenuItemClick(() => {
+                                        if (tasksAccess.canAccess) {
+                                            onTasksClick();
+                                        } else {
+                                            tasksAccess.showUpgradePrompt("Access your task list and track progress across sessions.");
+                                        }
+                                    })}
                                     variant="ghost"
                                     size="lg"
                                     className="w-full justify-start h-12 text-foreground hover:text-foreground hover:bg-accent rounded-xl transition-all duration-200"
                                 >
                                     <Target className="w-5 h-5 mr-4" />
                                     <span className="font-medium">Tasks</span>
+                                    {!tasksAccess.canAccess && (
+                                        <span className="ml-auto text-xs opacity-60">*</span>
+                                    )}
                                 </Button>
 
                                 <Button
-                                    onClick={() => handleMenuItemClick(onBreakRemindersClick)}
+                                    onClick={() => handleMenuItemClick(() => {
+                                        if (breakRemindersAccess.canAccess) {
+                                            onBreakRemindersClick();
+                                        } else {
+                                            breakRemindersAccess.showUpgradePrompt("Create custom break reminders and track healthy habits.");
+                                        }
+                                    })}
                                     variant="ghost"
                                     size="lg"
                                     className="w-full justify-start h-12 text-foreground hover:text-foreground hover:bg-accent rounded-xl transition-all duration-200"
                                 >
                                     <Coffee className="w-5 h-5 mr-4" />
                                     <span className="font-medium">Break Reminders</span>
+                                    {!breakRemindersAccess.canAccess && (
+                                        <span className="ml-auto text-xs opacity-60">*</span>
+                                    )}
                                 </Button>
 
                                 <Button
-                                    onClick={() => handleMenuItemClick(onStatsClick)}
+                                    onClick={() => handleMenuItemClick(() => {
+                                        if (statisticsAccess.canAccess) {
+                                            onStatsClick();
+                                        } else {
+                                            statisticsAccess.showUpgradePrompt("View detailed productivity analytics and insights.");
+                                        }
+                                    })}
                                     variant="ghost"
                                     size="lg"
                                     className="w-full justify-start h-12 text-foreground hover:text-foreground hover:bg-accent rounded-xl transition-all duration-200"
                                 >
                                     <BarChart3 className="w-5 h-5 mr-4" />
                                     <span className="font-medium">Report</span>
+                                    {!statisticsAccess.canAccess && (
+                                        <span className="ml-auto text-xs opacity-60">*</span>
+                                    )}
                                 </Button>
 
                                 <Button
@@ -185,7 +205,7 @@ export function MobileMenu({ onAuthClick, onSettingsClick, onStatsClick, onTasks
                             ) : (
                                 <div className="space-y-2">
                                     <Button
-                                        onClick={() => handleMenuItemClick(onAuthClick)}
+                                        onClick={() => handleMenuItemClick(() => window.location.href = '/auth/signin')}
                                         size="lg"
                                         className="w-full justify-start h-12 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl"
                                     >
@@ -194,7 +214,7 @@ export function MobileMenu({ onAuthClick, onSettingsClick, onStatsClick, onTasks
                                     </Button>
 
                                     <Button
-                                        onClick={() => handleMenuItemClick(onAuthClick)}
+                                        onClick={() => handleMenuItemClick(() => window.location.href = '/auth/signup')}
                                         variant="outline"
                                         size="lg"
                                         className="w-full justify-start h-12 border-red-200 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20 rounded-xl transition-all duration-200"

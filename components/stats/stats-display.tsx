@@ -4,1014 +4,1024 @@ import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Clock, Target, CheckCircle, Flame, TrendingUp, Calendar, ChevronLeft, ChevronRight, BarChart3, Coffee, Activity } from 'lucide-react';
-import { LocalStorage, DailyStats, WeeklyStats, MonthlyStats } from '@/lib/storage';
-import { StatisticsEngine, AccurateStatistics } from '@/lib/statistics-engine';
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, PieChart, Pie, Cell, ResponsiveContainer, Area, AreaChart } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LineChart, Line } from 'recharts';
+import {
+    Clock,
+    Target,
+    CheckCircle,
+    Flame,
+    TrendingUp,
+    Calendar as CalendarIcon,
+    ChevronLeft,
+    ChevronRight,
+    BarChart3,
+    Activity,
+    Coffee
+} from 'lucide-react';
+import { LocalStorage, Task, TodaysStats } from '@/lib/storage';
+import { FeatureGate } from '@/components/auth/feature-gate';
+import { useAuth } from '@/lib/auth-context';
+import { FirebaseService } from '@/lib/firebase-service';
+import { AdvancedStorageService } from '@/lib/advanced-storage-service';
 
-// Chart configurations
-const chartConfig = {
-  sessions: {
-    label: "Sessions",
-    color: "hsl(var(--chart-1))",
-  },
-  focusTime: {
-    label: "Focus Time",
-    color: "hsl(var(--chart-2))",
-  },
-  tasks: {
-    label: "Tasks",
-    color: "hsl(var(--chart-3))",
-  },
-  breakReminders: {
-    label: "Break Reminders",
-    color: "hsl(var(--chart-4))",
-  },
-  workSessions: {
-    label: "Work Sessions",
-    color: "#ef4444",
-  },
-  shortBreaks: {
-    label: "Short Breaks",
-    color: "#3b82f6",
-  },
-  longBreaks: {
-    label: "Long Breaks",
-    color: "#10b981",
-  },
-  completed: {
-    label: "Completed",
-    color: "#10b981",
-  },
-  shown: {
-    label: "Shown",
-    color: "#f59e0b",
-  },
-};
+interface BreakReminderStats {
+    id: string;
+    title: string;
+    completionCount: number;
+    todayCount: number;
+}
 
 export function StatsDisplay() {
-  const [todayStats, setTodayStats] = useState<DailyStats>({
-    sessions: 0,
-    focusTime: 0,
-    tasksCompleted: 0,
-    streak: 0,
-    date: new Date().toDateString(),
-    workSessions: 0,
-    shortBreakSessions: 0,
-    longBreakSessions: 0,
-    breakRemindersShown: 0,
-    breakRemindersCompleted: 0
-  });
+    const { user } = useAuth();
+    const [activeTab, setActiveTab] = useState<'today' | 'week' | 'month' | 'calendar'>('today');
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+    const [storageService, setStorageService] = useState<AdvancedStorageService | null>(null);
 
-  const [weeklyStats, setWeeklyStats] = useState<WeeklyStats | null>(null);
-  const [monthlyStats, setMonthlyStats] = useState<MonthlyStats | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [activeTab, setActiveTab] = useState('today');
-
-
-
-  // Task detail modal state
-  const [selectedDayTasks, setSelectedDayTasks] = useState<{ date: string, tasks: any[] } | null>(null);
-
-  useEffect(() => {
-    loadStats();
-
-    // Listen for session and task completion events to update stats
-    const handleStatsUpdate = () => {
-      loadStats();
-    };
-
-    window.addEventListener('sessionCompleted', handleStatsUpdate);
-    window.addEventListener('taskCompleted', handleStatsUpdate);
-    window.addEventListener('taskSessionCompleted', handleStatsUpdate);
-    window.addEventListener('firebaseDataSynced', handleStatsUpdate);
-
-    return () => {
-      window.removeEventListener('sessionCompleted', handleStatsUpdate);
-      window.removeEventListener('taskCompleted', handleStatsUpdate);
-      window.removeEventListener('taskSessionCompleted', handleStatsUpdate);
-      window.removeEventListener('firebaseDataSynced', handleStatsUpdate);
-    };
-  }, [selectedDate]);
-
-  const loadStats = () => {
-    // Use local storage for statistics
-    const sessions = LocalStorage.getAllSessions();
-    const tasks = LocalStorage.getTasks();
-
-    // Today's stats - use accurate calculation
-    const today = new Date().toISOString().split('T')[0];
-    const accurateToday = StatisticsEngine.calculateDailyStats(sessions, tasks, today);
-
-    // Add accurate streak calculation
-    const allDailyStats: DailyStats[] = [];
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(thirtyDaysAgo);
-      date.setDate(thirtyDaysAgo.getDate() + i);
-      const dateString = date.toISOString().split('T')[0];
-      const dayStats = StatisticsEngine.calculateDailyStats(sessions, tasks, dateString);
-      allDailyStats.push(dayStats);
-    }
-
-    const accurateStreak = StatisticsEngine.calculateStreakCount(allDailyStats);
-    accurateToday.streak = accurateStreak;
-
-    setTodayStats(accurateToday);
-
-    // Weekly stats - use accurate calculation with Monday start
-    const currentWeeklyStats = StatisticsEngine.calculateWeeklyStats(sessions, tasks, selectedDate);
-    setWeeklyStats(currentWeeklyStats);
-
-    // Monthly stats - fallback to original for now
-    const currentMonthlyStats = LocalStorage.getMonthlyStats(
-      selectedDate.getFullYear(),
-      selectedDate.getMonth() + 1
-    );
-    setMonthlyStats(currentMonthlyStats);
-
-
-  };
-
-  const formatTime = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    if (hours > 0) {
-      return `${hours}h ${mins}m`;
-    }
-    return `${mins}m`;
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  const navigateWeek = (direction: 'prev' | 'next') => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(selectedDate.getDate() + (direction === 'next' ? 7 : -7));
-    setSelectedDate(newDate);
-  };
-
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    const newDate = new Date(selectedDate);
-    newDate.setMonth(selectedDate.getMonth() + (direction === 'next' ? 1 : -1));
-    setSelectedDate(newDate);
-  };
-
-  const getMotivationalMessage = (sessions: number, dailyGoal: number) => {
-    if (sessions === 0) return "Ready to start your first session?";
-    if (sessions >= dailyGoal) return "🎯 Daily goal achieved! Outstanding work! 🏆";
-    if (sessions >= dailyGoal * 0.75) return "Almost there! You're doing great! 💪";
-    if (sessions >= dailyGoal * 0.5) return "Halfway to your goal! Keep it up! 🔥";
-    if (sessions >= dailyGoal * 0.25) return "Good progress! You're on fire! 🚀";
-    return "Great start! Let's keep going! 🚀";
-  };
-
-  // Chart data preparation functions
-  const prepareWeeklyChartData = () => {
-    if (!weeklyStats) return [];
-
-    return weeklyStats.dailyBreakdown.map(day => ({
-      date: formatDate(day.date),
-      sessions: day.sessions,
-      focusTime: Math.round(day.focusTime),
-      tasks: day.tasksCompleted,
-      workSessions: day.workSessions || 0,
-      shortBreaks: day.shortBreakSessions || 0,
-      longBreaks: day.longBreakSessions || 0,
-      breakRemindersCompleted: day.breakRemindersCompleted || 0,
-      breakRemindersShown: day.breakRemindersShown || 0,
-    }));
-  };
-
-  const prepareMonthlyChartData = () => {
-    if (!monthlyStats) return [];
-
-    // Group by weeks for monthly view
-    const weeklyData = [];
-    const dailyData = monthlyStats.dailyBreakdown;
-
-    for (let i = 0; i < dailyData.length; i += 7) {
-      const weekData = dailyData.slice(i, i + 7);
-      const weekStart = weekData[0]?.date;
-      const weekEnd = weekData[weekData.length - 1]?.date;
-
-      if (weekStart) {
-        weeklyData.push({
-          week: `${formatDate(weekStart)} - ${formatDate(weekEnd)}`,
-          sessions: weekData.reduce((sum, day) => sum + day.sessions, 0),
-          focusTime: weekData.reduce((sum, day) => sum + day.focusTime, 0),
-          tasks: weekData.reduce((sum, day) => sum + day.tasksCompleted, 0),
-          breakRemindersCompleted: weekData.reduce((sum, day) => sum + (day.breakRemindersCompleted || 0), 0),
-        });
-      }
-    }
-
-    return weeklyData;
-  };
-
-  const prepareSessionTypeData = () => {
-    if (!todayStats) return [];
-
-    return [
-      { name: 'Work Sessions', value: todayStats.workSessions || 0, color: '#ef4444' },
-      { name: 'Short Breaks', value: todayStats.shortBreakSessions || 0, color: '#3b82f6' },
-      { name: 'Long Breaks', value: todayStats.longBreakSessions || 0, color: '#10b981' },
-    ].filter(item => item.value > 0);
-  };
-
-
-
-  const prepareCalendarData = () => {
-    const today = new Date();
-    const currentMonth = selectedDate.getMonth();
-    const currentYear = selectedDate.getFullYear();
-
-    // Get tasks for calendar display
-    const tasks = LocalStorage.getTasks();
-    const upcomingTasks = tasks.filter(task => {
-      if (task.completed || task.archivedAt) return false;
-
-      // Regular tasks
-      if (!task.recurring && !task.spacedRepetition) return true;
-
-      // Recurring tasks
-      if (task.recurring?.enabled) {
-        const nextDue = new Date(task.recurring.nextDue);
-        return nextDue.getMonth() === currentMonth && nextDue.getFullYear() === currentYear;
-      }
-
-      // Spaced repetition tasks
-      if (task.spacedRepetition?.enabled) {
-        const nextReview = new Date(task.spacedRepetition.nextReviewDate);
-        return nextReview.getMonth() === currentMonth && nextReview.getFullYear() === currentYear;
-      }
-
-      return false;
+    // Stats data
+    const [todayStats, setTodayStats] = useState<TodaysStats>({
+        sessions: 0,
+        focusTime: 0,
+        date: new Date().toISOString().split('T')[0],
+        workSessions: 0,
+        shortBreakSessions: 0,
+        longBreakSessions: 0,
+        tasksCompleted: 0,
+        streak: 0,
+        breakRemindersShown: 0,
+        breakRemindersCompleted: 0
     });
 
-    // Create proper calendar grid with all days of the month
-    const firstDay = new Date(currentYear, currentMonth, 1);
-    const lastDay = new Date(currentYear, currentMonth + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
+    const [weeklyStats, setWeeklyStats] = useState<TodaysStats[]>([]);
+    const [monthlyStats, setMonthlyStats] = useState<TodaysStats[]>([]);
+    const [tasks, setTasks] = useState<Task[]>([]);
+    const [breakReminders, setBreakReminders] = useState<any[]>([]);
+    const [breakReminderCompletions, setBreakReminderCompletions] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-
-
-    const calendarDays = [];
-
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      calendarDays.push(null);
-    }
-
-    // Add all days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      const currentDate = new Date(currentYear, currentMonth, day);
-      const dateString = currentDate.toISOString().split('T')[0];
-
-      // Get day stats from storage
-      const dayStats = LocalStorage.getDailyStats(dateString);
-
-      const dayTasks = upcomingTasks.filter(task => {
-        if (task.recurring?.enabled) {
-          const nextDue = new Date(task.recurring.nextDue);
-          return nextDue.toDateString() === currentDate.toDateString();
+    useEffect(() => {
+        if (user) {
+            const service = new AdvancedStorageService(user);
+            setStorageService(service);
+        } else {
+            setStorageService(null);
         }
-        if (task.spacedRepetition?.enabled) {
-          const nextReview = new Date(task.spacedRepetition.nextReviewDate);
-          return nextReview.toDateString() === currentDate.toDateString();
-        }
-        return false;
-      });
+    }, [user]);
 
-      calendarDays.push({
-        ...dayStats,
-        tasks: dayTasks,
-        isToday: currentDate.toDateString() === today.toDateString(),
-        isPast: currentDate < today,
-        dayNumber: day
-      });
-    }
+    useEffect(() => {
+        loadAllStats();
+    }, [user, currentDate, storageService]);
 
-    // Ensure we have enough cells to fill complete weeks (42 cells total for 6 weeks)
-    const totalCells = 42;
-    while (calendarDays.length < totalCells) {
-      calendarDays.push(null);
-    }
+    const loadAllStats = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            if (user && storageService) {
+                // Calculate date ranges
+                const today = new Date();
+                const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+                const todayEnd = todayStart + (24 * 60 * 60 * 1000) - 1;
 
+                const weekStart = new Date(today);
+                weekStart.setDate(today.getDate() - 6);
+                weekStart.setHours(0, 0, 0, 0);
 
+                const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+                const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    return calendarDays;
-  };
+                // Load Firebase data using AdvancedStorageService
+                const [
+                    ,
+                    ,
+                    ,
+                    tasksData,
+                    breakRemindersData,
+                    breakCompletionsData
+                ] = await Promise.all([
+                    storageService.getStatistics({ start: todayStart, end: todayEnd }),
+                    storageService.getStatistics({ start: weekStart.getTime(), end: todayEnd }),
+                    storageService.getStatistics({ start: monthStart.getTime(), end: monthEnd.getTime() }),
+                    storageService.getTasks(),
+                    storageService.getBreakReminders(),
+                    storageService.getBreakReminderCompletions()
+                ]);
 
-  const StatCard = ({ title, value, icon: Icon, color, bgColor, borderColor, description }: any) => (
-    <div className={`p-4 rounded-xl border transition-all duration-200 hover:shadow-md hover:scale-105 ${bgColor} ${borderColor}`}>
-      <div className="flex items-center gap-4">
-        <div className={`p-3 rounded-full bg-white dark:bg-gray-900/20 shadow-xs ring-1 ring-white/20 dark:ring-gray-700/50`}>
-          <Icon className={`w-5 h-5 ${color}`} />
-        </div>
-        <div className="flex-1">
-          <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{value}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-500">{description}</p>
-        </div>
-      </div>
-    </div>
-  );
+                // Get sessions for detailed stats
+                const sessions = await FirebaseService.getRecentSessions(user, 100);
 
-  return (
-    <div className="space-y-6">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="today">Today</TabsTrigger>
-          <TabsTrigger value="week">This Week</TabsTrigger>
-          <TabsTrigger value="month">This Month</TabsTrigger>
-        </TabsList>
+                // Calculate today's detailed stats
+                const todaySessions = sessions.filter(s => {
+                    const sessionDate = new Date(s.timestamp);
+                    const sessionStart = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate()).getTime();
+                    return sessionStart === todayStart;
+                });
 
-        {/* Today Tab */}
-        <TabsContent value="today" className="space-y-6">
-          {/* Today's Overview - Full Width */}
-          <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                  <TrendingUp className="w-5 h-5 text-red-600 dark:text-red-400" />
-                  Today's Progress
-                </h2>
-                <Badge variant="secondary" className="text-xs">
-                  {new Date().toLocaleDateString('en-US', {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric'
-                  })}
-                </Badge>
-              </div>
+                const todayWorkSessions = todaySessions.filter(s => s.type === 'work').length;
+                const todayFocusTime = todaySessions.filter(s => s.type === 'work').reduce((sum, s) => {
+                    // Ensure duration is a valid number and in minutes
+                    let duration = typeof s.duration === 'number' ? s.duration : 0;
 
-              <div className="grid grid-cols-2 gap-4">
-                <StatCard
-                  title="Sessions Today"
-                  value={todayStats.sessions}
-                  icon={Target}
-                  color="text-red-600 dark:text-red-400"
-                  bgColor="bg-red-50 dark:bg-red-900/20"
-                  borderColor="border-red-200 dark:border-red-800"
-                  description="Pomodoros completed"
-                />
-                <StatCard
-                  title="Focus Time"
-                  value={formatTime(todayStats.focusTime)}
-                  icon={Clock}
-                  color="text-orange-600 dark:text-orange-400"
-                  bgColor="bg-orange-50 dark:bg-orange-900/20"
-                  borderColor="border-orange-200 dark:border-orange-800"
-                  description="Deep work time"
-                />
-                <StatCard
-                  title="Tasks Done"
-                  value={todayStats.tasksCompleted}
-                  icon={CheckCircle}
-                  color="text-pink-600 dark:text-red-400"
-                  bgColor="bg-pink-50 dark:bg-pink-900/20"
-                  borderColor="border-pink-200 dark:border-red-800"
-                  description="Completed today"
-                />
-                <StatCard
-                  title="Current Streak"
-                  value={todayStats.streak}
-                  icon={Flame}
-                  color="text-orange-600 dark:text-orange-400"
-                  bgColor="bg-orange-50 dark:bg-orange-900/20"
-                  borderColor="border-orange-200 dark:border-orange-800"
-                  description="Consecutive active days"
-                />
-              </div>
-
-              {/* Progress Bar */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Session Progress</span>
-                  <span>{todayStats.sessions} / {LocalStorage.getSettings().dailySessionGoal} sessions completed</span>
-                </div>
-                <div className="w-full bg-accent rounded-full h-2">
-                  <div
-                    className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min((todayStats.sessions / (LocalStorage.getSettings().dailySessionGoal || 4)) * 100, 100)}%` }}
-                  ></div>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-medium text-foreground">
-                    {todayStats.sessions >= LocalStorage.getSettings().dailySessionGoal
-                      ? "🎯 Daily goal achieved! Outstanding work! 🏆"
-                      : todayStats.sessions === 0
-                        ? "Ready to start your first session?"
-                        : `${LocalStorage.getSettings().dailySessionGoal - todayStats.sessions} more sessions to reach your daily goal! 🚀`
+                    // Fix: If duration seems to be in seconds (> 60 for a typical session), convert to minutes
+                    if (duration > 60) {
+                        duration = Math.round(duration / 60);
                     }
-                  </p>
-                </div>
-              </div>
 
-              {/* Additional Stats */}
-              <div className="pt-4 border-t border-accent">
-                <div className="text-center">
-                  {todayStats.sessions > 0 && (
-                    <div className="flex justify-center gap-4 text-xs text-muted-foreground">
-                      <span>Average: {Math.round((todayStats.focusTime / Math.max(todayStats.sessions, 1)) * 10) / 10}m per session</span>
-                      {todayStats.sessions >= LocalStorage.getSettings().dailySessionGoal && (
-                        <span>🎯 Goal achieved!</span>
-                      )}
-                    </div>
-                  )}
+                    return sum + duration;
+                }, 0);
+
+
+
+                // Calculate tasks completed today
+                const todayTasksCompleted = tasksData.filter(task => {
+                    if (task.completedAt && task.completedAt >= todayStart && task.completedAt <= todayEnd) return true;
+                    if (task.recurring?.lastCompleted && task.recurring.lastCompleted >= todayStart && task.recurring.lastCompleted <= todayEnd) return true;
+                    if (task.spacedRepetition?.lastReviewed && task.spacedRepetition.lastReviewed >= todayStart && task.spacedRepetition.lastReviewed <= todayEnd) return true;
+                    return false;
+                }).length;
+
+                // Calculate break reminder completions today
+                const todayBreakCompletions = breakCompletionsData.filter(completion =>
+                    completion.completedAt >= todayStart && completion.completedAt <= todayEnd
+                ).length;
+
+                // Calculate streak
+                const calculateStreak = (sessions: any[]) => {
+                    let streak = 0;
+                    const today = new Date();
+
+                    for (let i = 0; i < 365; i++) { // Check up to a year back
+                        const checkDate = new Date(today);
+                        checkDate.setDate(today.getDate() - i);
+                        checkDate.setHours(0, 0, 0, 0);
+
+                        const dayStart = checkDate.getTime();
+                        const dayEnd = dayStart + (24 * 60 * 60 * 1000) - 1;
+
+                        const dayHasSessions = sessions.some(s => {
+                            const sessionDate = new Date(s.timestamp);
+                            sessionDate.setHours(0, 0, 0, 0);
+                            return sessionDate.getTime() === dayStart && s.type === 'work';
+                        });
+
+                        if (dayHasSessions) {
+                            streak++;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    return streak;
+                };
+
+                const todayStatsFormatted: TodaysStats = {
+                    sessions: todayWorkSessions,
+                    focusTime: todayFocusTime,
+                    date: today.toISOString().split('T')[0],
+                    workSessions: todayWorkSessions,
+                    shortBreakSessions: todaySessions.filter(s => s.type === 'short-break').length,
+                    longBreakSessions: todaySessions.filter(s => s.type === 'long-break').length,
+                    tasksCompleted: todayTasksCompleted,
+                    streak: calculateStreak(sessions),
+                    breakRemindersShown: 0,
+                    breakRemindersCompleted: todayBreakCompletions
+                };
+
+                // Generate weekly stats array
+                const weeklyStatsArray: TodaysStats[] = [];
+                for (let i = 6; i >= 0; i--) {
+                    const date = new Date(today);
+                    date.setDate(today.getDate() - i);
+                    const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+                    const dayEnd = dayStart + (24 * 60 * 60 * 1000) - 1;
+
+                    const daySessions = sessions.filter(s => {
+                        const sessionDate = new Date(s.timestamp);
+                        const sessionStart = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate()).getTime();
+                        return sessionStart === dayStart;
+                    });
+
+                    const dayWorkSessions = daySessions.filter(s => s.type === 'work').length;
+                    const dayFocusTime = daySessions.filter(s => s.type === 'work').reduce((sum, s) => {
+                        let duration = typeof s.duration === 'number' ? s.duration : 0;
+                        // Fix: If duration seems to be in seconds, convert to minutes
+                        if (duration > 60) {
+                            duration = Math.round(duration / 60);
+                        }
+                        return sum + duration;
+                    }, 0);
+
+                    const dayTasksCompleted = tasksData.filter(task => {
+                        if (task.completedAt && task.completedAt >= dayStart && task.completedAt <= dayEnd) return true;
+                        if (task.recurring?.lastCompleted && task.recurring.lastCompleted >= dayStart && task.recurring.lastCompleted <= dayEnd) return true;
+                        if (task.spacedRepetition?.lastReviewed && task.spacedRepetition.lastReviewed >= dayStart && task.spacedRepetition.lastReviewed <= dayEnd) return true;
+                        return false;
+                    }).length;
+
+                    weeklyStatsArray.push({
+                        sessions: dayWorkSessions,
+                        focusTime: dayFocusTime,
+                        date: date.toISOString().split('T')[0],
+                        workSessions: dayWorkSessions,
+                        shortBreakSessions: daySessions.filter(s => s.type === 'short-break').length,
+                        longBreakSessions: daySessions.filter(s => s.type === 'long-break').length,
+                        tasksCompleted: dayTasksCompleted,
+                        streak: 0,
+                        breakRemindersShown: 0,
+                        breakRemindersCompleted: breakCompletionsData.filter(completion =>
+                            completion.completedAt >= dayStart && completion.completedAt <= dayEnd
+                        ).length
+                    });
+                }
+
+                // Generate monthly stats (similar logic for the month)
+                const monthlyStatsArray: TodaysStats[] = [];
+                const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+                    const dayStart = date.getTime();
+                    const dayEnd = dayStart + (24 * 60 * 60 * 1000) - 1;
+
+                    const daySessions = sessions.filter(s => {
+                        const sessionDate = new Date(s.timestamp);
+                        const sessionStart = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate()).getTime();
+                        return sessionStart === dayStart;
+                    });
+
+                    const dayWorkSessions = daySessions.filter(s => s.type === 'work').length;
+                    const dayFocusTime = daySessions.filter(s => s.type === 'work').reduce((sum, s) => {
+                        let duration = typeof s.duration === 'number' ? s.duration : 0;
+                        // Fix: If duration seems to be in seconds, convert to minutes
+                        if (duration > 60) {
+                            duration = Math.round(duration / 60);
+                        }
+                        return sum + duration;
+                    }, 0);
+
+                    const dayTasksCompleted = tasksData.filter(task => {
+                        if (task.completedAt && task.completedAt >= dayStart && task.completedAt <= dayEnd) return true;
+                        if (task.recurring?.lastCompleted && task.recurring.lastCompleted >= dayStart && task.recurring.lastCompleted <= dayEnd) return true;
+                        if (task.spacedRepetition?.lastReviewed && task.spacedRepetition.lastReviewed >= dayStart && task.spacedRepetition.lastReviewed <= dayEnd) return true;
+                        return false;
+                    }).length;
+
+                    monthlyStatsArray.push({
+                        sessions: dayWorkSessions,
+                        focusTime: dayFocusTime,
+                        date: date.toISOString().split('T')[0],
+                        workSessions: dayWorkSessions,
+                        shortBreakSessions: daySessions.filter(s => s.type === 'short-break').length,
+                        longBreakSessions: daySessions.filter(s => s.type === 'long-break').length,
+                        tasksCompleted: dayTasksCompleted,
+                        streak: 0,
+                        breakRemindersShown: 0,
+                        breakRemindersCompleted: breakCompletionsData.filter(completion =>
+                            completion.completedAt >= dayStart && completion.completedAt <= dayEnd
+                        ).length
+                    });
+                }
+
+                setTodayStats(todayStatsFormatted);
+                setWeeklyStats(weeklyStatsArray);
+                setMonthlyStats(monthlyStatsArray);
+                setTasks(tasksData);
+                setBreakReminders(breakRemindersData);
+                setBreakReminderCompletions(breakCompletionsData);
+            } else {
+                // Load localStorage data for unauthenticated users
+                const today = new Date().toISOString().split('T')[0];
+                const stats = LocalStorage.getDailyStats(today);
+                setTodayStats(stats);
+                setWeeklyStats([]);
+                setMonthlyStats([]);
+                setTasks([]);
+                setBreakReminders([]);
+                setBreakReminderCompletions([]);
+            }
+        } catch (error) {
+            console.error('Error loading stats:', error);
+            setError('Failed to load statistics. Please try refreshing the page.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        const handleStatsUpdate = () => {
+            loadAllStats();
+        };
+
+        window.addEventListener('sessionCompleted', handleStatsUpdate);
+        window.addEventListener('taskCompleted', handleStatsUpdate);
+        window.addEventListener('breakReminderCompleted', handleStatsUpdate);
+
+        return () => {
+            window.removeEventListener('sessionCompleted', handleStatsUpdate);
+            window.removeEventListener('taskCompleted', handleStatsUpdate);
+            window.removeEventListener('breakReminderCompleted', handleStatsUpdate);
+        };
+    }, [user]);
+
+    const formatTime = (minutes: number) => {
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        if (hours > 0) {
+            return `${hours}h ${mins}m`;
+        }
+        return `${mins}m`;
+    };
+
+    const navigateMonth = (direction: 'prev' | 'next') => {
+        const newDate = new Date(currentDate);
+        if (direction === 'prev') {
+            newDate.setMonth(newDate.getMonth() - 1);
+        } else {
+            newDate.setMonth(newDate.getMonth() + 1);
+        }
+        setCurrentDate(newDate);
+    };
+
+    const getBreakReminderStats = (): BreakReminderStats[] => {
+        if (!user) return [];
+
+        const today = new Date().toISOString().split('T')[0];
+
+        return breakReminders.map(reminder => {
+            const allCompletions = breakReminderCompletions.filter(
+                completion => completion.reminderId === reminder.id
+            );
+
+            const todayCompletions = allCompletions.filter(
+                completion => completion.date === today
+            );
+
+            return {
+                id: reminder.id,
+                title: reminder.title,
+                completionCount: allCompletions.length,
+                todayCount: todayCompletions.length
+            };
+        });
+    };
+
+    const getTasksForDate = (date: Date) => {
+        const checkDate = new Date(date);
+        checkDate.setHours(0, 0, 0, 0);
+
+        return tasks.filter(task => {
+            // Completed tasks on this date
+            if (task.completedAt) {
+                const completedDate = new Date(task.completedAt);
+                completedDate.setHours(0, 0, 0, 0);
+                if (completedDate.getTime() === checkDate.getTime()) return true;
+            }
+
+            // Due tasks (spaced repetition)
+            if (task.spacedRepetition?.nextReviewDate) {
+                const dueDate = new Date(task.spacedRepetition.nextReviewDate);
+                dueDate.setHours(0, 0, 0, 0);
+                if (dueDate.getTime() === checkDate.getTime()) return true;
+            }
+
+            // Recurring tasks - check if they should appear on this date
+            if (task.recurring?.enabled) {
+                const pattern = task.recurring.pattern;
+                const dayOfWeek = checkDate.getDay();
+
+                switch (pattern) {
+                    case 'daily':
+                        return true; // Daily tasks appear every day
+                    case 'weekdays':
+                        return dayOfWeek !== 0 && dayOfWeek !== 6; // Monday-Friday
+                    case 'weekly':
+                        // Check if it's the same day of week as the original
+                        const originalDate = new Date(task.createdAt);
+                        return dayOfWeek === originalDate.getDay();
+                    case 'specific-days':
+                        return task.recurring.daysOfWeek?.includes(dayOfWeek) || false;
+                    default:
+                        return false;
+                }
+            }
+
+            return false;
+        });
+    };
+
+    const getStatsForPeriod = (period: 'week' | 'month') => {
+        const stats = period === 'week' ? weeklyStats : monthlyStats;
+
+        const totalSessions = stats.reduce((sum, stat) => sum + stat.sessions, 0);
+        const totalFocusTime = stats.reduce((sum, stat) => sum + stat.focusTime, 0);
+        const totalTasksCompleted = stats.reduce((sum, stat) => sum + stat.tasksCompleted, 0);
+        const activeDays = stats.filter(stat => stat.sessions > 0).length;
+
+        return {
+            totalSessions,
+            totalFocusTime,
+            totalTasksCompleted,
+            activeDays,
+            averageSessionsPerDay: activeDays > 0 ? Math.round(totalSessions / activeDays) : 0
+        };
+    };
+
+    const StatCard = ({ title, value, icon: Icon, color, description, trend }: any) => (
+        <div className="p-4 rounded-xl border bg-background hover:bg-accent/50 transition-all duration-200 hover:shadow-md">
+            <div className="flex items-center gap-4">
+                <div className="p-3 rounded-full bg-accent/20">
+                    <Icon className={`w-5 h-5 ${color}`} />
                 </div>
-              </div>
+                <div className="flex-1">
+                    <p className="text-sm font-medium text-muted-foreground">{title}</p>
+                    <p className="text-2xl font-bold text-foreground">{value}</p>
+                    <p className="text-xs text-muted-foreground">{description}</p>
+                    {trend && (
+                        <p className="text-xs text-muted-foreground mt-1">{trend}</p>
+                    )}
+                </div>
             </div>
-          </Card>
+        </div>
+    );
 
-          {/* Session Breakdown - New Row */}
-          <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
+    const DailyActivityChart = ({ stats, title }: { stats: TodaysStats[], title: string }) => {
+        const maxSessions = Math.max(...stats.map(s => s.sessions), 1);
+        const isWeekly = title.includes('Weekly');
+        const displayStats = isWeekly ? stats.slice(-7) : stats; // Show all days for monthly, last 7 for weekly
+
+        return (
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                <Activity className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                Session Breakdown
-              </h3>
-
-              {prepareSessionTypeData().length > 0 ? (
-                <ChartContainer config={chartConfig} className="aspect-square max-h-[250px] w-full">
-                  <PieChart>
-                    <Pie
-                      data={prepareSessionTypeData()}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={40}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {prepareSessionTypeData().map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <ChartLegend content={<ChartLegendContent />} />
-                  </PieChart>
-                </ChartContainer>
-              ) : (
-                <div className="h-[200px] flex items-center justify-center text-gray-500 dark:text-gray-400">
-                  <div className="text-center">
-                    <Activity className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>No sessions completed today</p>
-                    <p className="text-sm">Start your first session to see the breakdown</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* Break Reminder Completion - Today Only */}
-          {todayStats.breakRemindersShown > 0 && (
-            <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                  <Coffee className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                  Today's Break Reminder Completion
+                <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5" />
+                    {title}
                 </h3>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Summary Stats */}
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                        <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                          {todayStats.breakRemindersCompleted}
-                        </div>
-                        <div className="text-sm text-red-700 dark:text-red-300">Completed</div>
-                      </div>
-                      <div className="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                        <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                          {todayStats.breakRemindersShown > 0 ? Math.round((todayStats.breakRemindersCompleted / todayStats.breakRemindersShown) * 100) : 0}%
-                        </div>
-                        <div className="text-sm text-orange-700 dark:text-orange-300">Completion Rate</div>
-                      </div>
-                    </div>
-                    <div className="text-xs text-muted-foreground text-center">
-                      {todayStats.breakRemindersShown} reminders shown today
-                    </div>
-                  </div>
-
-                  {/* Today's Completed Reminders */}
-                  <div className="space-y-3">
-
-                    <div className="space-y-2 max-h-32 overflow-y-auto">
-                      {(() => {
-                        // Get today's break reminder completions
-                        const today = new Date().toISOString().split('T')[0];
-                        const todayStart = new Date(today).getTime();
-                        const todayEnd = todayStart + (24 * 60 * 60 * 1000) - 1;
-
-                        const completions = LocalStorage.getBreakReminderCompletions().filter(c =>
-                          c.completedAt >= todayStart && c.completedAt <= todayEnd
-                        );
-
-                        const reminders = LocalStorage.getBreakReminders();
-
-                        if (completions.length === 0) {
-                          return (
-                            <div className="text-xs text-muted-foreground italic">
-                              No reminders completed yet today
-                            </div>
-                          );
-                        }
-
-                        // Group completions by reminder
-                        const completionsByReminder = completions.reduce((acc, completion) => {
-                          const reminder = reminders.find(r => r.id === completion.reminderId);
-                          if (reminder) {
-                            const key = reminder.id;
-                            if (!acc[key]) {
-                              acc[key] = {
-                                reminder,
-                                count: 0,
-                                times: []
-                              };
-                            }
-                            acc[key].count++;
-                            acc[key].times.push(new Date(completion.completedAt));
-                          }
-                          return acc;
-                        }, {} as Record<string, { reminder: any; count: number; times: Date[] }>);
-
-                        return Object.values(completionsByReminder).map(({ reminder, count, times }) => (
-                          <div key={reminder.id} className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                            <span className="text-sm">
-                              {(() => {
-                                const categories = LocalStorage.getBreakReminderCategories();
-                                if (reminder.customCategory) {
-                                  const customCat = categories.find(c => c.id === reminder.customCategory);
-                                  return customCat?.icon || '📝';
-                                }
-                                switch (reminder.category) {
-                                  case 'hydration': return '💧';
-                                  case 'movement': return '🚶';
-                                  case 'rest': return '😌';
-                                  default: return '📝';
-                                }
-                              })()}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs font-medium text-foreground truncate">
-                                {reminder.title}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {count} time{count > 1 ? 's' : ''}
-                              </div>
-                            </div>
-                          </div>
-                        ));
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* Week Tab */}
-        <TabsContent value="week" className="space-y-6">
-          {/* Week Header */}
-          <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                <Calendar className="w-5 h-5 text-red-600 dark:text-red-400" />
-                Weekly Progress
-              </h2>
-              <div className="flex items-center gap-2 text-sm">
-                <Button variant="outline" size="sm" onClick={() => navigateWeek('prev')}>
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                {weeklyStats && formatDate(weeklyStats.weekStart)} - {weeklyStats && formatDate(weeklyStats.weekEnd)}
-
-                <Button variant="outline" size="sm" onClick={() => navigateWeek('next')}>
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          </Card>
-
-          {weeklyStats && (
-            <>
-              {/* Weekly Summary Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard
-                  title="Total Sessions"
-                  value={weeklyStats?.totalSessions || 0}
-                  icon={Target}
-                  color="text-red-600 dark:text-red-400"
-                  bgColor="bg-red-50 dark:bg-red-900/20"
-                  borderColor="border-red-200 dark:border-red-800"
-                  description="This week"
-                />
-                <StatCard
-                  title="Total Focus Time"
-                  value={formatTime(weeklyStats.totalFocusTime)}
-                  icon={Clock}
-                  color="text-orange-600 dark:text-orange-400"
-                  bgColor="bg-orange-50 dark:bg-orange-900/20"
-                  borderColor="border-orange-200 dark:border-orange-800"
-                  description="Deep work time"
-                />
-                <StatCard
-                  title="Daily Average"
-                  value={Math.round(weeklyStats.averageSessionsPerDay * 10) / 10}
-                  icon={BarChart3}
-                  color="text-purple-600 dark:text-purple-400"
-                  bgColor="bg-purple-50 dark:bg-purple-900/20"
-                  borderColor="border-purple-200 dark:border-purple-800"
-                  description="Sessions per day"
-                />
-                <StatCard
-                  title="Best Day"
-                  value={formatDate(weeklyStats.bestDay)}
-                  icon={Flame}
-                  color="text-orange-600 dark:text-orange-400"
-                  bgColor="bg-orange-50 dark:bg-orange-900/20"
-                  borderColor="border-orange-200 dark:border-orange-800"
-                  description="Most productive"
-                />
-              </div>
-
-              {/* Weekly Charts */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Sessions Chart */}
-                <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                      <BarChart3 className="w-5 h-5 text-red-600 dark:text-red-400" />
-                      Daily Sessions
-                    </h3>
-
-                    <ChartContainer config={chartConfig} className="aspect-[4/3] max-h-[300px] w-full">
-                      <BarChart data={prepareWeeklyChartData()}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="date" />
-                        <YAxis />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Bar dataKey="sessions" fill="var(--color-workSessions)" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ChartContainer>
-                  </div>
-                </Card>
-
-                {/* Focus Time Chart */}
-                <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                      <Clock className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                      Daily Focus Time
-                    </h3>
-
-                    <ChartContainer config={chartConfig} className="aspect-[4/3] max-h-[300px] w-full">
-                      <AreaChart data={prepareWeeklyChartData()}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="date" />
-                        <YAxis />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Area
-                          type="monotone"
-                          dataKey="focusTime"
-                          stroke="var(--color-focusTime)"
-                          fill="var(--color-focusTime)"
-                          fillOpacity={0.3}
-                        />
-                      </AreaChart>
-                    </ChartContainer>
-                  </div>
-                </Card>
-              </div>
-
-              {/* Task Completion and Break Reminders */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Task Completion Chart */}
-                <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                      <CheckCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-                      Task Completion
-                    </h3>
-
-                    <ChartContainer config={chartConfig} className="aspect-[4/3] max-h-[250px] w-full">
-                      <LineChart data={prepareWeeklyChartData()}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="date" />
-                        <YAxis />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Line
-                          type="monotone"
-                          dataKey="tasks"
-                          stroke="var(--color-tasks)"
-                          strokeWidth={3}
-                          dot={{ fill: "var(--color-tasks)", strokeWidth: 2, r: 4 }}
-                        />
-                      </LineChart>
-                    </ChartContainer>
-                  </div>
-                </Card>
-
-                {/* Break Reminder Completion */}
-                <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                      <Coffee className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                      Break Reminders
-                    </h3>
-
-                    <ChartContainer config={chartConfig} className="aspect-[4/3] max-h-[250px] w-full">
-                      <BarChart data={prepareWeeklyChartData()}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="date" />
-                        <YAxis />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Bar dataKey="breakRemindersCompleted" fill="var(--color-completed)" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="breakRemindersShown" fill="var(--color-shown)" radius={[4, 4, 0, 0]} opacity={0.5} />
-                      </BarChart>
-                    </ChartContainer>
-                  </div>
-                </Card>
-              </div>
-            </>
-          )}
-        </TabsContent>
-
-        {/* Month Tab */}
-        <TabsContent value="month" className="space-y-6">
-          {/* Month Header */}
-          <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                <Calendar className="w-5 h-5 text-red-600 dark:text-red-400" />
-                Monthly Progress
-              </h2>
-              <div className="flex items-center gap-2 text-sm">
-                <Button variant="outline" size="sm" onClick={() => navigateMonth('prev')}>
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                <Button variant="outline" size="sm" onClick={() => navigateMonth('next')}>
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          </Card>
-
-          {monthlyStats && (
-            <>
-              {/* Monthly Summary Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard
-                  title="Total Sessions"
-                  value={monthlyStats?.totalSessions || 0}
-                  icon={Target}
-                  color="text-red-600 dark:text-red-400"
-                  bgColor="bg-red-50 dark:bg-red-900/20"
-                  borderColor="border-red-200 dark:border-red-800"
-                  description="This month"
-                />
-                <StatCard
-                  title="Total Focus Time"
-                  value={formatTime(monthlyStats.totalFocusTime)}
-                  icon={Clock}
-                  color="text-orange-600 dark:text-orange-400"
-                  bgColor="bg-orange-50 dark:bg-orange-900/20"
-                  borderColor="border-orange-200 dark:border-orange-800"
-                  description="Deep work time"
-                />
-                <StatCard
-                  title="Daily Average"
-                  value={Math.round(monthlyStats.averageSessionsPerDay * 10) / 10}
-                  icon={BarChart3}
-                  color="text-purple-600 dark:text-purple-400"
-                  bgColor="bg-purple-50 dark:bg-purple-900/20"
-                  borderColor="border-purple-200 dark:border-purple-800"
-                  description="Sessions per day"
-                />
-                <StatCard
-                  title="Best Day"
-                  value={formatDate(monthlyStats.bestDay)}
-                  icon={Flame}
-                  color="text-orange-600 dark:text-orange-400"
-                  bgColor="bg-orange-50 dark:bg-orange-900/20"
-                  borderColor="border-orange-200 dark:border-orange-800"
-                  description="Most productive"
-                />
-              </div>
-
-              {/* Monthly Trend Chart */}
-              <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                    <TrendingUp className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                    Weekly Trends
-                  </h3>
-
-                  <ChartContainer config={chartConfig} className="aspect-[4/3] max-h-[300px] w-full">
-                    <AreaChart data={prepareMonthlyChartData()}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="week" />
-                      <YAxis />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Area
-                        type="monotone"
-                        dataKey="sessions"
-                        stackId="1"
-                        stroke="var(--color-workSessions)"
-                        fill="var(--color-workSessions)"
-                        fillOpacity={0.6}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="tasks"
-                        stackId="2"
-                        stroke="var(--color-tasks)"
-                        fill="var(--color-tasks)"
-                        fillOpacity={0.6}
-                      />
-                    </AreaChart>
-                  </ChartContainer>
-                </div>
-              </Card>
-
-              {/* Task Calendar */}
-              <Card className="p-6 bg-white dark:bg-gray-900/20 shadow-lg border-0 ring-1 ring-gray-200/20 dark:ring-gray-700/20">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                    <Calendar className="w-5 h-5 text-red-600 dark:text-red-400" />
-                    Task Calendar
-                  </h3>
-
-                  <div className="space-y-3">
-                    {/* Calendar Header */}
-                    <div className="grid grid-cols-7 gap-1 mb-2">
-                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                        <div key={day} className="text-center text-xs font-medium text-gray-500 dark:text-gray-400 p-2">
-                          {day}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Calendar Grid */}
-                    <div className="grid grid-cols-7 gap-1">
-                      {prepareCalendarData().map((day, index) => {
-                        // Handle empty cells for proper calendar layout
-                        if (!day) {
-                          return <div key={`empty-${index}`} className="min-h-[80px]" />;
-                        }
-
-                        const intensity = Math.min(day.sessions / 8, 1);
-                        const hasUpcomingTasks = day.tasks.length > 0;
+                <div className={`grid gap-1 ${isWeekly ? 'grid-cols-7' : 'grid-cols-7 md:grid-cols-14 lg:grid-cols-21'} overflow-x-auto pb-16`}>
+                    {displayStats.map((stat) => {
+                        const date = new Date(stat.date);
+                        const height = (stat.sessions / maxSessions) * 100;
 
                         return (
-                          <div
-                            key={day.date}
-                            className={`min-h-[80px] rounded-lg p-1 text-xs transition-all duration-200 hover:scale-105 cursor-pointer border ${day.isToday
-                              ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                              : hasUpcomingTasks
-                                ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/20'
-                                : intensity > 0
-                                  ? 'border-red-300 bg-red-50 dark:bg-red-900/20'
-                                  : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50'
-                              }`}
-                            title={`${formatDate(day.date)}: ${day.sessions} sessions, ${day.tasks.map(t => t.title).join(', ')}`}
-                            onClick={() => {
-                              if (day.tasks.length > 2) {
-                                setSelectedDayTasks({
-                                  date: formatDate(day.date),
-                                  tasks: day.tasks
-                                });
-                              }
-                            }}
-                          >
-                            <div className="flex flex-col h-full">
-                              <div className={`font-medium mb-1 ${day.isToday
-                                ? 'text-red-700 dark:text-red-300'
-                                : hasUpcomingTasks
-                                  ? 'text-orange-700 dark:text-orange-300'
-                                  : 'text-gray-700 dark:text-gray-300'
-                                }`}>
-                                {day.dayNumber || new Date(day.date).getDate()}
-                              </div>
-
-                              {/* Session indicator */}
-                              {day.sessions > 0 && (
-                                <div className="mb-1">
-                                  <div className={`w-full h-1 rounded ${intensity > 0.7 ? 'bg-red-600' :
-                                    intensity > 0.4 ? 'bg-red-500' : 'bg-red-400'
-                                    }`} />
+                            <div key={stat.date} className="flex flex-col items-center gap-1 min-w-[2rem]">
+                                <div className="text-xs text-muted-foreground">
+                                    {isWeekly
+                                        ? date.toLocaleDateString('en-US', { weekday: 'short' })
+                                        : date.getDate()
+                                    }
                                 </div>
-                              )}
-
-                              {/* Task names */}
-                              {hasUpcomingTasks && (
-                                <div className="flex-1 space-y-1">
-                                  {day.tasks.slice(0, 2).map((task, taskIndex) => (
+                                <div className="w-6 h-12 bg-accent/20 rounded flex items-end relative group">
                                     <div
-                                      key={task.id}
-                                      className="text-xs p-1 rounded bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 truncate"
-                                      title={task.title}
-                                    >
-                                      {task.title.length > 12 ? `${task.title.substring(0, 12)}...` : task.title}
+                                        className={`w-full rounded transition-all duration-300 ${stat.sessions > 0
+                                            ? 'bg-gradient-to-t from-red-500 to-orange-500'
+                                            : 'bg-accent/40'
+                                            }`}
+                                        style={{ height: `${Math.max(height, stat.sessions > 0 ? 10 : 0)}%` }}
+                                    />
+                                    {/* Tooltip */}
+                                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-background border rounded shadow-lg text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+                                        <div className="font-medium">{date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                                        <div>{stat.sessions} work sessions</div>
+                                        <div>{Math.floor(stat.focusTime / 60)}h {stat.focusTime % 60}m focus</div>
+                                        <div>{stat.tasksCompleted} tasks completed</div>
                                     </div>
-                                  ))}
-                                  {day.tasks.length > 2 && (
-                                    <div className="text-xs text-orange-600 dark:text-orange-400 font-medium">
-                                      +{day.tasks.length - 2} more
-                                    </div>
-                                  )}
                                 </div>
-                              )}
+                                <div className="text-xs font-medium text-foreground">
+                                    {stat.sessions}
+                                </div>
                             </div>
-                          </div>
                         );
-                      })}
+                    })}
+                </div>
+                <div className="text-xs text-muted-foreground text-center">
+                    Hover over bars for detailed information
+                </div>
+            </div>
+        );
+    };
+
+    const BreakReminderStatsCard = () => {
+        const breakStats = getBreakReminderStats();
+
+        if (!user || breakStats.length === 0) {
+            return (
+                <Card className="p-6">
+                    <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+                        <Coffee className="w-5 h-5" />
+                        Break Reminders
+                    </h3>
+                    <p className="text-muted-foreground">No break reminders created yet.</p>
+                </Card>
+            );
+        }
+
+        return (
+            <Card className="p-6">
+                <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+                    <Coffee className="w-5 h-5" />
+                    Break Reminders
+                </h3>
+                <div className="space-y-3">
+                    {breakStats.filter(stat => stat.todayCount > 0).map(stat => {
+                        const reminder = breakReminders.find(r => r.id === stat.id);
+                        const weeklyCount = breakReminderCompletions.filter(completion => {
+                            const completionDate = new Date(completion.completedAt);
+                            const weekAgo = new Date();
+                            weekAgo.setDate(weekAgo.getDate() - 7);
+                            return completion.reminderId === stat.id && completionDate >= weekAgo;
+                        }).length;
+
+                        // Get category info for icon
+                        const getCategoryIcon = (categoryName: string) => {
+                            const categoryMap: { [key: string]: string } = {
+                                'hydration': '💧',
+                                'movement': '🏃',
+                                'rest': '💜',
+                                'nutrition': '🍎',
+                                'mindfulness': '🧘'
+                            };
+                            return categoryMap[categoryName] || '📝';
+                        };
+
+                        return (
+                            <div key={stat.id} className="p-3 rounded-lg bg-accent/20">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-lg">{getCategoryIcon(reminder?.category || '')}</span>
+                                        <span className="font-medium text-foreground">{stat.title}</span>
+                                    </div>
+                                    <Badge variant="secondary" className="text-xs">
+                                        Today: {stat.todayCount}
+                                    </Badge>
+                                </div>
+                                <div className="flex justify-between text-xs text-muted-foreground">
+                                    <span>This week: {weeklyCount}</span>
+                                </div>
+                                {stat.todayCount > 0 && (
+                                    <div className="mt-2">
+                                        <div className="w-full bg-accent/30 rounded-full h-1">
+                                            <div
+                                                className="bg-green-500 h-1 rounded-full transition-all duration-300"
+                                                style={{ width: `${Math.min((stat.todayCount / 8) * 100, 100)}%` }}
+                                            />
+                                        </div>
+                                        <div className="text-xs text-muted-foreground mt-1 text-center">
+                                            {stat.todayCount >= 8 ? '🎯 Great job!' : `${8 - stat.todayCount} more to reach daily goal`}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </Card>
+        );
+    };
+
+    if (loading) {
+        return (
+            <FeatureGate feature="statistics">
+                <div className="space-y-6">
+                    <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-2xl font-bold flex items-center gap-2 text-foreground">
+                            <TrendingUp className="w-6 h-6" />
+                            Statistics Dashboard
+                        </h2>
                     </div>
 
-                    {/* Legend */}
-                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 rounded bg-red-400" />
-                          <span>Sessions</span>
+                    <Tabs value="today" className="space-y-6">
+                        <TabsList className="grid w-full grid-cols-4">
+                            <TabsTrigger value="today">Today</TabsTrigger>
+                            <TabsTrigger value="week" disabled>This Week</TabsTrigger>
+                            <TabsTrigger value="month" disabled>This Month</TabsTrigger>
+                            <TabsTrigger value="calendar" disabled>Calendar</TabsTrigger>
+                        </TabsList>
+
+                        <div className="space-y-6 mt-6">
+                            <div className="flex items-center justify-center">
+                                <Badge variant="secondary" className="animate-pulse">Loading...</Badge>
+                            </div>
+
+                            {/* Loading skeleton for stats cards */}
+                            <div className="grid grid-cols-2 gap-4">
+                                {[1, 2, 3, 4].map((i) => (
+                                    <div key={i} className="p-4 rounded-xl border bg-background animate-pulse">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-3 rounded-full bg-accent/20">
+                                                <div className="w-5 h-5 bg-accent/40 rounded"></div>
+                                            </div>
+                                            <div className="flex-1 space-y-2">
+                                                <div className="h-3 bg-accent/40 rounded w-20"></div>
+                                                <div className="h-6 bg-accent/40 rounded w-16"></div>
+                                                <div className="h-2 bg-accent/40 rounded w-24"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Loading skeleton for progress bar */}
+                            <div className="space-y-2">
+                                <div className="flex justify-between">
+                                    <div className="h-3 bg-accent/40 rounded w-24 animate-pulse"></div>
+                                    <div className="h-3 bg-accent/40 rounded w-32 animate-pulse"></div>
+                                </div>
+                                <div className="w-full bg-accent rounded-full h-2 animate-pulse"></div>
+                                <div className="text-center">
+                                    <div className="h-4 bg-accent/40 rounded w-48 mx-auto animate-pulse"></div>
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 rounded bg-orange-400" />
-                          <span>Tasks Due</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 rounded border-2 border-red-500 bg-red-50" />
-                          <span>Today</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                    </Tabs>
                 </div>
-              </Card>
-            </>
-          )}
-        </TabsContent>
+            </FeatureGate>
+        );
+    }
+
+    if (error) {
+        return (
+            <FeatureGate feature="statistics">
+                <div className="space-y-6">
+                    <Card className="p-6">
+                        <div className="text-center py-8">
+                            <div className="text-red-500 mb-2">⚠️</div>
+                            <h3 className="text-lg font-semibold text-foreground mb-2">Error Loading Statistics</h3>
+                            <p className="text-muted-foreground mb-4">{error}</p>
+                            <Button onClick={loadAllStats} variant="outline">
+                                Try Again
+                            </Button>
+                        </div>
+                    </Card>
+                </div>
+            </FeatureGate>
+        );
+    }
+
+    return (
+        <FeatureGate feature="statistics">
+            <div className="space-y-6">
+                <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-2xl font-bold flex items-center gap-2 text-foreground">
+                        <TrendingUp className="w-6 h-6" />
+                        Statistics Dashboard
+                    </h2>
+                    {user && activeTab === 'month' && (
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigateMonth('prev')}
+                            >
+                                <ChevronLeft className="w-4 h-4" />
+                            </Button>
+                            <span className="text-sm font-medium px-3">
+                                {currentDate.toLocaleDateString('en-US', {
+                                    month: 'long',
+                                    year: 'numeric'
+                                })}
+                            </span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigateMonth('next')}
+                            >
+                                <ChevronRight className="w-4 h-4" />
+                            </Button>
+                        </div>
+                    )}
+                </div>
+
+                <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
+                    <TabsList className="grid w-full grid-cols-4">
+                        <TabsTrigger value="today">Today</TabsTrigger>
+                        <TabsTrigger value="week" disabled={!user}>This Week</TabsTrigger>
+                        <TabsTrigger value="month" disabled={!user}>This Month</TabsTrigger>
+                        <TabsTrigger value="calendar" disabled={!user}>Calendar</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="today" className="space-y-6 mt-6">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-foreground">Today's Progress</h3>
+                            <Badge variant="secondary">
+                                {new Date().toLocaleDateString('en-US', {
+                                    weekday: 'short',
+                                    month: 'short',
+                                    day: 'numeric'
+                                })}
+                            </Badge>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <StatCard
+                                title="Work Sessions"
+                                value={todayStats.workSessions}
+                                icon={Target}
+                                color="text-red-500"
+                                description="Focus sessions completed"
+                            />
+                            <StatCard
+                                title="Focus Time"
+                                value={formatTime(todayStats.focusTime)}
+                                icon={Clock}
+                                color="text-orange-500"
+                                description="Deep work time"
+                            />
+                            <StatCard
+                                title="Tasks Done"
+                                value={todayStats.tasksCompleted}
+                                icon={CheckCircle}
+                                color="text-green-500"
+                                description="Completed today"
+                            />
+                            <StatCard
+                                title="Current Streak"
+                                value={todayStats.streak}
+                                icon={Flame}
+                                color="text-orange-500"
+                                description="Consecutive active days"
+                            />
+                        </div>
+
+                        {/* Session breakdown */}
+                        {user && (todayStats.shortBreakSessions > 0 || todayStats.longBreakSessions > 0) && (
+                            <Card className="p-4">
+                                <h4 className="text-sm font-semibold text-foreground mb-3">Session Breakdown</h4>
+                                <div className="grid grid-cols-3 gap-4 text-center">
+                                    <div>
+                                        <div className="text-lg font-bold text-red-500">{todayStats.workSessions}</div>
+                                        <div className="text-xs text-muted-foreground">Work</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-lg font-bold text-blue-500">{todayStats.shortBreakSessions}</div>
+                                        <div className="text-xs text-muted-foreground">Short Break</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-lg font-bold text-green-500">{todayStats.longBreakSessions}</div>
+                                        <div className="text-xs text-muted-foreground">Long Break</div>
+                                    </div>
+                                </div>
+                            </Card>
+                        )}
+
+                        {/* Progress Bar */}
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                                <span>Work Session Progress</span>
+                                <span>{todayStats.workSessions} / {user ? 8 : LocalStorage.getSettings().dailySessionGoal || 4} work sessions completed</span>
+                            </div>
+                            <div className="w-full bg-accent rounded-full h-2">
+                                <div
+                                    className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-500"
+                                    style={{
+                                        width: `${Math.min((todayStats.workSessions / (user ? 8 : LocalStorage.getSettings().dailySessionGoal || 4)) * 100, 100)}%`
+                                    }}
+                                ></div>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-sm font-medium text-foreground">
+                                    {todayStats.workSessions >= (user ? 8 : LocalStorage.getSettings().dailySessionGoal || 4)
+                                        ? "🎯 Daily goal achieved! Outstanding work! 🏆"
+                                        : todayStats.workSessions === 0
+                                            ? "Ready to start your first work session?"
+                                            : `${(user ? 8 : LocalStorage.getSettings().dailySessionGoal || 4) - todayStats.workSessions} more work sessions to reach your daily goal! 🚀`
+                                    }
+                                </p>
+                            </div>
+                        </div>
 
 
-      </Tabs>
 
-      {/* Task Detail Modal */}
-      <Dialog open={!!selectedDayTasks} onOpenChange={() => setSelectedDayTasks(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Tasks for {selectedDayTasks?.date}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            {selectedDayTasks?.tasks.map((task) => (
-              <div key={task.id} className="p-3 border rounded-lg">
-                <div className="font-medium text-gray-900 dark:text-gray-100">
-                  {task.title}
-                </div>
-                {task.description && (
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    {task.description}
-                  </div>
-                )}
-                <div className="flex gap-2 mt-2">
-                  {task.recurring?.enabled && (
-                    <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded">
-                      Recurring
-                    </span>
-                  )}
-                  {task.spacedRepetition?.enabled && (
-                    <span className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 rounded">
-                      Spaced Repetition
-                    </span>
-                  )}
-                  {task.priority && (
-                    <span className={`text-xs px-2 py-1 rounded ${task.priority === 'high' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200' :
-                      task.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200' :
-                        'bg-gray-100 dark:bg-gray-900/30 text-gray-800 dark:text-gray-200'
-                      }`}>
-                      {task.priority}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div >
-  );
+                        {user && <BreakReminderStatsCard />}
+                    </TabsContent>
+
+                    <TabsContent value="week" className="space-y-6 mt-6">
+                        {user && (
+                            <>
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-lg font-semibold text-foreground">This Week's Summary</h3>
+                                    <Badge variant="secondary">Last 7 days</Badge>
+                                </div>
+
+                                {(() => {
+                                    const weekStats = getStatsForPeriod('week');
+                                    return (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <StatCard
+                                                title="Total Sessions"
+                                                value={weekStats.totalSessions}
+                                                icon={Target}
+                                                color="text-red-500"
+                                                description="This week"
+                                                trend={`Avg: ${weekStats.averageSessionsPerDay}/day`}
+                                            />
+                                            <StatCard
+                                                title="Total Focus Time"
+                                                value={formatTime(weekStats.totalFocusTime)}
+                                                icon={Clock}
+                                                color="text-orange-500"
+                                                description="Deep work time"
+                                            />
+                                            <StatCard
+                                                title="Tasks Completed"
+                                                value={weekStats.totalTasksCompleted}
+                                                icon={CheckCircle}
+                                                color="text-green-500"
+                                                description="This week"
+                                            />
+                                            <StatCard
+                                                title="Active Days"
+                                                value={weekStats.activeDays}
+                                                icon={Activity}
+                                                color="text-blue-500"
+                                                description="Days with sessions"
+                                            />
+                                        </div>
+                                    );
+                                })()}
+
+                                <DailyActivityChart stats={weeklyStats} title="Weekly Activity" />
+                            </>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="month" className="space-y-6 mt-6">
+                        {user && (
+                            <>
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-lg font-semibold text-foreground">Monthly Summary</h3>
+                                    <Badge variant="secondary">
+                                        {currentDate.toLocaleDateString('en-US', {
+                                            month: 'long',
+                                            year: 'numeric'
+                                        })}
+                                    </Badge>
+                                </div>
+
+                                {(() => {
+                                    const monthStats = getStatsForPeriod('month');
+                                    return (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <StatCard
+                                                title="Total Sessions"
+                                                value={monthStats.totalSessions}
+                                                icon={Target}
+                                                color="text-red-500"
+                                                description="This month"
+                                                trend={`Avg: ${monthStats.averageSessionsPerDay}/day`}
+                                            />
+                                            <StatCard
+                                                title="Total Focus Time"
+                                                value={formatTime(monthStats.totalFocusTime)}
+                                                icon={Clock}
+                                                color="text-orange-500"
+                                                description="Deep work time"
+                                            />
+                                            <StatCard
+                                                title="Tasks Completed"
+                                                value={monthStats.totalTasksCompleted}
+                                                icon={CheckCircle}
+                                                color="text-green-500"
+                                                description="This month"
+                                            />
+                                            <StatCard
+                                                title="Active Days"
+                                                value={monthStats.activeDays}
+                                                icon={Activity}
+                                                color="text-blue-500"
+                                                description="Days with sessions"
+                                            />
+                                        </div>
+                                    );
+                                })()}
+
+                                <DailyActivityChart stats={monthlyStats} title="Monthly Activity" />
+                            </>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="calendar" className="space-y-6 mt-6">
+                        {user && (
+                            <>
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                                        <CalendarIcon className="w-5 h-5" />
+                                        Task Calendar
+                                    </h3>
+                                    <Badge variant="secondary">
+                                        {selectedDate?.toLocaleDateString('en-US', {
+                                            weekday: 'short',
+                                            month: 'short',
+                                            day: 'numeric'
+                                        })}
+                                    </Badge>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    <Card className="p-4">
+                                        <div className="w-full flex justify-center">
+                                            <Calendar
+                                                mode="single"
+                                                selected={selectedDate}
+                                                onSelect={setSelectedDate}
+                                                className="rounded-md border-0"
+                                                modifiers={{
+                                                    hasTask: (date) => {
+                                                        const today = new Date();
+                                                        today.setHours(0, 0, 0, 0);
+                                                        const checkDate = new Date(date);
+                                                        checkDate.setHours(0, 0, 0, 0);
+
+                                                        // Only show future dates or today for tasks due
+                                                        if (checkDate.getTime() < today.getTime()) {
+                                                            return false;
+                                                        }
+
+                                                        const tasksForDate = getTasksForDate(date);
+                                                        // Only show as "has task" if there are uncompleted tasks due
+                                                        return tasksForDate.some(task =>
+                                                            !task.completed ||
+                                                            task.spacedRepetition?.enabled ||
+                                                            task.recurring?.enabled
+                                                        );
+                                                    },
+                                                    hasCompletion: (date) => {
+                                                        const today = new Date();
+                                                        today.setHours(0, 0, 0, 0);
+                                                        const checkDate = new Date(date);
+                                                        checkDate.setHours(0, 0, 0, 0);
+
+                                                        // Only show past dates or today as having completions
+                                                        if (checkDate.getTime() > today.getTime()) {
+                                                            return false;
+                                                        }
+
+                                                        const dateStr = date.toISOString().split('T')[0];
+                                                        const dayStats = [...weeklyStats, ...monthlyStats].find(s => s.date === dateStr);
+                                                        return dayStats ? dayStats.sessions > 0 : false;
+                                                    }
+                                                }}
+                                                modifiersStyles={{
+                                                    hasTask: {
+                                                        backgroundColor: 'rgb(239 68 68 / 0.2)',
+                                                        color: 'rgb(239 68 68)',
+                                                        fontWeight: 'bold'
+                                                    },
+                                                    hasCompletion: {
+                                                        backgroundColor: 'rgb(34 197 94 / 0.2)',
+                                                        color: 'rgb(34 197 94)',
+                                                        fontWeight: 'bold'
+                                                    }
+                                                }}
+                                            />
+                                        </div>
+                                    </Card>
+
+                                    <Card className="p-4">
+                                        <h4 className="font-semibold text-foreground mb-4">
+                                            {selectedDate ?
+                                                `Tasks for ${selectedDate.toLocaleDateString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric'
+                                                })}` :
+                                                'Select a date'
+                                            }
+                                        </h4>
+                                        {selectedDate && (
+                                            <div className="space-y-3">
+                                                {getTasksForDate(selectedDate).map(task => (
+                                                    <div key={task.id} className="p-3 rounded-lg bg-accent/20">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="font-medium text-foreground">
+                                                                {task.title}
+                                                            </span>
+                                                            <Badge variant={task.completed ? "default" : "secondary"}>
+                                                                {task.completed ? 'Completed' :
+                                                                    task.spacedRepetition ? 'Review Due' :
+                                                                        task.recurring ? 'Recurring' : 'Due'}
+                                                            </Badge>
+                                                        </div>
+                                                        {task.description && (
+                                                            <p className="text-sm text-muted-foreground mt-1">
+                                                                {task.description}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                {getTasksForDate(selectedDate).length === 0 && (
+                                                    <p className="text-muted-foreground text-center py-4">
+                                                        No tasks for this date
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </Card>
+                                </div>
+                            </>
+                        )}
+                    </TabsContent>
+                </Tabs>
+            </div>
+        </FeatureGate>
+    );
 }

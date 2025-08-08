@@ -3,8 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { TimerDisplay } from './timer-display';
 import { BreakReminderDisplay } from './break-reminder-display';
-import { showBreakReminders as triggerBreakReminders } from '@/components/tasks/break-reminder-manager';
-import { LocalStorage, PomodoroSession, Task } from '@/lib/storage';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth } from '@/lib/firebase';
+import { LocalStorage, PomodoroSession } from '@/lib/storage';
+import { useAuth } from '@/lib/auth-context';
+import { TimerSession } from '@/lib/auth-storage-provider';
 import { useToast } from '@/hooks/use-toast';
 import AudioService from '@/lib/audio-service';
 
@@ -23,14 +26,111 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
   const [currentSession, setCurrentSession] = useState(1);
   const [totalSessions, setTotalSessions] = useState(4);
   const [settings, setSettings] = useState(LocalStorage.getSettings());
-  const [currentTask, setCurrentTask] = useState<Task | null>(null);
+  const [currentTask, setCurrentTask] = useState<any | null>(null);
   const [showBreakReminders, setShowBreakReminders] = useState(false);
   const [breakRemindersCompleted, setBreakRemindersCompleted] = useState<string[]>([]);
   const [breakRemindersShown, setBreakRemindersShown] = useState<string[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string>('');
   const { toast } = useToast();
+  const { storageProvider } = useAuth();
   const audioService = AudioService.getInstance();
   const breakRemindersTriggered = useRef<string | null>(null);
+  const [user] = useAuthState(auth);
+
+  // Restore session on component mount
+  useEffect(() => {
+    const savedSession = storageProvider.basic.getCurrentSession();
+    if (savedSession) {
+      // Calculate elapsed time since last update
+      const now = Date.now();
+      const elapsed = Math.floor((now - savedSession.lastUpdated) / 1000);
+
+      // Only restore if session was active and not too old (max 1 hour)
+      if (savedSession.isActive && elapsed < 3600) {
+        let newTimeLeft = savedSession.timeLeft - elapsed;
+
+        // If time has run out, complete the session
+        if (newTimeLeft <= 0) {
+          newTimeLeft = 0;
+          // Session completed while away - we'll handle this in the timer effect
+        }
+
+        setTimeLeft(newTimeLeft);
+        setTotalTime(savedSession.totalTime);
+        setIsActive(savedSession.isActive);
+        setIsPaused(savedSession.isPaused);
+        setSessionType(savedSession.sessionType);
+        setCurrentSession(savedSession.currentSession);
+        setTotalSessions(savedSession.totalSessions);
+        setCurrentSessionId(savedSession.id);
+
+        if (savedSession.selectedTaskId) {
+          // Tasks are Firebase-only, so we can't restore task details
+          // but we can keep the task ID for reference
+        }
+
+        // Show confirmation dialog if session was active
+        if (savedSession.isActive && !savedSession.isPaused && newTimeLeft > 0) {
+          const shouldContinue = window.confirm(
+            `You have an active ${savedSession.sessionType === 'work' ? 'focus' : 'break'} session with ${Math.ceil(newTimeLeft / 60)} minutes remaining. Would you like to continue?`
+          );
+
+          if (!shouldContinue) {
+            setIsActive(false);
+            setIsPaused(false);
+            storageProvider.basic.clearCurrentSession();
+          }
+        }
+      } else {
+        // Clear old or inactive session
+        storageProvider.basic.clearCurrentSession();
+      }
+    }
+  }, [storageProvider]);
+
+  // Save session state whenever it changes
+  useEffect(() => {
+    if (isActive || isPaused) {
+      const sessionData: TimerSession = {
+        id: currentSessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type: sessionType === 'work' ? 'work' : sessionType === 'shortBreak' ? 'short-break' : 'long-break',
+        startTime: Date.now() - ((totalTime - timeLeft) * 1000),
+        duration: totalTime,
+        totalTime,
+        timeLeft,
+        isActive,
+        isPaused,
+        sessionType,
+        currentSession,
+        totalSessions,
+        selectedTaskId,
+        lastUpdated: Date.now(),
+      };
+
+      storageProvider.basic.saveCurrentSession(sessionData);
+    } else {
+      // Clear session when stopped
+      storageProvider.basic.clearCurrentSession();
+    }
+  }, [isActive, isPaused, timeLeft, totalTime, sessionType, currentSession, totalSessions, selectedTaskId, currentSessionId, storageProvider]);
+
+  // Add beforeunload event listener for confirmation dialog
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (isActive && !isPaused) {
+        const message = `You have an active ${sessionType === 'work' ? 'focus' : 'break'} session running. Are you sure you want to leave?`;
+        event.preventDefault();
+        event.returnValue = message;
+        return message;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isActive, isPaused, sessionType]);
 
   // Listen for settings updates
   useEffect(() => {
@@ -70,14 +170,11 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
   // Load settings and update timer when settings change
   useEffect(() => {
     const currentSettings = LocalStorage.getSettings();
-    setSettings(prevSettings => {
-      // Only update if settings have actually changed
-      if (JSON.stringify(prevSettings) !== JSON.stringify(currentSettings)) {
-        return currentSettings;
-      }
-      return prevSettings;
-    });
+    setSettings(currentSettings);
+  }, []);
 
+  // Update timer durations when settings change
+  useEffect(() => {
     let duration: number;
 
     switch (sessionType) {
@@ -123,9 +220,8 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
   // Handle selected task
   useEffect(() => {
     if (selectedTaskId) {
-      const tasks = LocalStorage.getTasks();
-      const task = tasks.find(t => t.id === selectedTaskId);
-      setCurrentTask(task || null);
+      // Tasks are Firebase-only, no localStorage fallback
+      setCurrentTask(null);
     } else {
       setCurrentTask(null);
     }
@@ -140,7 +236,7 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
       const sessionKey = `${sessionType}-${currentSession}`;
 
       if (breakRemindersTriggered.current !== sessionKey) {
-        triggerBreakReminders(breakType, currentSessionId);
+        // Break reminders are now handled by the BreakReminderDisplay component
         breakRemindersTriggered.current = sessionKey;
       }
     } else {
@@ -153,7 +249,7 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
     }
   }, [sessionType, isActive, currentSession]);
 
-  const handleSessionComplete = useCallback(() => {
+  const handleSessionComplete = useCallback(async () => {
     const sessionId = currentSessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const session: PomodoroSession = {
       id: sessionId,
@@ -165,6 +261,22 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
       ...(sessionType !== 'work' && breakRemindersCompleted.length > 0 && { breakRemindersCompleted }),
       ...(sessionType !== 'work' && breakRemindersShown.length > 0 && { breakRemindersShown }),
     };
+
+    // Clear the saved session since it's completed
+    storageProvider.basic.clearCurrentSession();
+
+    // Save session to localStorage for immediate use
+    LocalStorage.addSession(session);
+
+    // Save to Firebase if user is authenticated
+    if (user && storageProvider.advanced) {
+      try {
+        await storageProvider.advanced.recordSession(session);
+        console.log('Session saved to Firebase:', session);
+      } catch (error) {
+        console.error('Failed to save session to Firebase:', error);
+      }
+    }
 
     onSessionComplete(session);
 
@@ -223,7 +335,7 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
       setIsActive(false);
       setIsPaused(false);
     }
-  }, [sessionType, totalTime, onSessionComplete, toast, settings]);
+  }, [sessionType, totalTime, onSessionComplete, toast, settings, user, storageProvider]);
 
   const handleRemindersCompleted = useCallback((completed: string[], shown: string[]) => {
     setBreakRemindersCompleted(completed);
@@ -296,6 +408,9 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
     setIsPaused(false);
     audioService.stopAll();
 
+    // Clear the saved session
+    storageProvider.basic.clearCurrentSession();
+
     // Reset to original time
     let duration: number;
 
@@ -323,6 +438,9 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
     setSessionType('work');
     setCurrentSession(1);
     audioService.stopAll();
+
+    // Clear the saved session
+    storageProvider.basic.clearCurrentSession();
 
     const workTime = settings.workDuration * 60;
     setTimeLeft(workTime);

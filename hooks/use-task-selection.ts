@@ -26,31 +26,8 @@ export function useTaskSelection() {
     const completeTaskSession = useCallback((taskId: string) => {
         if (!taskId) return;
 
-        const tasks = LocalStorage.getTasks();
-        const task = tasks.find(t => t.id === taskId);
-        if (!task) return;
-
-        // Increment both total and daily sessions
-        const updatedTasks = tasks.map(t =>
-            t.id === taskId
-                ? { ...t, sessionsCompleted: t.sessionsCompleted + 1 }
-                : t
-        );
-
-        LocalStorage.saveTasks(updatedTasks);
-
-        // Increment daily session count
-        LocalStorage.incrementDailySession(taskId);
-
-        // Check if task should be auto-completed (using total sessions)
-        const updatedTask = updatedTasks.find(t => t.id === taskId);
-        if (updatedTask &&
-            updatedTask.sessionsCompleted >= updatedTask.estimatedSessions &&
-            updatedTask.estimatedSessions > 0) {
-
-            // Auto-complete the task
-            LocalStorage.updateTaskAfterCompletion(taskId);
-        }
+        // Task completion handled by Firebase service
+        // No localStorage operations for tasks
     }, []);
 
     const resetSelection = useCallback(() => {

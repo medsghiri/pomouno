@@ -328,8 +328,8 @@ export class StatisticsEngine {
             const { LocalStorage } = require('@/lib/storage');
 
             const sessions = LocalStorage.getAllSessions();
-            const tasks = LocalStorage.getTasks();
             const settings = LocalStorage.getSettings();
+            const tasks = LocalStorage.getTasks();
 
             const today = new Date().toISOString().split('T')[0];
             const todayStats = this.calculateDailyStats(sessions, tasks, today);
@@ -362,9 +362,8 @@ export class StatisticsEngine {
             const { LocalStorage } = require('@/lib/storage');
 
             const sessions = LocalStorage.getAllSessions();
-            const tasks = LocalStorage.getTasks();
 
-            return this.getRealTimeStatistics(sessions, tasks);
+            return this.getRealTimeStatistics(sessions, []);
         } catch (error) {
             console.error('Error calculating dashboard stats:', error);
             return null;

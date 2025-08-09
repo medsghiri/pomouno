@@ -371,13 +371,16 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
   };
 
   const handleSessionTypeChange = (newType: 'work' | 'shortBreak' | 'longBreak') => {
-    if (isActive) {
-      // Stop current timer if running
-      setIsActive(false);
-      setIsPaused(false);
-      audioService.stopAll();
+    // Only allow session type changes when timer is not active
+    if (!isActive) {
+      setSessionType(newType);
+      // Reset timer to new session type duration
+      const newDuration = newType === 'work' ? settings.workDuration :
+        newType === 'shortBreak' ? settings.shortBreakDuration :
+          settings.longBreakDuration;
+      setTimeLeft(newDuration * 60);
+      setTotalTime(newDuration * 60);
     }
-    setSessionType(newType);
   };
 
   const handleStart = () => {

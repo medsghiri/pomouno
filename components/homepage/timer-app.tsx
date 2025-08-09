@@ -300,13 +300,64 @@ export function TimerApp({
 
                 {/* Timer Section */}
                 <div className="w-full flex flex-col items-center justify-center">
-                    {/* Navigation Bar */}
-                    <div className="mb-8 bg-background/80 backdrop-blur-sm border border-accent rounded-full shadow-lg px-2 py-2">
-                        <div className="flex items-center space-x-2">
+                    <div className="w-full max-w-2xl">
+                        <TimerWithTitle
+                            onSessionComplete={handleSessionComplete}
+                            selectedTaskId={selectedTaskId}
+                            onTaskSessionComplete={handleTaskSessionComplete}
+                        />
+
+                        {/* Daily Goal Progress */}
+                        <div className="mt-6 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 shadow-sm">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+                                        <Target className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-foreground">
+                                            {sessionsCompleted} / {dailyGoal}
+                                        </h3>
+                                        <p className="text-xs text-muted-foreground">sessions today</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                                        {Math.round((sessionsCompleted / dailyGoal) * 100)}%
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">complete</p>
+                                </div>
+                            </div>
+
+                            <div className="w-full bg-red-100 dark:bg-red-900/30 rounded-full h-3 mb-3">
+                                <div
+                                    className="bg-gradient-to-r from-red-500 to-orange-500 h-3 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
+                                    style={{
+                                        width: `${Math.min((sessionsCompleted / dailyGoal) * 100, 100)}%`
+                                    }}
+                                >
+                                    {sessionsCompleted > 0 && (
+                                        <div className="w-2 h-2 bg-white rounded-full shadow-sm"></div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <p className="text-sm text-center text-muted-foreground">
+                                {sessionsCompleted >= dailyGoal
+                                    ? "🎯 Daily goal achieved! Outstanding work!"
+                                    : sessionsCompleted === 0
+                                        ? "Ready to start your productive day?"
+                                        : `${dailyGoal - sessionsCompleted} more to reach your goal`
+                                }
+                            </p>
+                        </div>
+
+                        {/* Productivity Tools */}
+                        <div className="mt-6 flex items-center justify-center space-x-3">
                             <Button
                                 onClick={() => setShowTasks(!showTasks)}
                                 className={cn(
-                                    "h-10 sm:h-12 px-3 sm:px-4 rounded-full transition-all duration-300 border text-sm sm:text-base",
+                                    "h-10 sm:h-12 px-4 sm:px-6 rounded-full transition-all duration-300 border text-sm sm:text-base",
                                     showTasks
                                         ? "bg-red-50 text-red-600 border-red-300 dark:text-red-400 dark:bg-red-900/20"
                                         : "bg-white hover:bg-red-50 text-red-600 border-red-200 hover:border-red-300 dark:bg-accent/10 dark:hover:bg-red-900/20 dark:text-red-400 dark:border-red-800"
@@ -323,7 +374,7 @@ export function TimerApp({
                             <Button
                                 onClick={() => setShowBreakReminders(!showBreakReminders)}
                                 className={cn(
-                                    "h-10 sm:h-12 px-3 sm:px-4 rounded-full transition-all duration-300 border text-sm sm:text-base",
+                                    "h-10 sm:h-12 px-4 sm:px-6 rounded-full transition-all duration-300 border text-sm sm:text-base",
                                     showBreakReminders
                                         ? "bg-red-50 text-red-600 border-red-300 dark:text-red-400 dark:bg-red-900/20"
                                         : "bg-white hover:bg-red-50 text-red-600 border-red-200 hover:border-red-300 dark:bg-accent/10 dark:hover:bg-red-900/20 dark:text-red-400 dark:border-red-800"
@@ -336,45 +387,6 @@ export function TimerApp({
                                     <span className="ml-1 text-xs opacity-60">*</span>
                                 )}
                             </Button>
-                        </div>
-                    </div>
-
-                    <div className="w-full max-w-2xl">
-                        <TimerWithTitle
-                            onSessionComplete={handleSessionComplete}
-                            selectedTaskId={selectedTaskId}
-                            onTaskSessionComplete={handleTaskSessionComplete}
-                        />
-
-                        {/* Daily Goal Progress */}
-                        <div className="mt-6 bg-background/80 backdrop-blur-sm border border-accent rounded-xl p-4 shadow-lg">
-                            <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
-                                    <Target className="w-4 h-4 text-red-600 dark:text-red-400" />
-                                    Daily Goal Progress
-                                </h3>
-                                <span className="text-xs text-muted-foreground">
-                                    {sessionsCompleted} / {dailyGoal} sessions
-                                </span>
-                            </div>
-
-                            <div className="w-full bg-accent rounded-full h-2 mb-2">
-                                <div
-                                    className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-500"
-                                    style={{
-                                        width: `${Math.min((sessionsCompleted / dailyGoal) * 100, 100)}%`
-                                    }}
-                                ></div>
-                            </div>
-
-                            <p className="text-xs text-center text-muted-foreground">
-                                {sessionsCompleted >= dailyGoal
-                                    ? "🎯 Daily goal achieved! Outstanding work! 🏆"
-                                    : sessionsCompleted === 0
-                                        ? "Ready to start your first session?"
-                                        : `${dailyGoal - sessionsCompleted} more sessions to reach your daily goal! 🚀`
-                                }
-                            </p>
                         </div>
                     </div>
                 </div>

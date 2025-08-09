@@ -241,7 +241,7 @@ export function TimerWithTitle({ onSessionComplete, selectedTaskId, onTaskSessio
         const session: PomodoroSession = {
             id: currentSessionId || Date.now().toString(),
             type: sessionTypeMapping[sessionType],
-            duration: totalTime,
+            duration: Math.round(totalTime / 60), // Convert seconds to minutes
             completed: true,
             timestamp: Date.now(),
         };
@@ -373,7 +373,18 @@ export function TimerWithTitle({ onSessionComplete, selectedTaskId, onTaskSessio
                 onPause={handlePause}
                 onStop={handleReset}
                 onReset={handleReset}
-                onSessionTypeChange={(type) => setSessionType(type)}
+                onSessionTypeChange={(type) => {
+                    // Only allow session type changes when timer is not active
+                    if (!isActive) {
+                        setSessionType(type);
+                        // Reset timer to new session type duration
+                        const newDuration = type === 'work' ? settings.workDuration :
+                            type === 'shortBreak' ? settings.shortBreakDuration :
+                                settings.longBreakDuration;
+                        setTimeLeft(newDuration * 60);
+                        setTotalTime(newDuration * 60);
+                    }
+                }}
                 settings={settings}
                 currentTask={currentTask}
             />

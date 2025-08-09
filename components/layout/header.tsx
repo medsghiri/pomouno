@@ -64,11 +64,11 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
       <div className="mx-auto max-w-7xl px-4 py-3 sm:py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
             <Logo clickable />
             <div>
               <Link href="/" className="hover:opacity-80 transition-opacity">
-                <h1 className="text-xl font-bold text-foreground">
+                <h1 className="text-2xl font-bold text-foreground">
                   PomoUno
                 </h1>
               </Link>

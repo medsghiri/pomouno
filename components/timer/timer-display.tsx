@@ -152,21 +152,7 @@ export function TimerDisplay({
   if (!mounted) {
     return (
       <div className="text-center space-y-8 mt-10">
-        <div className="space-y-2">
-          <div className="text-gray-700 dark:text-gray-300 text-sm font-medium">
-            {homepageStats.focusLabel}
-          </div>
-          {homepageStats.completionRate > 0 && (
-            <div className="w-full max-w-xs mx-auto">
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                <div
-                  className="bg-gradient-to-r from-red-500 to-orange-500 h-1.5 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(homepageStats.completionRate, 100)}%` }}
-                ></div>
-              </div>
-            </div>
-          )}
-        </div>
+
         <div className="relative flex items-center justify-center">
           <svg className="w-64 h-64 transform -rotate-90" viewBox="0 0 256 256">
             <circle
@@ -274,10 +260,7 @@ export function TimerDisplay({
 
   return (
     <div className="text-center space-y-6 sm:space-y-8">
-      {/* Daily Progress Info */}
-      <div className="text-gray-700 dark:text-gray-300 text-sm font-medium tracking-wide px-4">
-        {homepageStats.focusLabel}
-      </div>
+
 
       {/* Circular Timer */}
       <div className="relative flex items-center justify-center px-4">
@@ -411,12 +394,15 @@ export function TimerDisplay({
       <div className="flex justify-center gap-2 sm:gap-3 mb-6 sm:mb-8 px-4">
         <Card
           className={cn(
-            "px-3 sm:px-4 py-2 sm:py-3 transition-all duration-300 cursor-pointer backdrop-blur-sm flex-1 max-w-[100px] sm:max-w-none",
+            "px-3 sm:px-4 py-2 sm:py-3 transition-all duration-300 backdrop-blur-sm flex-1 max-w-[100px] sm:max-w-none",
+            isActive
+              ? "cursor-not-allowed opacity-50"
+              : "cursor-pointer",
             sessionType === 'work'
               ? "bg-red-500/20 ring-2 ring-red-500/50 dark:bg-red-500/20 dark:ring-red-400/50"
               : "bg-white/10 hover:bg-white/15 dark:bg-gray-800/30 dark:hover:bg-gray-700/40"
           )}
-          onClick={() => onSessionTypeChange('work')}
+          onClick={() => !isActive && onSessionTypeChange('work')}
         >
           <div className="text-center">
             <div className={cn(
@@ -440,12 +426,15 @@ export function TimerDisplay({
 
         <Card
           className={cn(
-            "px-3 sm:px-4 py-2 sm:py-3 transition-all duration-300 cursor-pointer backdrop-blur-sm flex-1 max-w-[100px] sm:max-w-none",
+            "px-3 sm:px-4 py-2 sm:py-3 transition-all duration-300 backdrop-blur-sm flex-1 max-w-[100px] sm:max-w-none",
+            isActive
+              ? "cursor-not-allowed opacity-50"
+              : "cursor-pointer",
             sessionType === 'shortBreak'
               ? "bg-green-500/20 ring-2 ring-green-500/50 dark:bg-green-500/20 dark:ring-green-400/50"
               : "bg-white/10 hover:bg-white/15 dark:bg-gray-800/30 dark:hover:bg-gray-700/40"
           )}
-          onClick={() => onSessionTypeChange('shortBreak')}
+          onClick={() => !isActive && onSessionTypeChange('shortBreak')}
         >
           <div className="text-center">
             <div className={cn(
@@ -469,12 +458,15 @@ export function TimerDisplay({
 
         <Card
           className={cn(
-            "px-3 sm:px-4 py-2 sm:py-3 transition-all duration-300 cursor-pointer backdrop-blur-sm flex-1 max-w-[100px] sm:max-w-none",
+            "px-3 sm:px-4 py-2 sm:py-3 transition-all duration-300 backdrop-blur-sm flex-1 max-w-[100px] sm:max-w-none",
+            isActive
+              ? "cursor-not-allowed opacity-50"
+              : "cursor-pointer",
             sessionType === 'longBreak'
               ? "bg-blue-500/20 ring-2 ring-blue-500/50 dark:bg-blue-500/20 dark:ring-blue-400/50"
               : "bg-white/10 hover:bg-white/15 dark:bg-gray-800/30 dark:hover:bg-gray-700/40"
           )}
-          onClick={() => onSessionTypeChange('longBreak')}
+          onClick={() => !isActive && onSessionTypeChange('longBreak')}
         >
           <div className="text-center">
             <div className={cn(

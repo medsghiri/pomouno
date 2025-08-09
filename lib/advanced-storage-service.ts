@@ -293,7 +293,8 @@ export class AdvancedStorageService {
                     }
                 }
 
-                if (data.spacedRepetitionEnabled && !data.spacedRepetition) {
+                if (data.spacedRepetitionEnabled) {
+                    // Always reconstruct from flattened fields if they exist, to ensure consistency
                     const spacedData: any = {
                         enabled: data.spacedRepetitionEnabled,
                         difficulty: data.spacedRepetitionDifficulty || 'medium',
@@ -308,6 +309,22 @@ export class AdvancedStorageService {
                     }
 
                     task.spacedRepetition = spacedData;
+
+                    // Debug logging for spaced repetition tasks
+                    if (task.title.includes('spaced')) {
+                        console.log(`Spaced repetition task "${task.title}" data:`, {
+                            enabled: spacedData.enabled,
+                            nextReviewDate: spacedData.nextReviewDate ? new Date(spacedData.nextReviewDate).toISOString() : 'none',
+                            lastReviewed: spacedData.lastReviewed ? new Date(spacedData.lastReviewed).toISOString() : 'never',
+                            interval: spacedData.interval,
+                            reviewCount: spacedData.reviewCount,
+                            rawData: {
+                                spacedRepetitionEnabled: data.spacedRepetitionEnabled,
+                                spacedRepetitionNextReviewDate: data.spacedRepetitionNextReviewDate,
+                                spacedRepetitionLastReviewed: data.spacedRepetitionLastReviewed
+                            }
+                        });
+                    }
                 }
 
                 return task;
@@ -362,6 +379,61 @@ export class AdvancedStorageService {
                     const updateData = removeUndefinedFields({
                         recurring: updatedTask.recurring,
                         recurringNextDue: newNextDue.getTime()
+                    });
+                    batch.update(taskRef, updateData);
+                    hasUpdates = true;
+
+                    return updatedTask;
+                }
+            }
+
+            // Update spaced repetition tasks that are overdue
+            if (task.spacedRepetition?.enabled) {
+                // Check if nextReviewDate is valid
+                if (!task.spacedRepetition.nextReviewDate || typeof task.spacedRepetition.nextReviewDate !== 'number') {
+                    console.warn(`Invalid nextReviewDate for spaced repetition task "${task.title}":`, task.spacedRepetition.nextReviewDate);
+                    // Set to today if invalid
+                    const updatedTask = {
+                        ...task,
+                        spacedRepetition: {
+                            ...task.spacedRepetition,
+                            nextReviewDate: nowTimestamp
+                        }
+                    };
+
+                    const taskRef = doc(db, 'users', this.user.uid, 'tasks', task.id);
+                    const updateData = removeUndefinedFields({
+                        spacedRepetition: updatedTask.spacedRepetition,
+                        spacedRepetitionNextReviewDate: nowTimestamp
+                    });
+                    batch.update(taskRef, updateData);
+                    hasUpdates = true;
+
+                    return updatedTask;
+                }
+
+                const nextReview = new Date(task.spacedRepetition.nextReviewDate);
+                nextReview.setHours(0, 0, 0, 0);
+
+                // If the task is significantly overdue (more than 7 days), reset to today
+                const daysDiff = Math.floor((nowTimestamp - nextReview.getTime()) / (24 * 60 * 60 * 1000));
+                if (daysDiff > 7) {
+                    console.log(`Spaced repetition task "${task.title}" is ${daysDiff} days overdue, resetting to today`);
+
+                    const updatedTask = {
+                        ...task,
+                        spacedRepetition: {
+                            ...task.spacedRepetition,
+                            nextReviewDate: nowTimestamp,
+                            interval: 1 // Reset interval to 1 day
+                        }
+                    };
+
+                    const taskRef = doc(db, 'users', this.user.uid, 'tasks', task.id);
+                    const updateData = removeUndefinedFields({
+                        spacedRepetition: updatedTask.spacedRepetition,
+                        spacedRepetitionNextReviewDate: nowTimestamp,
+                        spacedRepetitionInterval: 1
                     });
                     batch.update(taskRef, updateData);
                     hasUpdates = true;
@@ -501,7 +573,56 @@ export class AdvancedStorageService {
                 throw new Error('Task not found');
             }
 
-            const task = { id: taskDoc.id, ...taskDoc.data() } as Task;
+            const data = taskDoc.data();
+            const task: any = {
+                ...data,
+                id: taskDoc.id  // Always use Firebase document ID
+            };
+
+            // Reconstruct spaced repetition data if needed (same logic as in getTasks)
+            if (data.spacedRepetitionEnabled) {
+                const spacedData: any = {
+                    enabled: data.spacedRepetitionEnabled,
+                    difficulty: data.spacedRepetitionDifficulty || 'medium',
+                    interval: data.spacedRepetitionInterval || 1,
+                    nextReviewDate: data.spacedRepetitionNextReviewDate || Date.now(),
+                    reviewCount: data.spacedRepetitionReviewCount || 0
+                };
+
+                // Only add lastReviewed if it has a value
+                if (data.spacedRepetitionLastReviewed) {
+                    spacedData.lastReviewed = data.spacedRepetitionLastReviewed;
+                }
+
+                task.spacedRepetition = spacedData;
+            }
+
+            // Reconstruct recurring data if needed (same logic as in getTasks)
+            if (data.recurringEnabled) {
+                const recurringData: any = {
+                    enabled: data.recurringEnabled,
+                    pattern: data.recurringPattern || 'daily',
+                    interval: data.recurringInterval || 1,
+                    nextDue: data.recurringNextDue || Date.now()
+                };
+
+                // Only add optional fields if they have values
+                if (data.recurringLastCompleted) {
+                    recurringData.lastCompleted = data.recurringLastCompleted;
+                }
+                if (data.recurringDaysOfWeek) {
+                    recurringData.daysOfWeek = data.recurringDaysOfWeek;
+                }
+                if (data.recurringDayOfMonth) {
+                    recurringData.dayOfMonth = data.recurringDayOfMonth;
+                }
+                if (data.recurringEndDate) {
+                    recurringData.endDate = data.recurringEndDate;
+                }
+
+                task.recurring = recurringData;
+            }
+
             const now = Date.now();
             let updates: Partial<Task> = {
                 sessionsCompleted: (task.sessionsCompleted || 0) + 1
@@ -528,6 +649,14 @@ export class AdvancedStorageService {
                     interval: nextReview.newInterval,
                     nextReviewDate: nextReview.nextReviewDate.getTime()
                 };
+
+                // Also update flattened fields for Firebase compatibility
+                updates.spacedRepetitionDifficulty = currentDifficulty;
+                updates.spacedRepetitionReviewCount = (task.spacedRepetition.reviewCount || 0) + 1;
+                updates.spacedRepetitionLastReviewed = now;
+                updates.spacedRepetitionInterval = nextReview.newInterval;
+                updates.spacedRepetitionNextReviewDate = nextReview.nextReviewDate.getTime();
+
                 // Don't mark spaced repetition tasks as completed
                 updates.completed = false;
             }

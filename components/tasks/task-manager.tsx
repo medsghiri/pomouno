@@ -825,10 +825,18 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                     return isDueAndAvailable;
                 }
 
-                // Spaced repetition tasks - show if due for review
+                // Spaced repetition tasks - show if due for review (including overdue tasks)
                 if (task.spacedRepetition?.enabled) {
                     const now = new Date();
                     now.setHours(0, 0, 0, 0);
+
+                    // Handle invalid or missing nextReviewDate
+                    if (!task.spacedRepetition.nextReviewDate || typeof task.spacedRepetition.nextReviewDate !== 'number') {
+                        console.warn(`Invalid nextReviewDate for spaced repetition task "${task.title}":`, task.spacedRepetition.nextReviewDate);
+                        // Show the task if nextReviewDate is invalid - it needs attention
+                        return canCompleteSpacedRepetitionTask(task);
+                    }
+
                     const nextReview = new Date(task.spacedRepetition.nextReviewDate);
                     nextReview.setHours(0, 0, 0, 0);
 
@@ -840,10 +848,11 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                         canReview,
                         nextReviewDate: nextReview.toISOString(),
                         now: now.toISOString(),
-                        lastReviewed: task.spacedRepetition.lastReviewed ? new Date(task.spacedRepetition.lastReviewed).toISOString() : 'never'
+                        lastReviewed: task.spacedRepetition.lastReviewed ? new Date(task.spacedRepetition.lastReviewed).toISOString() : 'never',
+                        willShow: isDue && canReview
                     });
 
-                    // Show if due and can be reviewed
+                    // Show if due (including overdue) and can be reviewed
                     return isDue && canReview;
                 }
 

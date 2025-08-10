@@ -371,24 +371,38 @@ export function StatsDisplay() {
     const getTasksForDate = (date: Date) => {
         const checkDate = new Date(date);
         checkDate.setHours(0, 0, 0, 0);
+        const checkDateStart = checkDate.getTime();
+        const checkDateEnd = checkDateStart + (24 * 60 * 60 * 1000) - 1;
 
         return tasks.filter(task => {
-            // Completed tasks on this date
-            if (task.completedAt) {
-                const completedDate = new Date(task.completedAt);
-                completedDate.setHours(0, 0, 0, 0);
-                if (completedDate.getTime() === checkDate.getTime()) return true;
+            // Regular completed tasks on this date
+            if (task.completedAt && task.completedAt >= checkDateStart && task.completedAt <= checkDateEnd) {
+                return true;
             }
 
-            // Due tasks (spaced repetition)
-            if (task.spacedRepetition?.nextReviewDate) {
+            // Recurring tasks completed on this date
+            if (task.recurring?.enabled && task.recurring.lastCompleted &&
+                task.recurring.lastCompleted >= checkDateStart && task.recurring.lastCompleted <= checkDateEnd) {
+                return true;
+            }
+
+            // Spaced repetition tasks reviewed on this date
+            if (task.spacedRepetition?.enabled && task.spacedRepetition.lastReviewed &&
+                task.spacedRepetition.lastReviewed >= checkDateStart && task.spacedRepetition.lastReviewed <= checkDateEnd) {
+                return true;
+            }
+
+            // Due tasks (spaced repetition) - only show if not completed today
+            if (task.spacedRepetition?.nextReviewDate &&
+                !(task.spacedRepetition.lastReviewed && task.spacedRepetition.lastReviewed >= checkDateStart && task.spacedRepetition.lastReviewed <= checkDateEnd)) {
                 const dueDate = new Date(task.spacedRepetition.nextReviewDate);
                 dueDate.setHours(0, 0, 0, 0);
-                if (dueDate.getTime() === checkDate.getTime()) return true;
+                if (dueDate.getTime() === checkDateStart) return true;
             }
 
-            // Recurring tasks - check if they should appear on this date
-            if (task.recurring?.enabled) {
+            // Recurring tasks - check if they should appear on this date (only if not completed today)
+            if (task.recurring?.enabled &&
+                !(task.recurring.lastCompleted && task.recurring.lastCompleted >= checkDateStart && task.recurring.lastCompleted <= checkDateEnd)) {
                 const pattern = task.recurring.pattern;
                 const dayOfWeek = checkDate.getDay();
 
@@ -562,7 +576,7 @@ export function StatsDisplay() {
                                     <div className="mt-2">
                                         <div className="w-full bg-accent/30 rounded-full h-1">
                                             <div
-                                                className="bg-green-500 h-1 rounded-full transition-all duration-300"
+                                                className="bg-primary h-1 rounded-full transition-all duration-300"
                                                 style={{ width: `${Math.min((stat.todayCount / 8) * 100, 100)}%` }}
                                             />
                                         </div>
@@ -985,6 +999,8 @@ export function StatsDisplay() {
                                                         today.setHours(0, 0, 0, 0);
                                                         const checkDate = new Date(date);
                                                         checkDate.setHours(0, 0, 0, 0);
+                                                        const checkDateStart = checkDate.getTime();
+                                                        const checkDateEnd = checkDateStart + (24 * 60 * 60 * 1000) - 1;
 
                                                         // Only show future dates or today for tasks due
                                                         if (checkDate.getTime() < today.getTime()) {
@@ -993,37 +1009,52 @@ export function StatsDisplay() {
 
                                                         const tasksForDate = getTasksForDate(date);
                                                         // Only show as "has task" if there are uncompleted tasks due
-                                                        return tasksForDate.some(task =>
-                                                            !task.completed ||
-                                                            task.spacedRepetition?.enabled ||
-                                                            task.recurring?.enabled
-                                                        );
+                                                        return tasksForDate.some(task => {
+                                                            const wasCompletedToday =
+                                                                (task.completedAt && task.completedAt >= checkDateStart && task.completedAt <= checkDateEnd) ||
+                                                                (task.recurring?.lastCompleted && task.recurring.lastCompleted >= checkDateStart && task.recurring.lastCompleted <= checkDateEnd) ||
+                                                                (task.spacedRepetition?.lastReviewed && task.spacedRepetition.lastReviewed >= checkDateStart && task.spacedRepetition.lastReviewed <= checkDateEnd);
+
+                                                            return !wasCompletedToday;
+                                                        });
                                                     },
                                                     hasCompletion: (date) => {
                                                         const today = new Date();
                                                         today.setHours(0, 0, 0, 0);
                                                         const checkDate = new Date(date);
                                                         checkDate.setHours(0, 0, 0, 0);
+                                                        const checkDateStart = checkDate.getTime();
+                                                        const checkDateEnd = checkDateStart + (24 * 60 * 60 * 1000) - 1;
 
                                                         // Only show past dates or today as having completions
                                                         if (checkDate.getTime() > today.getTime()) {
                                                             return false;
                                                         }
 
+                                                        // Show any date that has completions (sessions or tasks)
                                                         const dateStr = date.toISOString().split('T')[0];
                                                         const dayStats = [...weeklyStats, ...monthlyStats].find(s => s.date === dateStr);
-                                                        return dayStats ? dayStats.sessions > 0 : false;
+                                                        const hasSessionCompletions = dayStats ? dayStats.sessions > 0 : false;
+
+                                                        // Check if any tasks were completed on this date
+                                                        const hasTaskCompletions = tasks.some(task =>
+                                                            (task.completedAt && task.completedAt >= checkDateStart && task.completedAt <= checkDateEnd) ||
+                                                            (task.recurring?.lastCompleted && task.recurring.lastCompleted >= checkDateStart && task.recurring.lastCompleted <= checkDateEnd) ||
+                                                            (task.spacedRepetition?.lastReviewed && task.spacedRepetition.lastReviewed >= checkDateStart && task.spacedRepetition.lastReviewed <= checkDateEnd)
+                                                        );
+
+                                                        return hasSessionCompletions || hasTaskCompletions;
                                                     }
                                                 }}
                                                 modifiersStyles={{
                                                     hasTask: {
-                                                        backgroundColor: 'rgb(239 68 68 / 0.2)',
-                                                        color: 'rgb(239 68 68)',
+                                                        backgroundColor: 'hsl(var(--destructive) / 0.2)',
+                                                        color: 'hsl(var(--destructive))',
                                                         fontWeight: 'bold'
                                                     },
                                                     hasCompletion: {
-                                                        backgroundColor: 'rgb(34 197 94 / 0.2)',
-                                                        color: 'rgb(34 197 94)',
+                                                        backgroundColor: 'hsl(var(--primary) / 0.2)',
+                                                        color: 'hsl(var(--primary))',
                                                         fontWeight: 'bold'
                                                     }
                                                 }}
@@ -1043,25 +1074,56 @@ export function StatsDisplay() {
                                         </h4>
                                         {selectedDate && (
                                             <div className="space-y-3">
-                                                {getTasksForDate(selectedDate).map(task => (
-                                                    <div key={task.id} className="p-3 rounded-lg bg-accent/20">
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="font-medium text-foreground">
-                                                                {task.title}
-                                                            </span>
-                                                            <Badge variant={task.completed ? "default" : "secondary"}>
-                                                                {task.completed ? 'Completed' :
-                                                                    task.spacedRepetition ? 'Review Due' :
-                                                                        task.recurring ? 'Recurring' : 'Due'}
-                                                            </Badge>
+                                                {getTasksForDate(selectedDate).map(task => {
+                                                    const checkDate = new Date(selectedDate);
+                                                    checkDate.setHours(0, 0, 0, 0);
+                                                    const checkDateStart = checkDate.getTime();
+                                                    const checkDateEnd = checkDateStart + (24 * 60 * 60 * 1000) - 1;
+
+                                                    // Determine if task was completed on this date
+                                                    const wasCompletedToday =
+                                                        (task.completedAt && task.completedAt >= checkDateStart && task.completedAt <= checkDateEnd) ||
+                                                        (task.recurring?.lastCompleted && task.recurring.lastCompleted >= checkDateStart && task.recurring.lastCompleted <= checkDateEnd) ||
+                                                        (task.spacedRepetition?.lastReviewed && task.spacedRepetition.lastReviewed >= checkDateStart && task.spacedRepetition.lastReviewed <= checkDateEnd);
+
+                                                    // Determine task status
+                                                    let status = 'Due';
+                                                    let variant: "default" | "secondary" | "destructive" | "outline" = "secondary";
+
+                                                    if (wasCompletedToday) {
+                                                        status = 'Completed';
+                                                        variant = "default";
+                                                    } else if (task.spacedRepetition?.enabled) {
+                                                        status = 'Review Due';
+                                                        variant = "destructive";
+                                                    } else if (task.recurring?.enabled) {
+                                                        status = 'Recurring';
+                                                        variant = "outline";
+                                                    }
+
+                                                    return (
+                                                        <div key={`${task.id}-${selectedDate.toISOString()}`} className="p-3 rounded-lg bg-accent/20">
+                                                            <div className="flex items-center justify-between">
+                                                                <span className={`font-medium ${wasCompletedToday ? 'text-primary line-through' : 'text-foreground'}`}>
+                                                                    {task.title}
+                                                                </span>
+                                                                <Badge variant={variant}>
+                                                                    {status}
+                                                                </Badge>
+                                                            </div>
+                                                            {task.description && (
+                                                                <p className="text-sm text-muted-foreground mt-1">
+                                                                    {task.description}
+                                                                </p>
+                                                            )}
+                                                            {wasCompletedToday && (
+                                                                <p className="text-xs text-primary mt-1 flex items-center gap-1">
+                                                                    ✓ Completed on {selectedDate.toLocaleDateString()}
+                                                                </p>
+                                                            )}
                                                         </div>
-                                                        {task.description && (
-                                                            <p className="text-sm text-muted-foreground mt-1">
-                                                                {task.description}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
                                                 {getTasksForDate(selectedDate).length === 0 && (
                                                     <p className="text-muted-foreground text-center py-4">
                                                         No tasks for this date

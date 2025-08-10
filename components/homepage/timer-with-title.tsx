@@ -15,10 +15,14 @@ import AudioService from '@/lib/audio-service';
 interface TimerWithTitleProps {
     onSessionComplete: (session: PomodoroSession) => void;
     selectedTaskId?: string | null;
+    selectedTask?: any | null;
     onTaskSessionComplete?: (taskId: string) => void;
+    shouldAutoStart?: boolean;
+    onAutoStartComplete?: () => void;
+    todaysTaskSessions?: number;
 }
 
-export function TimerWithTitle({ onSessionComplete, selectedTaskId, onTaskSessionComplete }: TimerWithTitleProps) {
+export function TimerWithTitle({ onSessionComplete, selectedTaskId, selectedTask, onTaskSessionComplete, shouldAutoStart, onAutoStartComplete, todaysTaskSessions }: TimerWithTitleProps) {
     const [timeLeft, setTimeLeft] = useState(25 * 60);
     const [totalTime, setTotalTime] = useState(25 * 60);
     const [isActive, setIsActive] = useState(false);
@@ -194,15 +198,20 @@ export function TimerWithTitle({ onSessionComplete, selectedTaskId, onTaskSessio
         setTotalSessions(settings.sessionsUntilLongBreak);
     }, [settings, sessionType, isActive]);
 
-    // Update current task when selectedTaskId changes
+    // Update current task when selectedTask changes
     useEffect(() => {
-        if (selectedTaskId) {
-            // Tasks are Firebase-only
-            setCurrentTask(null);
-        } else {
-            setCurrentTask(null);
+        setCurrentTask(selectedTask);
+    }, [selectedTask]);
+
+    // Auto-start timer when shouldAutoStart is true
+    useEffect(() => {
+        if (shouldAutoStart && !isActive && sessionType === 'work') {
+            handleStart();
+            if (onAutoStartComplete) {
+                onAutoStartComplete();
+            }
         }
-    }, [selectedTaskId]);
+    }, [shouldAutoStart, isActive, sessionType]);
 
     // Timer logic
     useEffect(() => {
@@ -244,6 +253,7 @@ export function TimerWithTitle({ onSessionComplete, selectedTaskId, onTaskSessio
             duration: Math.round(totalTime / 60), // Convert seconds to minutes
             completed: true,
             timestamp: Date.now(),
+            ...(selectedTaskId && sessionType === 'work' && { taskId: selectedTaskId }),
         };
 
         // Call the completion handler
@@ -387,6 +397,7 @@ export function TimerWithTitle({ onSessionComplete, selectedTaskId, onTaskSessio
                 }}
                 settings={settings}
                 currentTask={currentTask}
+                todaysTaskSessions={todaysTaskSessions}
             />
         </>
     );

@@ -26,6 +26,7 @@ interface TimerDisplayProps {
   totalSessions: number;
   settings: Settings;
   currentTask?: any | null;
+  todaysTaskSessions?: number;
 }
 
 export function TimerDisplay({
@@ -42,7 +43,8 @@ export function TimerDisplay({
   currentSession,
   totalSessions,
   settings,
-  currentTask
+  currentTask,
+  todaysTaskSessions
 }: TimerDisplayProps) {
   const [mounted, setMounted] = useState(false);
   const [homepageStats, setHomepageStats] = useState({
@@ -308,7 +310,7 @@ export function TimerDisplay({
         {isActive && !isPaused && (
           <span className="animate-pulse">
             {sessionType === 'work'
-              ? (currentTask ? `Working on: ${currentTask.title}` : '#1 Time to focus!')
+              ? (currentTask ? `Working on: ${currentTask.title}` : `#${currentSession} Time to focus!`)
               : 'Take a break!'
             }
           </span>
@@ -330,6 +332,31 @@ export function TimerDisplay({
           </span>
         )}
       </div>
+
+      {/* Task Progress - Show when working on a task */}
+      {currentTask && sessionType === 'work' && currentTask.estimatedSessions > 0 && (
+        <div className="px-4 max-w-md mx-auto">
+          <div className="bg-white/10 dark:bg-gray-800/30 rounded-lg p-3 backdrop-blur-sm">
+            <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+              <span>Task Progress</span>
+              <span>{todaysTaskSessions || 0} / {currentTask.estimatedSessions} sessions</span>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div
+                className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-300"
+                style={{
+                  width: `${Math.min(((todaysTaskSessions || 0) / currentTask.estimatedSessions) * 100, 100)}%`
+                }}
+              />
+            </div>
+            {currentTask.description && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+                {currentTask.description}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Audio Control Section - Always Visible */}
       <div className="space-y-3">

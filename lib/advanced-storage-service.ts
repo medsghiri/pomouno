@@ -46,6 +46,7 @@ export interface Task {
     spacedRepetitionNextReviewDate?: number;
     spacedRepetitionReviewCount?: number;
     spacedRepetitionLastReviewed?: number;
+    spacedRepetitionEaseFactor?: number;
 
     // Flattened recurring fields (for Firebase compatibility)
     recurringEnabled?: boolean;
@@ -71,6 +72,7 @@ export interface SpacedRepetitionData {
     reviewCount: number;
     lastReviewed?: number;
     interval: number; // days until next review
+    easeFactor: number; // SM-2 ease factor (default 2.5)
 }
 
 export interface RecurringData {
@@ -300,7 +302,8 @@ export class AdvancedStorageService {
                         difficulty: data.spacedRepetitionDifficulty || 'medium',
                         interval: data.spacedRepetitionInterval || 1,
                         nextReviewDate: data.spacedRepetitionNextReviewDate || Date.now(),
-                        reviewCount: data.spacedRepetitionReviewCount || 0
+                        reviewCount: data.spacedRepetitionReviewCount || 0,
+                        easeFactor: data.spacedRepetitionEaseFactor || 2.5
                     };
 
                     // Only add lastReviewed if it has a value
@@ -457,6 +460,75 @@ export class AdvancedStorageService {
         return updatedTasks;
     }
 
+    async getTask(taskId: string): Promise<Task | null> {
+        try {
+            const taskRef = doc(db, 'users', this.user.uid, 'tasks', taskId);
+            const taskDoc = await getDoc(taskRef);
+
+            if (!taskDoc.exists()) {
+                return null;
+            }
+
+            const data = taskDoc.data();
+            const task: any = {
+                ...data,
+                id: taskDoc.id  // Always use Firebase document ID
+            };
+
+            // Handle corrupted nested objects by reconstructing from flattened fields
+            if (data.recurringEnabled) {
+                const recurringData: any = {
+                    enabled: data.recurringEnabled,
+                    pattern: data.recurringPattern || 'daily',
+                    interval: data.recurringInterval || 1,
+                    nextDue: data.recurringNextDue || Date.now()
+                };
+
+                if (data.recurringLastCompleted) {
+                    recurringData.lastCompleted = data.recurringLastCompleted;
+                }
+                if (data.recurringDaysOfWeek) {
+                    recurringData.daysOfWeek = data.recurringDaysOfWeek;
+                }
+                if (data.recurringDayOfMonth) {
+                    recurringData.dayOfMonth = data.recurringDayOfMonth;
+                }
+                if (data.recurringEndDate) {
+                    recurringData.endDate = data.recurringEndDate;
+                }
+
+                task.recurring = recurringData;
+
+                // Fix: Recurring tasks should never be permanently completed
+                if (task.completed && task.recurring.enabled) {
+                    task.completed = false;
+                }
+            }
+
+            if (data.spacedRepetitionEnabled) {
+                const spacedData: any = {
+                    enabled: data.spacedRepetitionEnabled,
+                    difficulty: data.spacedRepetitionDifficulty || 'medium',
+                    interval: data.spacedRepetitionInterval || 1,
+                    nextReviewDate: data.spacedRepetitionNextReviewDate || Date.now(),
+                    reviewCount: data.spacedRepetitionReviewCount || 0,
+                    easeFactor: data.spacedRepetitionEaseFactor || 2.5
+                };
+
+                if (data.spacedRepetitionLastReviewed) {
+                    spacedData.lastReviewed = data.spacedRepetitionLastReviewed;
+                }
+
+                task.spacedRepetition = spacedData;
+            }
+
+            return task as Task;
+        } catch (error) {
+            console.error('Failed to get task:', error);
+            throw error;
+        }
+    }
+
     async createTask(taskData: CreateTaskRequest): Promise<Task> {
         try {
             const now = Date.now();
@@ -471,10 +543,12 @@ export class AdvancedStorageService {
             if (taskData.spacedRepetition?.enabled) {
                 const spacedData: SpacedRepetitionData = {
                     ...taskData.spacedRepetition,
+                    difficulty: taskData.spacedRepetition.difficulty || 'medium', // Default to medium for new tasks
                     reviewCount: 0,
                     interval: 1, // Start with 1 day interval
-                    nextReviewDate: now + (24 * 60 * 60 * 1000), // Tomorrow
-                    lastReviewed: undefined
+                    nextReviewDate: now, // Available immediately for first review
+                    lastReviewed: undefined,
+                    easeFactor: taskData.spacedRepetition.easeFactor || 2.5 // Default SM-2 ease factor
                 };
 
                 // Store as flattened fields to avoid Firebase serialization issues
@@ -484,6 +558,7 @@ export class AdvancedStorageService {
                 task.spacedRepetitionNextReviewDate = spacedData.nextReviewDate;
                 task.spacedRepetitionReviewCount = spacedData.reviewCount;
                 task.spacedRepetitionLastReviewed = spacedData.lastReviewed;
+                task.spacedRepetitionEaseFactor = spacedData.easeFactor;
 
                 // Also keep the nested structure for compatibility
                 task.spacedRepetition = spacedData;
@@ -586,7 +661,8 @@ export class AdvancedStorageService {
                     difficulty: data.spacedRepetitionDifficulty || 'medium',
                     interval: data.spacedRepetitionInterval || 1,
                     nextReviewDate: data.spacedRepetitionNextReviewDate || Date.now(),
-                    reviewCount: data.spacedRepetitionReviewCount || 0
+                    reviewCount: data.spacedRepetitionReviewCount || 0,
+                    easeFactor: data.spacedRepetitionEaseFactor || 2.5
                 };
 
                 // Only add lastReviewed if it has a value
@@ -638,7 +714,8 @@ export class AdvancedStorageService {
                 const nextReview = this.calculateNextSpacedRepetitionReview(
                     currentDifficulty,
                     task.spacedRepetition.interval,
-                    task.spacedRepetition.reviewCount
+                    task.spacedRepetition.reviewCount,
+                    task.spacedRepetition.easeFactor
                 );
 
                 updates.spacedRepetition = {
@@ -647,7 +724,8 @@ export class AdvancedStorageService {
                     reviewCount: (task.spacedRepetition.reviewCount || 0) + 1,
                     lastReviewed: now,
                     interval: nextReview.newInterval,
-                    nextReviewDate: nextReview.nextReviewDate.getTime()
+                    nextReviewDate: nextReview.nextReviewDate.getTime(),
+                    easeFactor: nextReview.easeFactor
                 };
 
                 // Also update flattened fields for Firebase compatibility
@@ -656,6 +734,7 @@ export class AdvancedStorageService {
                 updates.spacedRepetitionLastReviewed = now;
                 updates.spacedRepetitionInterval = nextReview.newInterval;
                 updates.spacedRepetitionNextReviewDate = nextReview.nextReviewDate.getTime();
+                updates.spacedRepetitionEaseFactor = nextReview.easeFactor;
 
                 // Don't mark spaced repetition tasks as completed
                 updates.completed = false;
@@ -704,6 +783,30 @@ export class AdvancedStorageService {
         }
     }
 
+    // Get today's sessions for a specific task
+    async getTodaysTaskSessions(taskId: string): Promise<number> {
+        try {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayStart = today.getTime();
+            const todayEnd = todayStart + (24 * 60 * 60 * 1000) - 1;
+
+            const sessionsQuery = query(
+                collection(db, 'users', this.user.uid, 'sessions'),
+                where('taskId', '==', taskId),
+                where('timestamp', '>=', todayStart),
+                where('timestamp', '<=', todayEnd),
+                where('type', '==', 'work')
+            );
+
+            const snapshot = await getDocs(sessionsQuery);
+            return snapshot.size;
+        } catch (error) {
+            console.error('Failed to get today\'s task sessions:', error);
+            return 0;
+        }
+    }
+
     // Check if spaced repetition task can be completed today
     private canCompleteSpacedRepetitionTask(task: Task): boolean {
         if (!task.spacedRepetition?.enabled) return true;
@@ -742,48 +845,65 @@ export class AdvancedStorageService {
         return today.getTime() !== lastCompletedDate.getTime();
     }
 
-    // Spaced repetition algorithm based on SM-2
+    // Spaced repetition algorithm based on SM-2 (SuperMemo 2)
     private calculateNextSpacedRepetitionReview(
         difficulty: 'easy' | 'medium' | 'hard',
         currentInterval: number,
-        reviewCount: number
-    ): { nextReviewDate: Date; newInterval: number } {
-        let easeFactor: number;
+        reviewCount: number,
+        currentEaseFactor?: number
+    ): { nextReviewDate: Date; newInterval: number; easeFactor: number } {
+        // Initialize ease factor (default 2.5 for new items)
+        let easeFactor = currentEaseFactor || 2.5;
 
-        // Determine ease factor based on difficulty
+        // Map difficulty to quality score (0-5 scale in SM-2)
+        let quality: number;
         switch (difficulty) {
-            case 'easy':
-                easeFactor = 2.5;
+            case 'hard':
+                quality = 1; // Incorrect response, but remembered with serious difficulty
                 break;
             case 'medium':
-                easeFactor = 2.0;
+                quality = 3; // Correct response recalled with serious difficulty
                 break;
-            case 'hard':
-                easeFactor = 1.3;
+            case 'easy':
+                quality = 5; // Perfect response
                 break;
             default:
-                easeFactor = 2.0;
+                quality = 3;
         }
 
-        // Calculate new interval
+        // Update ease factor based on SM-2 algorithm
+        // EF' = EF + (0.1 - (5-q) * (0.08 + (5-q) * 0.02))
+        easeFactor = easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+
+        // Ensure ease factor doesn't go below 1.3
+        easeFactor = Math.max(1.3, easeFactor);
+
+        // Calculate new interval based on SM-2 algorithm
         let newInterval: number;
-        if (reviewCount === 0) {
-            newInterval = 1; // First review after 1 day
-        } else if (reviewCount === 1) {
-            newInterval = 6; // Second review after 6 days
+
+        if (quality < 3) {
+            // If quality is less than 3, restart the sequence
+            newInterval = 1;
         } else {
-            newInterval = Math.ceil(currentInterval * easeFactor);
+            if (reviewCount === 0) {
+                newInterval = 1; // First review after 1 day
+            } else if (reviewCount === 1) {
+                newInterval = 6; // Second review after 6 days
+            } else {
+                // For subsequent reviews: I(n) = I(n-1) * EF
+                newInterval = Math.ceil(currentInterval * easeFactor);
+            }
         }
 
-        // Ensure minimum interval of 1 day
-        newInterval = Math.max(1, newInterval);
+        // Ensure minimum interval of 1 day and maximum of 365 days
+        newInterval = Math.max(1, Math.min(365, newInterval));
 
         // Calculate next review date
         const nextReviewDate = new Date();
         nextReviewDate.setDate(nextReviewDate.getDate() + newInterval);
         nextReviewDate.setHours(0, 0, 0, 0); // Set to start of day
 
-        return { nextReviewDate, newInterval };
+        return { nextReviewDate, newInterval, easeFactor };
     }
 
     // Calculate next recurring date based on local time

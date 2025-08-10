@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit3, MoreVertical, Eye, EyeOff, Target, Play, AlertTriangle, CheckCircle, HelpCircle, Coffee } from 'lucide-react';
+import { Plus, Trash2, Edit3, MoreVertical, Eye, EyeOff, Target, AlertTriangle, CheckCircle, HelpCircle, Coffee, Play, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -46,9 +46,10 @@ const DEFAULT_COLORS = [
 interface TaskManagerProps {
     onStartFocusSession?: (taskId: string) => void;
     isTimerActive?: boolean;
+    selectedTaskId?: string | null;
 }
 
-export function TaskManager({ onStartFocusSession, isTimerActive = false }: TaskManagerProps) {
+export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId }: TaskManagerProps) {
     const { user, storageProvider } = useAuth();
     const [tasks, setTasks] = useState<Task[]>([]);
     const [storageService, setStorageService] = useState<AdvancedStorageService | null>(null);
@@ -63,8 +64,7 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
     const [priorityFilter, setPriorityFilter] = useState<'all' | 'high' | 'medium' | 'low' | 'none'>('all');
     const [typeFilter, setTypeFilter] = useState<'all' | 'regular' | 'recurring' | 'spaced'>('all');
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
-    const [showStartSessionDialog, setShowStartSessionDialog] = useState(false);
-    const [pendingSessionTaskId, setPendingSessionTaskId] = useState<string | null>(null);
+
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
     const [editingTitle, setEditingTitle] = useState('');
     const [showEditDialog, setShowEditDialog] = useState(false);
@@ -77,7 +77,6 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
 
     // Spaced repetition states
     const [editingSpacedRepetition, setEditingSpacedRepetition] = useState(false);
-    const [editingSpacedDifficulty, setEditingSpacedDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
 
     // Recurring task states
     const [editingRecurring, setEditingRecurring] = useState(false);
@@ -92,6 +91,7 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
     const [newCategoryColor, setNewCategoryColor] = useState('#EF4444');
     const [newCategoryIcon, setNewCategoryIcon] = useState<IconItem | null>(null);
     const [availableCategories, setAvailableCategories] = useState<TaskCategory[]>([]);
+    const [todaysTaskSessions, setTodaysTaskSessions] = useState<Record<string, number>>({});
 
     const { toast } = useToast();
     const settings = LocalStorage.getSettings();
@@ -115,10 +115,34 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
             loadCategories();
         };
 
+        // Listen for session completion to refresh task sessions
+        const handleSessionCompleted = async (event: CustomEvent) => {
+            const session = event.detail;
+            // If it's a work session with a task, update that specific task's session count
+            if (session?.type === 'work' && session?.taskId && storageService) {
+                try {
+                    const updatedCount = await storageService.getTodaysTaskSessions(session.taskId);
+                    setTodaysTaskSessions(prev => ({
+                        ...prev,
+                        [session.taskId]: updatedCount
+                    }));
+                } catch (error) {
+                    console.error('Failed to update task session count:', error);
+                    // Fallback: reload all tasks
+                    loadTasks();
+                }
+            } else {
+                // For other cases, reload all tasks
+                loadTasks();
+            }
+        };
+
         window.addEventListener('firebaseDataSynced', handleFirebaseDataSynced);
+        window.addEventListener('sessionCompleted', handleSessionCompleted as EventListener);
 
         return () => {
             window.removeEventListener('firebaseDataSynced', handleFirebaseDataSynced);
+            window.removeEventListener('sessionCompleted', handleSessionCompleted as EventListener);
         };
     }, [storageService]);
 
@@ -215,13 +239,26 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                 const firebaseTasks = await storageService.getTasks();
                 console.log('Loaded tasks:', firebaseTasks.length, 'tasks');
 
-
-
                 // Filter and sort tasks properly
                 const activeTasks = firebaseTasks.filter(task => !task.archivedAt);
                 console.log('Active tasks:', activeTasks.length);
 
                 setTasks(activeTasks);
+
+                // Load today's sessions for each task
+                const sessionsMap: Record<string, number> = {};
+                await Promise.all(
+                    activeTasks.map(async (task) => {
+                        try {
+                            const todaySessions = await storageService.getTodaysTaskSessions(task.id);
+                            sessionsMap[task.id] = todaySessions;
+                        } catch (error) {
+                            console.error(`Failed to load today's sessions for task ${task.id}:`, error);
+                            sessionsMap[task.id] = 0;
+                        }
+                    })
+                );
+                setTodaysTaskSessions(sessionsMap);
             } catch (error) {
                 console.error('Failed to load tasks from Firebase:', error);
                 toast({
@@ -234,6 +271,7 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
         } else {
             // No tasks for unauthenticated users
             setTasks([]);
+            setTodaysTaskSessions({});
         }
     };
 
@@ -498,7 +536,6 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
 
         // Spaced repetition
         setEditingSpacedRepetition(task.spacedRepetition?.enabled || false);
-        setEditingSpacedDifficulty(task.spacedRepetition?.difficulty || 'medium');
 
         // Recurring
         setEditingRecurring(task.recurring?.enabled || false);
@@ -546,11 +583,12 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                         const existingTask = tasks.find(t => t.id === editingTaskId);
                         updates.spacedRepetition = {
                             enabled: true,
-                            difficulty: editingSpacedDifficulty,
+                            difficulty: existingTask?.spacedRepetition?.difficulty || 'medium', // Default to medium, will be set on first review
                             nextReviewDate: existingTask?.spacedRepetition?.nextReviewDate || Date.now(),
                             reviewCount: existingTask?.spacedRepetition?.reviewCount || 0,
                             lastReviewed: existingTask?.spacedRepetition?.lastReviewed,
-                            interval: existingTask?.spacedRepetition?.interval || 1
+                            interval: existingTask?.spacedRepetition?.interval || 1,
+                            easeFactor: existingTask?.spacedRepetition?.easeFactor || 2.5
                         };
                     } else {
                         updates.spacedRepetition = undefined;
@@ -593,11 +631,12 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                             if (editingSpacedRepetition) {
                                 updatedTask.spacedRepetition = {
                                     enabled: true,
-                                    difficulty: editingSpacedDifficulty,
+                                    difficulty: task.spacedRepetition?.difficulty || 'medium', // Default to medium, will be set on first review
                                     nextReviewDate: task.spacedRepetition?.nextReviewDate || Date.now(),
                                     reviewCount: task.spacedRepetition?.reviewCount || 0,
                                     lastReviewed: task.spacedRepetition?.lastReviewed,
-                                    interval: task.spacedRepetition?.interval || 1
+                                    interval: task.spacedRepetition?.interval || 1,
+                                    easeFactor: task.spacedRepetition?.easeFactor || 2.5
                                 };
                             } else {
                                 updatedTask.spacedRepetition = undefined;
@@ -648,9 +687,10 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                     if (editingSpacedRepetition) {
                         taskData.spacedRepetition = {
                             enabled: true,
-                            difficulty: editingSpacedDifficulty,
+                            difficulty: 'medium', // Default to medium, will be set on first review
                             interval: 1,
-                            nextReviewDate: Date.now() + (24 * 60 * 60 * 1000) // Tomorrow
+                            nextReviewDate: Date.now(), // Available immediately for first review
+                            easeFactor: 2.5 // Default SM-2 ease factor
                         };
                     }
 
@@ -688,10 +728,11 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                     if (editingSpacedRepetition) {
                         newTask.spacedRepetition = {
                             enabled: true,
-                            difficulty: editingSpacedDifficulty,
+                            difficulty: 'medium', // Default to medium, will be set on first review
                             nextReviewDate: Date.now(),
                             reviewCount: 0,
                             interval: 1,
+                            easeFactor: 2.5 // Default SM-2 ease factor
                         };
                     }
 
@@ -762,22 +803,9 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
         }
     };
 
-    const handleStartFocusSession = (taskId: string) => {
-        if (isTimerActive) {
-            setPendingSessionTaskId(taskId);
-            setShowStartSessionDialog(true);
-        } else {
-            onStartFocusSession?.(taskId);
-        }
-    };
 
-    const confirmStartSession = () => {
-        if (pendingSessionTaskId) {
-            onStartFocusSession?.(pendingSessionTaskId);
-            setPendingSessionTaskId(null);
-        }
-        setShowStartSessionDialog(false);
-    };
+
+
 
     const getFilteredTasks = () => {
         let filtered;
@@ -843,14 +871,18 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                     const isDue = nextReview.getTime() <= now.getTime();
                     const canReview = canCompleteSpacedRepetitionTask(task);
 
-                    console.log(`Spaced repetition task "${task.title}":`, {
-                        isDue,
-                        canReview,
-                        nextReviewDate: nextReview.toISOString(),
-                        now: now.toISOString(),
-                        lastReviewed: task.spacedRepetition.lastReviewed ? new Date(task.spacedRepetition.lastReviewed).toISOString() : 'never',
-                        willShow: isDue && canReview
-                    });
+                    // Debug logging for spaced repetition tasks
+                    if (task.title.toLowerCase().includes('spaced') || task.title.toLowerCase().includes('test')) {
+                        console.log(`Spaced repetition task "${task.title}":`, {
+                            isDue,
+                            canReview,
+                            nextReviewDate: nextReview.toISOString(),
+                            now: now.toISOString(),
+                            lastReviewed: task.spacedRepetition.lastReviewed ? new Date(task.spacedRepetition.lastReviewed).toISOString() : 'never',
+                            reviewCount: task.spacedRepetition.reviewCount,
+                            willShow: isDue && canReview
+                        });
+                    }
 
                     // Show if due (including overdue) and can be reviewed
                     return isDue && canReview;
@@ -1138,7 +1170,9 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                         (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
                                         (task.recurring?.enabled && !canCompleteRecurringTask(task)))
                                         ? "bg-background border-accent hover:bg-accent/50"
-                                        : "bg-background border-accent hover:bg-accent/50"
+                                        : "bg-background border-accent hover:bg-accent/50",
+                                    // Highlight selected task if timer is active
+                                    isTimerActive && task.id === selectedTaskId && "ring-2 ring-red-500/50 bg-red-50/50 dark:bg-red-900/10"
                                 )}
                             >
                                 {/* Task Completion Animation for this specific task */}
@@ -1210,14 +1244,34 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                         task.estimatedSessions > 0 && (
                                             <div className="space-y-1">
                                                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                                    <span>Today: {LocalStorage.getTodaysDailySessions(task)}/{task.estimatedSessions} sessions</span>
+                                                    <div className="flex items-center gap-2">
+                                                        {/* Show completed sessions as pomodoro timer circles */}
+                                                        <div className="flex items-center gap-1">
+                                                            {Array.from({ length: task.estimatedSessions }, (_, index) => (
+                                                                <div
+                                                                    key={index}
+                                                                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${index < (todaysTaskSessions[task.id] || 0)
+                                                                        ? 'bg-red-500 border-red-600'
+                                                                        : 'bg-background border-muted-foreground/30'
+                                                                        }`}
+                                                                >
+                                                                    {index < (todaysTaskSessions[task.id] || 0) && (
+                                                                        <div className="w-1 h-1 bg-white rounded-full"></div>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <span>
+                                                            {todaysTaskSessions[task.id] || 0}/{task.estimatedSessions}
+                                                        </span>
+                                                    </div>
                                                     <span>Total: {task.sessionsCompleted}</span>
                                                 </div>
                                                 <div className="w-full bg-accent rounded-full h-1.5">
                                                     <div
                                                         className="bg-red-600 h-1.5 rounded-full transition-all duration-300"
                                                         style={{
-                                                            width: `${Math.min((LocalStorage.getTodaysDailySessions(task) / task.estimatedSessions) * 100, 100)}%`
+                                                            width: `${Math.min(((todaysTaskSessions[task.id] || 0) / task.estimatedSessions) * 100, 100)}%`
                                                         }}
                                                     />
                                                 </div>
@@ -1234,8 +1288,18 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                     )}
 
                                     {/* Line 6: Special badges and category (if exist) */}
-                                    {(task.recurring?.enabled || task.spacedRepetition?.enabled || task.autoComplete || task.category) && (
+                                    {(task.recurring?.enabled || task.spacedRepetition?.enabled || task.autoComplete || task.category || (isTimerActive && task.id === selectedTaskId)) && (
                                         <div className="flex items-center gap-2 flex-wrap">
+                                            {/* Currently Working Badge */}
+                                            {isTimerActive && task.id === selectedTaskId && (
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="text-xs bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400 animate-pulse"
+                                                >
+                                                    🎯 Currently Working
+                                                </Badge>
+                                            )}
+
                                             {task.category && (() => {
                                                 const category = availableCategories.find(cat => cat.name === task.category);
                                                 return (
@@ -1275,7 +1339,7 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                             {task.autoComplete && (
                                                 <Badge
                                                     variant="secondary"
-                                                    className="text-xs bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
+                                                    className="text-xs bg-primary/10 text-primary"
                                                 >
                                                     Auto-complete
                                                 </Badge>
@@ -1293,7 +1357,7 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                                         "text-xs",
                                                         task.priority === 'high' && "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
                                                         task.priority === 'medium' && "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400",
-                                                        task.priority === 'low' && "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
+                                                        task.priority === 'low' && "bg-primary/10 text-primary"
                                                     )}
                                                 >
                                                     {task.priority}
@@ -1311,23 +1375,34 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                 <div className='flex items-center justify-between w-full mt-2'>
                                     {/* Line 3: Priority badge (if exists) */}
                                     <div className='flex justify-start items-start'>
-                                        {!((task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) ||
-                                            (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
-                                            (task.recurring?.enabled && !canCompleteRecurringTask(task))) &&
-                                            task.estimatedSessions > 0 && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={() => handleStartFocusSession(task.id)}
-                                                    className="h-8 px-3 text-xs bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/20 dark:hover:bg-red-900/30 dark:text-red-400 dark:border-red-800 cursor-pointer"
-                                                    disabled={isTimerActive}
-                                                >
-                                                    <Play className="w-3 h-3 mr-1" />
-                                                    Focus
-                                                </Button>
-                                            )}
+
                                     </div>
                                     <div className='flex float-right gap-1'>
+                                        {/* Focus Play Button - only show for incomplete tasks */}
+                                        {!((task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) ||
+                                            (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
+                                            (task.recurring?.enabled && !canCompleteRecurringTask(task))) && onStartFocusSession && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="default"
+                                                    onClick={() => onStartFocusSession(task.id)}
+                                                    disabled={isTimerActive}
+                                                    className={cn(
+                                                        "h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
+                                                        isTimerActive && task.id === selectedTaskId && "bg-red-100 text-red-600"
+                                                    )}
+                                                    title={
+                                                        isTimerActive && task.id === selectedTaskId
+                                                            ? "Currently working on this task"
+                                                            : isTimerActive
+                                                                ? "Timer is already active"
+                                                                : "Start focus session for this task"
+                                                    }
+                                                >
+                                                    <Play className="w-3 h-3" />
+                                                </Button>
+                                            )}
+
                                         {!((task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) ||
                                             (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
                                             (task.recurring?.enabled && !canCompleteRecurringTask(task))) && (
@@ -1373,7 +1448,6 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                             setEditingCategory('none');
                             setEditingAutoComplete(false);
                             setEditingSpacedRepetition(false);
-                            setEditingSpacedDifficulty('medium');
                             setEditingRecurring(false);
                             setEditingRecurringPattern('daily');
                             setEditingRecurringInterval(1);
@@ -1546,9 +1620,9 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                                             <div className="font-medium mb-1">Spaced Repetition Learning</div>
                                             <div className="space-y-1">
                                                 <div>• Tasks reappear at optimized intervals</div>
-                                                <div>• Rate difficulty after each review</div>
+                                                <div>• Rate difficulty when completing each review</div>
                                                 <div>• Easy items appear less frequently</div>
-                                                <div>• Hard items appear more often</div>
+                                                <div>• Hard items appear more often until mastered</div>
                                             </div>
                                             <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-100"></div>
                                         </div>
@@ -1559,18 +1633,9 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
 
                             {editingSpacedRepetition && (
                                 <div className="ml-6 space-y-3">
-                                    <div>
-                                        <Label className="text-sm text-gray-600 dark:text-gray-400">Difficulty Level</Label>
-                                        <Select value={editingSpacedDifficulty} onValueChange={(value: any) => setEditingSpacedDifficulty(value)}>
-                                            <SelectTrigger className="mt-1">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="easy">Easy (longer intervals)</SelectItem>
-                                                <SelectItem value="medium">Medium</SelectItem>
-                                                <SelectItem value="hard">Hard (shorter intervals)</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                    <div className="text-sm text-muted-foreground">
+                                        <p>✨ This task will use spaced repetition learning</p>
+                                        <p className="text-xs mt-1">You'll rate the difficulty after each review to optimize future intervals</p>
                                     </div>
                                 </div>
                             )}
@@ -1674,36 +1739,7 @@ export function TaskManager({ onStartFocusSession, isTimerActive = false }: Task
                 </DialogContent>
             </Dialog>
 
-            {/* Start Session Confirmation Dialog */}
-            <Dialog open={showStartSessionDialog} onOpenChange={setShowStartSessionDialog}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <AlertTriangle className="w-5 h-5 text-orange-500" />
-                            Start New Focus Session?
-                        </DialogTitle>
-                        <DialogDescription>
-                            A focus session is currently active. Starting a new session will stop the current one. Are you sure you want to continue?
-                        </DialogDescription>
-                    </DialogHeader>
 
-                    <div className="flex gap-2 pt-4">
-                        <Button
-                            variant="outline"
-                            onClick={() => setShowStartSessionDialog(false)}
-                            className="flex-1"
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={confirmStartSession}
-                            className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-                        >
-                            Start New Session
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
 
             {/* Create Category Dialog */}
             <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>

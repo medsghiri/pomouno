@@ -7,12 +7,15 @@ import { BreakReminderManager } from '@/components/tasks/break-reminder-manager'
 import { StatsDisplay } from '@/components/stats/stats-display';
 import { SettingsPanel } from '@/components/settings/settings-panel';
 import { AuthPrompt } from '@/components/auth/auth-prompt';
+import { TaskCompletionDialog } from '@/components/tasks/task-completion-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { LocalStorage, PomodoroSession, TodaysStats } from '@/lib/storage';
 import { StatisticsEngine } from '@/lib/statistics-engine';
 import { useAuth, useFeatureAccess } from '@/lib/auth-context';
 import { FirebaseService } from '@/lib/firebase-service';
+import { AdvancedStorageService } from '@/lib/advanced-storage-service';
+import type { Task } from '@/lib/advanced-storage-service';
 import { useToast } from '@/hooks/use-toast';
 import { Settings, BarChart3, X, Target, Coffee } from 'lucide-react';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -50,10 +53,24 @@ export function TimerApp({
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false);
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+    const [selectedTask, setSelectedTask] = useState<Task | null>(null);
     const [isTimerActive, setIsTimerActive] = useState(false);
     const [dailyGoal, setDailyGoal] = useState(8);
+    const [showTaskCompletionDialog, setShowTaskCompletionDialog] = useState(false);
+    const [storageService, setStorageService] = useState<AdvancedStorageService | null>(null);
+    const [shouldAutoStartTimer, setShouldAutoStartTimer] = useState(false);
+    const [todaysTaskSessions, setTodaysTaskSessions] = useState(0);
     const { toast } = useToast();
     const router = useRouter();
+
+    useEffect(() => {
+        if (user) {
+            const service = new AdvancedStorageService(user);
+            setStorageService(service);
+        } else {
+            setStorageService(null);
+        }
+    }, [user]);
 
     useEffect(() => {
         // Check and reset daily sessions if it's a new day
@@ -169,7 +186,7 @@ export function TimerApp({
         }
     }, [user, loading, handleAuthSuccess]);
 
-    const handleSessionComplete = useCallback((session: PomodoroSession) => {
+    const handleSessionComplete = useCallback(async (session: PomodoroSession) => {
         const currentSessions = LocalStorage.getTodaysSessions();
         const updatedSessions = [...currentSessions, session];
         LocalStorage.saveTodaysSessions(updatedSessions);
@@ -197,6 +214,12 @@ export function TimerApp({
         LocalStorage.saveTodaysStats(updatedStats);
         setSessionsCompleted(todayStats.sessions);
 
+        // Update today's task sessions count if a task was selected
+        if (selectedTaskId && session.type === 'work') {
+            // Immediately increment the count for instant feedback
+            setTodaysTaskSessions(prev => prev + 1);
+        }
+
         if (todayStats.sessions === dailyGoal) {
             toast({
                 title: "🎯 Daily goal achieved!",
@@ -205,8 +228,22 @@ export function TimerApp({
         }
 
         if (user) {
-            FirebaseService.saveSessions(user, [session]).catch(console.error);
+            // Use AdvancedStorageService if available, otherwise fallback to FirebaseService
+            if (storageService) {
+                // Record session and wait for it to complete before dispatching event
+                storageService.recordSession(session).then(() => {
+                    // Dispatch event after session is saved
+                    window.dispatchEvent(new CustomEvent('sessionCompleted', { detail: session }));
+                }).catch(console.error);
+            } else {
+                FirebaseService.saveSessions(user, [session]).catch(console.error);
+                // Dispatch event for non-advanced storage
+                window.dispatchEvent(new CustomEvent('sessionCompleted', { detail: session }));
+            }
             FirebaseService.saveStats(user, updatedStats).catch(console.error);
+        } else {
+            // For non-authenticated users, dispatch immediately
+            window.dispatchEvent(new CustomEvent('sessionCompleted', { detail: session }));
         }
 
         if (!user) {
@@ -218,30 +255,130 @@ export function TimerApp({
                 setShowAuthPrompt(true);
             }
         }
-    }, [user, toast, dailyGoal]);
+    }, [user, toast, dailyGoal, selectedTaskId, storageService, todaysTaskSessions]);
 
-    const handleStartFocusSession = useCallback((taskId: string) => {
-        setSelectedTaskId(taskId);
-        setIsTimerActive(true);
+    const handleStartFocusSession = useCallback(async (taskId: string) => {
+        if (!storageService) return;
 
-        // Tasks are Firebase-only, no localStorage fallback
-        const task = null;
+        try {
+            // Get the task details
+            const task = await storageService.getTask(taskId);
+            if (!task) {
+                toast({
+                    title: "Task not found",
+                    description: "The selected task could not be found.",
+                    variant: "destructive",
+                });
+                return;
+            }
 
+            setSelectedTaskId(taskId);
+            setSelectedTask(task);
+            setIsTimerActive(true);
+            setShouldAutoStartTimer(true); // Signal to auto-start the timer
+
+            // Load today's sessions for this task
+            const todaySessions = await storageService.getTodaysTaskSessions(taskId);
+            setTodaysTaskSessions(todaySessions);
+
+            toast({
+                title: "Focus session started",
+                description: `Working on: ${task.title}`,
+            });
+        } catch (error) {
+            console.error('Error starting focus session:', error);
+            toast({
+                title: "Error starting session",
+                description: "Please try again.",
+                variant: "destructive",
+            });
+        }
+    }, [storageService, toast]);
+
+    const handleTaskSessionComplete = useCallback(async (taskId: string) => {
+        if (!storageService || !selectedTask) return;
+
+        try {
+            // Refresh task data to get latest state
+            const updatedTask = await storageService.getTask(taskId);
+            if (updatedTask) {
+                setSelectedTask(updatedTask);
+            }
+
+            // Get today's sessions for this task to check if we should show dialog
+            const todaySessions = await storageService.getTodaysTaskSessions(taskId);
+            setTodaysTaskSessions(todaySessions);
+
+            // Only show completion dialog if:
+            // 1. Task has estimated sessions AND we've reached the goal
+            // 2. OR it's a spaced repetition/recurring task (always ask)
+            // 3. OR task has no estimated sessions (always ask)
+            const shouldShowDialog =
+                (updatedTask?.estimatedSessions && updatedTask.estimatedSessions > 0 && todaySessions >= updatedTask.estimatedSessions) ||
+                updatedTask?.spacedRepetition?.enabled ||
+                updatedTask?.recurring?.enabled ||
+                !updatedTask?.estimatedSessions ||
+                updatedTask?.estimatedSessions === 0;
+
+            if (shouldShowDialog) {
+                setShowTaskCompletionDialog(true);
+            } else {
+                // Just show a simple completion message and continue
+                toast({
+                    title: "Session completed!",
+                    description: `Progress: ${todaySessions}/${updatedTask?.estimatedSessions} sessions completed today.`,
+                });
+            }
+
+            setIsTimerActive(false);
+        } catch (error) {
+            console.error('Error handling task session completion:', error);
+            toast({
+                title: "Task session completed!",
+                description: "Session completed successfully.",
+            });
+            setIsTimerActive(false);
+        }
+    }, [storageService, selectedTask, toast]);
+
+    const handleTaskComplete = useCallback(async () => {
+        if (!storageService || !selectedTask) return;
+
+        try {
+            if (selectedTask.spacedRepetition?.enabled) {
+                // For spaced repetition, we need to show difficulty dialog
+                // This will be handled by the task manager's existing logic
+                await storageService.completeTask(selectedTask.id);
+            } else {
+                // For regular and recurring tasks
+                await storageService.completeTask(selectedTask.id);
+            }
+
+            toast({
+                title: "Task completed!",
+                description: `"${selectedTask.title}" has been marked as complete.`,
+            });
+
+            // Reset selection
+            setSelectedTaskId(null);
+            setSelectedTask(null);
+        } catch (error) {
+            console.error('Error completing task:', error);
+            toast({
+                title: "Error completing task",
+                description: "Please try again.",
+                variant: "destructive",
+            });
+        }
+    }, [storageService, selectedTask, toast]);
+
+    const handleContinueWorking = useCallback(() => {
+        // Just close the dialog, keep the task selected for potential future sessions
         toast({
-            title: "Focus session started",
-            description: "Focus session started",
+            title: "Keep going!",
+            description: `Continue working on "${selectedTask?.title}" when ready.`,
         });
-    }, [toast]);
-
-    const handleTaskSessionComplete = useCallback((taskId: string) => {
-        // Task completion handled by Firebase service
-        // No localStorage operations for tasks
-
-        toast({
-            title: "Task session completed!",
-            description: "Task session has been completed.",
-        });
-    }, [toast]);
+    }, [selectedTask, toast]);
 
     const handleSignUp = () => {
         setShowAuthPrompt(false);
@@ -286,6 +423,7 @@ export function TimerApp({
                         <TaskManager
                             onStartFocusSession={handleStartFocusSession}
                             isTimerActive={isTimerActive}
+                            selectedTaskId={selectedTaskId}
                         />
                     </SheetContent>
                 </Sheet>
@@ -304,7 +442,11 @@ export function TimerApp({
                         <TimerWithTitle
                             onSessionComplete={handleSessionComplete}
                             selectedTaskId={selectedTaskId}
+                            selectedTask={selectedTask}
                             onTaskSessionComplete={handleTaskSessionComplete}
+                            shouldAutoStart={shouldAutoStartTimer}
+                            onAutoStartComplete={() => setShouldAutoStartTimer(false)}
+                            todaysTaskSessions={todaysTaskSessions}
                         />
 
                         {/* Daily Goal Progress */}
@@ -446,6 +588,16 @@ export function TimerApp({
                     </div>
                 </div>
             )}
+
+            {/* Task Completion Dialog */}
+            <TaskCompletionDialog
+                open={showTaskCompletionDialog}
+                onOpenChange={setShowTaskCompletionDialog}
+                task={selectedTask}
+                onTaskComplete={handleTaskComplete}
+                onContinueWorking={handleContinueWorking}
+                todaysTaskSessions={todaysTaskSessions}
+            />
         </div>
     );
 }

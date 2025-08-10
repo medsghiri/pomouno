@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { LocalStorage, Task, TaskUtils } from '@/lib/storage';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 interface TaskSelectorProps {
@@ -96,83 +97,85 @@ export function TaskSelector({ open, onOpenChange, onTaskSelect, sessionType }: 
                     </DialogTitle>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-y-auto space-y-3">
-                    {tasks.length === 0 ? (
-                        <div className="text-center py-8 text-gray-600 dark:text-gray-400">
-                            <p>{getEmptyMessage()}</p>
-                        </div>
-                    ) : (
-                        tasks.map((task) => (
-                            <Card
-                                key={task.id}
-                                className={cn(
-                                    "p-4 cursor-pointer transition-all duration-200 hover:shadow-md",
-                                    selectedTaskId === task.id
-                                        ? "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                                        : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
-                                )}
-                                onClick={() => handleTaskSelect(task)}
-                            >
-                                <div className="flex items-start gap-3">
-                                    <div className="flex items-center gap-2 flex-1">
-                                        {task.priority && (
-                                            <div className={getPriorityColor(task.priority)}>
-                                                <Star className="w-4 h-4" fill={task.priority === 'high' ? 'currentColor' : 'none'} />
+                <ScrollArea className="flex-1">
+                    <div className="space-y-3">
+                        {tasks.length === 0 ? (
+                            <div className="text-center py-8 text-gray-600 dark:text-gray-400">
+                                <p>{getEmptyMessage()}</p>
+                            </div>
+                        ) : (
+                            tasks.map((task) => (
+                                <Card
+                                    key={task.id}
+                                    className={cn(
+                                        "p-4 cursor-pointer transition-all duration-200 hover:shadow-md",
+                                        selectedTaskId === task.id
+                                            ? "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                                            : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                                    )}
+                                    onClick={() => handleTaskSelect(task)}
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex items-center gap-2 flex-1">
+                                            {task.priority && (
+                                                <div className={getPriorityColor(task.priority)}>
+                                                    <Star className="w-4 h-4" fill={task.priority === 'high' ? 'currentColor' : 'none'} />
+                                                </div>
+                                            )}
+                                            {getTaskTypeIcon(task)}
+
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                                                        {task.title}
+                                                    </span>
+                                                    {getTaskTypeBadge(task)}
+                                                </div>
+
+                                                {task.description && (
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                                        {task.description}
+                                                    </p>
+                                                )}
+
+                                                <div className="flex items-center gap-2 mt-2">
+                                                    {task.category && (
+                                                        <Badge variant="outline" className="text-xs">
+                                                            <Tag className="w-3 h-3 mr-1" />
+                                                            {task.category}
+                                                        </Badge>
+                                                    )}
+
+                                                    {sessionType === 'work' && task.estimatedSessions > 0 && (
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                            {task.sessionsCompleted}/{task.estimatedSessions} sessions
+                                                        </span>
+                                                    )}
+
+
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {TaskUtils.getTaskProgress(task) > 0 && sessionType === 'work' && (
+                                            <div className="text-right">
+                                                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                    {Math.round(TaskUtils.getTaskProgress(task))}%
+                                                </div>
+                                                <div className="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                                                    <div
+                                                        className="bg-blue-500 dark:bg-blue-400 h-1.5 rounded-full transition-all duration-300"
+                                                        style={{ width: `${TaskUtils.getTaskProgress(task)}%` }}
+                                                    />
+                                                </div>
                                             </div>
                                         )}
-                                        {getTaskTypeIcon(task)}
-
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-medium text-gray-900 dark:text-gray-100">
-                                                    {task.title}
-                                                </span>
-                                                {getTaskTypeBadge(task)}
-                                            </div>
-
-                                            {task.description && (
-                                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                                    {task.description}
-                                                </p>
-                                            )}
-
-                                            <div className="flex items-center gap-2 mt-2">
-                                                {task.category && (
-                                                    <Badge variant="outline" className="text-xs">
-                                                        <Tag className="w-3 h-3 mr-1" />
-                                                        {task.category}
-                                                    </Badge>
-                                                )}
-
-                                                {sessionType === 'work' && task.estimatedSessions > 0 && (
-                                                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                        {task.sessionsCompleted}/{task.estimatedSessions} sessions
-                                                    </span>
-                                                )}
-
-
-                                            </div>
-                                        </div>
                                     </div>
-
-                                    {TaskUtils.getTaskProgress(task) > 0 && sessionType === 'work' && (
-                                        <div className="text-right">
-                                            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                                {Math.round(TaskUtils.getTaskProgress(task))}%
-                                            </div>
-                                            <div className="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                                                <div
-                                                    className="bg-blue-500 dark:bg-blue-400 h-1.5 rounded-full transition-all duration-300"
-                                                    style={{ width: `${TaskUtils.getTaskProgress(task)}%` }}
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </Card>
-                        ))
-                    )}
-                </div>
+                                </Card>
+                            ))
+                        )}
+                    </div>
+                </ScrollArea>
 
                 <div className="flex gap-2 pt-4 border-t">
                     <Button

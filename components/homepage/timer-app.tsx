@@ -412,21 +412,25 @@ export function TimerApp({
             <div className="flex min-h-[60vh] relative">
                 {/* Tasks Sheet */}
                 <Sheet open={showTasks} onOpenChange={setShowTasks}>
-                    <SheetContent side="left" className="w-full sm:w-[600px] p-0 overflow-y-auto">
+                    <SheetContent side="left" className="w-full sm:w-[600px] p-0">
                         <SheetTitle className="sr-only">Tasks</SheetTitle>
-                        <TaskManager
-                            onStartFocusSession={handleStartFocusSession}
-                            isTimerActive={isTimerActive}
-                            selectedTaskId={selectedTaskId}
-                        />
+                        <ScrollArea className="h-full">
+                            <TaskManager
+                                onStartFocusSession={handleStartFocusSession}
+                                isTimerActive={isTimerActive}
+                                selectedTaskId={selectedTaskId}
+                            />
+                        </ScrollArea>
                     </SheetContent>
                 </Sheet>
 
                 {/* Break Reminders Sheet */}
                 <Sheet open={showBreakReminders} onOpenChange={setShowBreakReminders}>
-                    <SheetContent side="left" className="w-full sm:w-[600px] p-0 overflow-y-auto">
+                    <SheetContent side="left" className="w-full sm:w-[600px] p-0">
                         <SheetTitle className="sr-only">Break Reminders</SheetTitle>
-                        <BreakReminderManager />
+                        <ScrollArea className="h-full">
+                            <BreakReminderManager />
+                        </ScrollArea>
                     </SheetContent>
                 </Sheet>
 

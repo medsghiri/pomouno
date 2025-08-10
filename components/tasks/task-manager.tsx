@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { SessionSelector } from '@/components/ui/session-selector';
 import { DaySelector } from '@/components/ui/day-selector';
 import { IconSelector, IconItem } from '@/components/ui/icon-selector';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { LocalStorage, TaskUtils } from '@/lib/storage';
 import { AdvancedStorageService } from '@/lib/advanced-storage-service';
 import type { Task, TaskCategory } from '@/lib/advanced-storage-service';
@@ -1489,238 +1490,240 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
                         <DialogTitle>{editingTaskId ? 'Edit Task' : 'Add New Task'}</DialogTitle>
                     </DialogHeader>
 
-                    <div className="space-y-4 space-x-1 max-h-[60vh] px-1 overflow-y-auto">
-                        <div>
-                            <Label htmlFor="edit-title">Title</Label>
-                            <Input
-                                id="edit-title"
-                                placeholder="Task title"
-                                value={editingTitle}
-                                onChange={(e) => setEditingTitle(e.target.value)}
-                            />
-                        </div>
-
-                        <div>
-                            <Label htmlFor="edit-description">Description (Optional)</Label>
-                            <Textarea
-                                id="edit-description"
-                                placeholder="Add a description"
-                                value={editingDescription}
-                                onChange={(e) => setEditingDescription(e.target.value)}
-                                rows={3}
-                            />
-                        </div>
-
-                        <div>
-                            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Estimated Sessions</Label>
-                            <div className="mt-2">
-                                <SessionSelector
-                                    value={editingEstimate}
-                                    onChange={setEditingEstimate}
-                                    max={8}
+                    <ScrollArea className="max-h-[60vh]">
+                        <div className="space-y-4 space-x-1 px-1">
+                            <div>
+                                <Label htmlFor="edit-title">Title</Label>
+                                <Input
+                                    id="edit-title"
+                                    placeholder="Task title"
+                                    value={editingTitle}
+                                    onChange={(e) => setEditingTitle(e.target.value)}
                                 />
                             </div>
-                        </div>
 
-                        <div>
-                            <div className="flex items-center space-x-2 mb-3">
-                                <Switch
-                                    id="edit-priority-enabled"
-                                    checked={editingPriorityEnabled}
-                                    onCheckedChange={setEditingPriorityEnabled}
-                                    className="data-[state=checked]:bg-red-600"
+                            <div>
+                                <Label htmlFor="edit-description">Description (Optional)</Label>
+                                <Textarea
+                                    id="edit-description"
+                                    placeholder="Add a description"
+                                    value={editingDescription}
+                                    onChange={(e) => setEditingDescription(e.target.value)}
+                                    rows={3}
                                 />
-                                <Label htmlFor="edit-priority-enabled" className="text-sm font-medium">Set Priority</Label>
                             </div>
 
-                            {editingPriorityEnabled && (
-                                <div className="ml-6">
-                                    <Select value={editingPriority} onValueChange={(value: any) => setEditingPriority(value)}>
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="low">Low</SelectItem>
-                                            <SelectItem value="medium">Medium</SelectItem>
-                                            <SelectItem value="high">High</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                            <div>
+                                <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Estimated Sessions</Label>
+                                <div className="mt-2">
+                                    <SessionSelector
+                                        value={editingEstimate}
+                                        onChange={setEditingEstimate}
+                                        max={8}
+                                    />
                                 </div>
-                            )}
-                        </div>
-
-                        <div>
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="edit-category">Category (Optional)</Label>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setShowCategoryDialog(true)}
-                                    className="text-xs h-6 px-2"
-                                >
-                                    <Plus className="w-3 h-3 mr-1" />
-                                    Add Category
-                                </Button>
-                            </div>
-                            <Select value={editingCategory} onValueChange={setEditingCategory}>
-                                <SelectTrigger className="mt-2">
-                                    <SelectValue placeholder="Select a category" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">No Category</SelectItem>
-                                    {availableCategories.map((category) => (
-                                        <SelectItem key={category.id} value={category.name}>
-                                            <div className="flex items-center gap-2">
-                                                {category.icon && <span>{category.icon}</span>}
-                                                <span>{category.name}</span>
-                                            </div>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                            <Switch
-                                id="edit-auto-complete"
-                                checked={editingAutoComplete}
-                                onCheckedChange={setEditingAutoComplete}
-                                className="data-[state=checked]:bg-red-600"
-                            />
-                            <Label htmlFor="edit-auto-complete" className="text-sm">Auto-complete when sessions are done</Label>
-                        </div>
-
-                        {/* Spaced Repetition Section */}
-                        <div className="border-t pt-4">
-                            <div className="flex items-center space-x-2 mb-3">
-                                <Switch
-                                    id="edit-spaced-repetition"
-                                    checked={editingSpacedRepetition}
-                                    onCheckedChange={(checked) => {
-                                        setEditingSpacedRepetition(checked);
-                                        if (checked && editingRecurring) {
-                                            setEditingRecurring(false);
-                                            toast({
-                                                title: "Recurring disabled",
-                                                description: "Tasks cannot be both spaced repetition and recurring.",
-                                            });
-                                        }
-                                    }}
-                                    disabled={editingRecurring}
-                                    className="data-[state=checked]:bg-red-600"
-                                />
-                                <Label htmlFor="edit-spaced-repetition" className={cn(
-                                    "text-sm font-medium flex items-center gap-2",
-                                    editingRecurring && "text-gray-400 dark:text-gray-500"
-                                )}>
-                                    Enable Spaced Repetition
-                                    <div className="group relative">
-                                        <HelpCircle className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help" />
-                                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 w-64">
-                                            <div className="font-medium mb-1">Spaced Repetition Learning</div>
-                                            <div className="space-y-1">
-                                                <div>• Tasks reappear at optimized intervals</div>
-                                                <div>• Rate difficulty when completing each review</div>
-                                                <div>• Easy items appear less frequently</div>
-                                                <div>• Hard items appear more often until mastered</div>
-                                            </div>
-                                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-100"></div>
-                                        </div>
-                                    </div>
-                                    {editingRecurring && <span className="text-xs text-gray-400 ml-2">(disabled - task is recurring)</span>}
-                                </Label>
                             </div>
 
-                            {editingSpacedRepetition && (
-                                <div className="ml-6 space-y-3">
-                                    <div className="text-sm text-muted-foreground">
-                                        <p>✨ This task will use spaced repetition learning</p>
-                                        <p className="text-xs mt-1">You'll rate the difficulty after each review to optimize future intervals</p>
-                                    </div>
+                            <div>
+                                <div className="flex items-center space-x-2 mb-3">
+                                    <Switch
+                                        id="edit-priority-enabled"
+                                        checked={editingPriorityEnabled}
+                                        onCheckedChange={setEditingPriorityEnabled}
+                                        className="data-[state=checked]:bg-red-600"
+                                    />
+                                    <Label htmlFor="edit-priority-enabled" className="text-sm font-medium">Set Priority</Label>
                                 </div>
-                            )}
-                        </div>
 
-                        {/* Recurring Task Section */}
-                        <div className="border-t pt-4">
-                            <div className="flex items-center space-x-2 mb-3">
-                                <Switch
-                                    id="edit-recurring"
-                                    checked={editingRecurring}
-                                    onCheckedChange={(checked) => {
-                                        setEditingRecurring(checked);
-                                        if (checked && editingSpacedRepetition) {
-                                            setEditingSpacedRepetition(false);
-                                            toast({
-                                                title: "Spaced repetition disabled",
-                                                description: "Tasks cannot be both recurring and spaced repetition.",
-                                            });
-                                        }
-                                    }}
-                                    disabled={editingSpacedRepetition}
-                                    className="data-[state=checked]:bg-red-600"
-                                />
-                                <Label htmlFor="edit-recurring" className={cn(
-                                    "text-sm font-medium",
-                                    editingSpacedRepetition && "text-gray-400 dark:text-gray-500"
-                                )}>
-                                    Make Recurring
-                                    {editingSpacedRepetition && <span className="text-xs text-gray-400 ml-2">(disabled - task has spaced repetition)</span>}
-                                </Label>
-                            </div>
-
-                            {editingRecurring && (
-                                <div className="ml-6 space-y-3">
-                                    <div>
-                                        <Label className="text-sm text-gray-600 dark:text-gray-400">Repeat Pattern</Label>
-                                        <Select value={editingRecurringPattern} onValueChange={(value: any) => setEditingRecurringPattern(value)}>
-                                            <SelectTrigger className="mt-1">
+                                {editingPriorityEnabled && (
+                                    <div className="ml-6">
+                                        <Select value={editingPriority} onValueChange={(value: any) => setEditingPriority(value)}>
+                                            <SelectTrigger>
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="daily">Daily</SelectItem>
-                                                <SelectItem value="weekdays">Weekdays Only</SelectItem>
-                                                <SelectItem value="weekly">Weekly</SelectItem>
-                                                <SelectItem value="specific-days">Specific Days</SelectItem>
-                                                <SelectItem value="monthly">Monthly</SelectItem>
-                                                <SelectItem value="custom">Custom Interval</SelectItem>
+                                                <SelectItem value="low">Low</SelectItem>
+                                                <SelectItem value="medium">Medium</SelectItem>
+                                                <SelectItem value="high">High</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
+                                )}
+                            </div>
 
-                                    {editingRecurringPattern === 'specific-days' && (
+                            <div>
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="edit-category">Category (Optional)</Label>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setShowCategoryDialog(true)}
+                                        className="text-xs h-6 px-2"
+                                    >
+                                        <Plus className="w-3 h-3 mr-1" />
+                                        Add Category
+                                    </Button>
+                                </div>
+                                <Select value={editingCategory} onValueChange={setEditingCategory}>
+                                    <SelectTrigger className="mt-2">
+                                        <SelectValue placeholder="Select a category" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">No Category</SelectItem>
+                                        {availableCategories.map((category) => (
+                                            <SelectItem key={category.id} value={category.name}>
+                                                <div className="flex items-center gap-2">
+                                                    {category.icon && <span>{category.icon}</span>}
+                                                    <span>{category.name}</span>
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="flex items-center space-x-2">
+                                <Switch
+                                    id="edit-auto-complete"
+                                    checked={editingAutoComplete}
+                                    onCheckedChange={setEditingAutoComplete}
+                                    className="data-[state=checked]:bg-red-600"
+                                />
+                                <Label htmlFor="edit-auto-complete" className="text-sm">Auto-complete when sessions are done</Label>
+                            </div>
+
+                            {/* Spaced Repetition Section */}
+                            <div className="border-t pt-4">
+                                <div className="flex items-center space-x-2 mb-3">
+                                    <Switch
+                                        id="edit-spaced-repetition"
+                                        checked={editingSpacedRepetition}
+                                        onCheckedChange={(checked) => {
+                                            setEditingSpacedRepetition(checked);
+                                            if (checked && editingRecurring) {
+                                                setEditingRecurring(false);
+                                                toast({
+                                                    title: "Recurring disabled",
+                                                    description: "Tasks cannot be both spaced repetition and recurring.",
+                                                });
+                                            }
+                                        }}
+                                        disabled={editingRecurring}
+                                        className="data-[state=checked]:bg-red-600"
+                                    />
+                                    <Label htmlFor="edit-spaced-repetition" className={cn(
+                                        "text-sm font-medium flex items-center gap-2",
+                                        editingRecurring && "text-gray-400 dark:text-gray-500"
+                                    )}>
+                                        Enable Spaced Repetition
+                                        <div className="group relative">
+                                            <HelpCircle className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help" />
+                                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 w-64">
+                                                <div className="font-medium mb-1">Spaced Repetition Learning</div>
+                                                <div className="space-y-1">
+                                                    <div>• Tasks reappear at optimized intervals</div>
+                                                    <div>• Rate difficulty when completing each review</div>
+                                                    <div>• Easy items appear less frequently</div>
+                                                    <div>• Hard items appear more often until mastered</div>
+                                                </div>
+                                                <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-100"></div>
+                                            </div>
+                                        </div>
+                                        {editingRecurring && <span className="text-xs text-gray-400 ml-2">(disabled - task is recurring)</span>}
+                                    </Label>
+                                </div>
+
+                                {editingSpacedRepetition && (
+                                    <div className="ml-6 space-y-3">
+                                        <div className="text-sm text-muted-foreground">
+                                            <p>✨ This task will use spaced repetition learning</p>
+                                            <p className="text-xs mt-1">You'll rate the difficulty after each review to optimize future intervals</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Recurring Task Section */}
+                            <div className="border-t pt-4">
+                                <div className="flex items-center space-x-2 mb-3">
+                                    <Switch
+                                        id="edit-recurring"
+                                        checked={editingRecurring}
+                                        onCheckedChange={(checked) => {
+                                            setEditingRecurring(checked);
+                                            if (checked && editingSpacedRepetition) {
+                                                setEditingSpacedRepetition(false);
+                                                toast({
+                                                    title: "Spaced repetition disabled",
+                                                    description: "Tasks cannot be both recurring and spaced repetition.",
+                                                });
+                                            }
+                                        }}
+                                        disabled={editingSpacedRepetition}
+                                        className="data-[state=checked]:bg-red-600"
+                                    />
+                                    <Label htmlFor="edit-recurring" className={cn(
+                                        "text-sm font-medium",
+                                        editingSpacedRepetition && "text-gray-400 dark:text-gray-500"
+                                    )}>
+                                        Make Recurring
+                                        {editingSpacedRepetition && <span className="text-xs text-gray-400 ml-2">(disabled - task has spaced repetition)</span>}
+                                    </Label>
+                                </div>
+
+                                {editingRecurring && (
+                                    <div className="ml-6 space-y-3">
                                         <div>
-                                            <Label className="text-sm text-gray-600 dark:text-gray-400">Select Days</Label>
-                                            <div className="mt-2">
-                                                <DaySelector
-                                                    selectedDays={editingRecurringDaysOfWeek}
-                                                    onChange={setEditingRecurringDaysOfWeek}
+                                            <Label className="text-sm text-gray-600 dark:text-gray-400">Repeat Pattern</Label>
+                                            <Select value={editingRecurringPattern} onValueChange={(value: any) => setEditingRecurringPattern(value)}>
+                                                <SelectTrigger className="mt-1">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="daily">Daily</SelectItem>
+                                                    <SelectItem value="weekdays">Weekdays Only</SelectItem>
+                                                    <SelectItem value="weekly">Weekly</SelectItem>
+                                                    <SelectItem value="specific-days">Specific Days</SelectItem>
+                                                    <SelectItem value="monthly">Monthly</SelectItem>
+                                                    <SelectItem value="custom">Custom Interval</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        {editingRecurringPattern === 'specific-days' && (
+                                            <div>
+                                                <Label className="text-sm text-gray-600 dark:text-gray-400">Select Days</Label>
+                                                <div className="mt-2">
+                                                    <DaySelector
+                                                        selectedDays={editingRecurringDaysOfWeek}
+                                                        onChange={setEditingRecurringDaysOfWeek}
+                                                    />
+                                                </div>
+                                                {editingRecurringDaysOfWeek.length === 0 && (
+                                                    <p className="text-xs text-red-500 mt-1">Please select at least one day</p>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {editingRecurringPattern === 'custom' && (
+                                            <div>
+                                                <Label className="text-sm text-gray-600 dark:text-gray-400">Every X Days</Label>
+                                                <Input
+                                                    type="number"
+                                                    min="1"
+                                                    max="365"
+                                                    value={editingRecurringInterval}
+                                                    onChange={(e) => setEditingRecurringInterval(parseInt(e.target.value) || 1)}
+                                                    className="mt-1"
                                                 />
                                             </div>
-                                            {editingRecurringDaysOfWeek.length === 0 && (
-                                                <p className="text-xs text-red-500 mt-1">Please select at least one day</p>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {editingRecurringPattern === 'custom' && (
-                                        <div>
-                                            <Label className="text-sm text-gray-600 dark:text-gray-400">Every X Days</Label>
-                                            <Input
-                                                type="number"
-                                                min="1"
-                                                max="365"
-                                                value={editingRecurringInterval}
-                                                onChange={(e) => setEditingRecurringInterval(parseInt(e.target.value) || 1)}
-                                                className="mt-1"
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    </ScrollArea>
 
                     <div className="flex gap-2">
                         <Button

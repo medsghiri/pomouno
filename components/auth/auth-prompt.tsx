@@ -65,7 +65,7 @@ const promptContent = {
 
 export function AuthPrompt({ trigger, sessionsCompleted = 0, onDismiss, onSignUp, className }: AuthPromptProps) {
   const [isVisible, setIsVisible] = useState(true);
-  
+
   if (!isVisible) return null;
 
   const content = promptContent[trigger];
@@ -78,21 +78,21 @@ export function AuthPrompt({ trigger, sessionsCompleted = 0, onDismiss, onSignUp
 
   return (
     <Card className={cn(
-      "p-4 border-2 border-blue-200 bg-linear-to-r from-blue-50 to-indigo-50",
+      "p-4 border-2 border-red-200 dark:border-red-800/30 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950/20 dark:to-orange-950/20",
       className
     )}>
       <div className="space-y-4">
         {/* Header */}
         <div className="flex items-start justify-between">
           <div className="space-y-1">
-            <h3 className="font-semibold text-blue-900">{content.title}</h3>
-            <p className="text-sm text-blue-700">{description}</p>
+            <h3 className="font-semibold text-foreground">{content.title}</h3>
+            <p className="text-sm text-muted-foreground">{description}</p>
           </div>
           <Button
             variant="ghost"
             size="sm"
             onClick={handleDismiss}
-            className="text-blue-600 hover:text-blue-800 hover:bg-blue-100 p-1 h-auto"
+            className="text-muted-foreground hover:text-foreground hover:bg-accent p-1 h-auto"
           >
             <X className="w-4 h-4" />
           </Button>
@@ -104,7 +104,7 @@ export function AuthPrompt({ trigger, sessionsCompleted = 0, onDismiss, onSignUp
             <Badge
               key={index}
               variant="secondary"
-              className="text-xs bg-blue-100 text-blue-800 hover:bg-blue-200"
+              className="text-xs bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/30"
             >
               {benefit}
             </Badge>
@@ -115,7 +115,7 @@ export function AuthPrompt({ trigger, sessionsCompleted = 0, onDismiss, onSignUp
         <div className="flex gap-2">
           <Button
             onClick={onSignUp}
-            className="bg-blue-600 hover:bg-blue-700 text-white flex-1"
+            className="bg-red-600 hover:bg-red-700 text-white flex-1"
             size="sm"
           >
             <Cloud className="w-4 h-4 mr-2" />
@@ -125,7 +125,7 @@ export function AuthPrompt({ trigger, sessionsCompleted = 0, onDismiss, onSignUp
             variant="outline"
             size="sm"
             onClick={handleDismiss}
-            className="text-blue-600 border-blue-300 hover:bg-blue-50"
+            className="text-muted-foreground border-accent hover:bg-accent"
           >
             Later
           </Button>

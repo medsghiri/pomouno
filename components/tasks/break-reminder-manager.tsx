@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 import { AdvancedStorageService } from '@/lib/advanced-storage-service';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import type { BreakReminder, BreakReminderCategory, CreateBreakReminderRequest } from '@/lib/advanced-storage-service';
 
 // Default categories for break reminders
@@ -401,147 +402,149 @@ export function BreakReminderManager() {
                     Track healthy habits with simple counters. Click + to increment when you complete an activity.
                 </div>
 
-                <div className="space-y-3 flex-1 overflow-y-auto pr-2">
-                    {loading && reminders.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                            <Coffee className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                            <p>Loading break reminders...</p>
-                        </div>
-                    ) : reminders.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                            <Coffee className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                            <p>No break reminders yet. Add some to help maintain healthy habits!</p>
-                        </div>
-                    ) : (
-                        reminders
-                            .sort((a, b) => {
-                                // Sort by enabled status first (enabled first), then by creation date
-                                if (a.enabled !== b.enabled) {
-                                    return b.enabled ? 1 : -1;
-                                }
-                                return b.createdAt - a.createdAt;
-                            })
-                            .map((reminder) => {
-                                const categoryInfo = getCategoryInfo(reminder.category);
-                                return (
-                                    <Card
-                                        key={reminder.id}
-                                        className={cn(
-                                            "p-3 sm:p-4 rounded-lg border transition-all duration-200 space-y-3",
-                                            reminder.enabled
-                                                ? "bg-background border-accent hover:bg-accent/10"
-                                                : "bg-background border-accent hover:bg-accent/10 opacity-60"
-                                        )}
-                                    >
-                                        <div className="flex gap-3 items-start">
-                                            {/* Icon and title */}
-                                            <div className="flex-shrink-0 w-5 mt-0.5">
-                                                <span className="text-base">{categoryInfo.icon}</span>
+                <ScrollArea className="flex-1">
+                    <div className="space-y-3 pr-2">
+                        {loading && reminders.length === 0 ? (
+                            <div className="text-center py-8 text-muted-foreground">
+                                <Coffee className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                                <p>Loading break reminders...</p>
+                            </div>
+                        ) : reminders.length === 0 ? (
+                            <div className="text-center py-8 text-muted-foreground">
+                                <Coffee className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                                <p>No break reminders yet. Add some to help maintain healthy habits!</p>
+                            </div>
+                        ) : (
+                            reminders
+                                .sort((a, b) => {
+                                    // Sort by enabled status first (enabled first), then by creation date
+                                    if (a.enabled !== b.enabled) {
+                                        return b.enabled ? 1 : -1;
+                                    }
+                                    return b.createdAt - a.createdAt;
+                                })
+                                .map((reminder) => {
+                                    const categoryInfo = getCategoryInfo(reminder.category);
+                                    return (
+                                        <Card
+                                            key={reminder.id}
+                                            className={cn(
+                                                "p-3 sm:p-4 rounded-lg border transition-all duration-200 space-y-3",
+                                                reminder.enabled
+                                                    ? "bg-background border-accent hover:bg-accent/10"
+                                                    : "bg-background border-accent hover:bg-accent/10 opacity-60"
+                                            )}
+                                        >
+                                            <div className="flex gap-3 items-start">
+                                                {/* Icon and title */}
+                                                <div className="flex-shrink-0 w-5 mt-0.5">
+                                                    <span className="text-base">{categoryInfo.icon}</span>
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="text-sm font-medium text-foreground">
+                                                        {reminder.title}
+                                                    </h3>
+                                                    {reminder.description && (
+                                                        <p className="text-sm text-muted-foreground mt-1">
+                                                            {reminder.description}
+                                                        </p>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <h3 className="text-sm font-medium text-foreground">
-                                                    {reminder.title}
-                                                </h3>
-                                                {reminder.description && (
-                                                    <p className="text-sm text-muted-foreground mt-1">
-                                                        {reminder.description}
-                                                    </p>
+
+                                            {/* Counter and controls */}
+                                            <div className="flex flex-col gap-3">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <Badge
+                                                        variant="secondary"
+                                                        className="text-xs bg-accent text-accent-foreground"
+                                                    >
+                                                        {categoryInfo.name}
+                                                    </Badge>
+                                                    <Badge
+                                                        variant="secondary"
+                                                        className={cn(
+                                                            "text-xs",
+                                                            reminder.enabled
+                                                                ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
+                                                                : "bg-accent text-accent-foreground"
+                                                        )}
+                                                    >
+                                                        {reminder.enabled ? 'Enabled' : 'Disabled'}
+                                                    </Badge>
+                                                </div>
+
+                                                <div className="flex items-center justify-between">
+                                                    {/* Counter display and controls */}
+                                                    <div className="flex items-center gap-1 bg-accent/50 rounded-lg px-2 py-1">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => decrementCount(reminder.id)}
+                                                            disabled={loading || reminder.completionCount <= 0}
+                                                            className="h-6 w-6 p-0 hover:bg-red-100 hover:text-red-600"
+                                                        >
+                                                            <Minus className="w-3 h-3" />
+                                                        </Button>
+                                                        <span className="text-sm font-medium min-w-[2rem] text-center">
+                                                            {reminder.completionCount || 0}
+                                                        </span>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => incrementCount(reminder.id)}
+                                                            disabled={loading}
+                                                            className="h-6 w-6 p-0 hover:bg-green-100 hover:text-green-600"
+                                                        >
+                                                            <Plus className="w-3 h-3" />
+                                                        </Button>
+                                                    </div>
+
+                                                    {/* Action buttons */}
+                                                    <div className="flex items-center gap-1">
+                                                        <Switch
+                                                            checked={reminder.enabled}
+                                                            onCheckedChange={() => toggleReminder(reminder.id)}
+                                                            disabled={loading}
+                                                            className="data-[state=checked]:bg-red-600"
+                                                        />
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleEdit(reminder)}
+                                                            disabled={loading}
+                                                            className="h-8 w-8 p-0 hover:bg-accent"
+                                                        >
+                                                            <Edit3 className="w-3 h-3" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleDelete(reminder.id)}
+                                                            disabled={loading}
+                                                            className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20"
+                                                        >
+                                                            <Trash2 className="w-3 h-3" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Today's count display */}
+                                            <div className="text-xs text-muted-foreground">
+                                                Today: {reminder.completionCount || 0} times
+                                                {reminder.lastCompleted && (
+                                                    <span className="ml-2">
+                                                        • Last: {new Date(reminder.lastCompleted).toLocaleTimeString()}
+                                                    </span>
                                                 )}
                                             </div>
-                                        </div>
-
-                                        {/* Counter and controls */}
-                                        <div className="flex flex-col gap-3">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <Badge
-                                                    variant="secondary"
-                                                    className="text-xs bg-accent text-accent-foreground"
-                                                >
-                                                    {categoryInfo.name}
-                                                </Badge>
-                                                <Badge
-                                                    variant="secondary"
-                                                    className={cn(
-                                                        "text-xs",
-                                                        reminder.enabled
-                                                            ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
-                                                            : "bg-accent text-accent-foreground"
-                                                    )}
-                                                >
-                                                    {reminder.enabled ? 'Enabled' : 'Disabled'}
-                                                </Badge>
-                                            </div>
-
-                                            <div className="flex items-center justify-between">
-                                                {/* Counter display and controls */}
-                                                <div className="flex items-center gap-1 bg-accent/50 rounded-lg px-2 py-1">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => decrementCount(reminder.id)}
-                                                        disabled={loading || reminder.completionCount <= 0}
-                                                        className="h-6 w-6 p-0 hover:bg-red-100 hover:text-red-600"
-                                                    >
-                                                        <Minus className="w-3 h-3" />
-                                                    </Button>
-                                                    <span className="text-sm font-medium min-w-[2rem] text-center">
-                                                        {reminder.completionCount || 0}
-                                                    </span>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => incrementCount(reminder.id)}
-                                                        disabled={loading}
-                                                        className="h-6 w-6 p-0 hover:bg-green-100 hover:text-green-600"
-                                                    >
-                                                        <Plus className="w-3 h-3" />
-                                                    </Button>
-                                                </div>
-
-                                                {/* Action buttons */}
-                                                <div className="flex items-center gap-1">
-                                                    <Switch
-                                                        checked={reminder.enabled}
-                                                        onCheckedChange={() => toggleReminder(reminder.id)}
-                                                        disabled={loading}
-                                                        className="data-[state=checked]:bg-red-600"
-                                                    />
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => handleEdit(reminder)}
-                                                        disabled={loading}
-                                                        className="h-8 w-8 p-0 hover:bg-accent"
-                                                    >
-                                                        <Edit3 className="w-3 h-3" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => handleDelete(reminder.id)}
-                                                        disabled={loading}
-                                                        className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20"
-                                                    >
-                                                        <Trash2 className="w-3 h-3" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Today's count display */}
-                                        <div className="text-xs text-muted-foreground">
-                                            Today: {reminder.completionCount || 0} times
-                                            {reminder.lastCompleted && (
-                                                <span className="ml-2">
-                                                    • Last: {new Date(reminder.lastCompleted).toLocaleTimeString()}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </Card>
-                                );
-                            })
-                    )}
-                </div>
+                                        </Card>
+                                    );
+                                })
+                        )}
+                    </div>
+                </ScrollArea>
             </div>
 
             {/* Add/Edit Dialog */}

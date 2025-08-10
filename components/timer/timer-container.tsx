@@ -10,6 +10,8 @@ import { useAuth } from '@/lib/auth-context';
 import { TimerSession } from '@/lib/auth-storage-provider';
 import { useToast } from '@/hooks/use-toast';
 import AudioService from '@/lib/audio-service';
+import VibrationService from '@/lib/vibration-service';
+import NotificationService from '@/lib/notification-service';
 
 interface TimerContainerProps {
   onSessionComplete: (session: PomodoroSession) => void;
@@ -34,6 +36,8 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
   const { toast } = useToast();
   const { storageProvider } = useAuth();
   const audioService = AudioService.getInstance();
+  const vibrationService = VibrationService.getInstance();
+  const notificationService = NotificationService.getInstance();
   const breakRemindersTriggered = useRef<string | null>(null);
   const [user] = useAuthState(auth);
 
@@ -291,24 +295,15 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
       window.dispatchEvent(new CustomEvent('taskSessionCompleted', { detail: currentTask.id }));
     }
 
-    // Play notification sound using user's selected notification (only if not 'none')
+    // Play notification sound and vibrate
     if (settings.notificationAudio !== 'none') {
       audioService.playNotification(settings.notificationAudio);
     }
+    vibrationService.sessionComplete();
 
-    // Show notification
-    if (settings.notifications && 'Notification' in window) {
-      if (Notification.permission === 'granted') {
-        new Notification(
-          sessionType === 'work' ? 'Work session completed!' : 'Break time over!',
-          {
-            body: sessionType === 'work'
-              ? 'Great job! Time for a break.'
-              : 'Back to work!',
-            icon: '/favicon.ico'
-          }
-        );
-      }
+    // Show notification using the notification service
+    if (settings.notifications) {
+      notificationService.showSessionComplete(sessionType);
     }
 
     // Show toast
@@ -335,7 +330,7 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
       setIsActive(false);
       setIsPaused(false);
     }
-  }, [sessionType, totalTime, onSessionComplete, toast, settings, user, storageProvider]);
+  }, [sessionType, totalTime, onSessionComplete, toast, settings, user, storageProvider, vibrationService, notificationService]);
 
   const handleRemindersCompleted = useCallback((completed: string[], shown: string[]) => {
     setBreakRemindersCompleted(completed);
@@ -383,7 +378,12 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
     }
   };
 
-  const handleStart = () => {
+  const handleStart = async () => {
+    // Request notification permission on first use
+    if (settings.notifications) {
+      await notificationService.requestPermissionOnFirstUse();
+    }
+
     setIsActive(true);
     setIsPaused(false);
 
@@ -395,21 +395,21 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
     // Resume audio if it was paused
     audioService.resumeAudio();
 
-    // Request notification permission
-    if (settings.notifications && 'Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
+    // Vibrate on start
+    vibrationService.timerStart();
   };
 
   const handlePause = () => {
     setIsPaused(true);
     audioService.pauseAudio();
+    vibrationService.timerPause();
   };
 
   const handleStop = () => {
     setIsActive(false);
     setIsPaused(false);
     audioService.stopAll();
+    vibrationService.timerStop();
 
     // Clear the saved session
     storageProvider.basic.clearCurrentSession();
@@ -441,6 +441,7 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
     setSessionType('work');
     setCurrentSession(1);
     audioService.stopAll();
+    vibrationService.timerStop();
 
     // Clear the saved session
     storageProvider.basic.clearCurrentSession();

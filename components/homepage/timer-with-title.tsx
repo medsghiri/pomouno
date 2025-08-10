@@ -11,6 +11,8 @@ import { useAuth } from '@/lib/auth-context';
 import { TimerSession } from '@/lib/auth-storage-provider';
 import { useToast } from '@/hooks/use-toast';
 import AudioService from '@/lib/audio-service';
+import VibrationService from '@/lib/vibration-service';
+import NotificationService from '@/lib/notification-service';
 
 interface TimerWithTitleProps {
     onSessionComplete: (session: PomodoroSession) => void;
@@ -39,6 +41,8 @@ export function TimerWithTitle({ onSessionComplete, selectedTaskId, selectedTask
     const { toast } = useToast();
     const { storageProvider } = useAuth();
     const audioService = AudioService.getInstance();
+    const vibrationService = VibrationService.getInstance();
+    const notificationService = NotificationService.getInstance();
     const breakRemindersTriggered = useRef<string | null>(null);
     const [user] = useAuthState(auth);
 
@@ -230,15 +234,23 @@ export function TimerWithTitle({ onSessionComplete, selectedTaskId, selectedTask
         };
     }, [isActive, isPaused, timeLeft]);
 
-    const handleSessionEnd = useCallback(() => {
+    const handleSessionEnd = useCallback(async () => {
         setIsActive(false);
         setIsPaused(false);
 
         // Clear the saved session since it's completed
         storageProvider.basic.clearCurrentSession();
 
-        // Play completion sound
-        audioService.playNotification();
+        // Play completion sound and vibrate
+        if (settings.notificationAudio !== 'none') {
+            audioService.playNotification(settings.notificationAudio);
+        }
+        vibrationService.sessionComplete();
+
+        // Show notification if enabled
+        if (settings.notifications) {
+            notificationService.showSessionComplete(sessionType);
+        }
 
         // Create session record
         const sessionTypeMapping = {
@@ -271,11 +283,19 @@ export function TimerWithTitle({ onSessionComplete, selectedTaskId, selectedTask
                 setCurrentSession(1);
                 setShowBreakReminders(true);
                 breakRemindersTriggered.current = 'longBreak';
+                vibrationService.breakStart();
+                if (settings.notifications) {
+                    notificationService.showBreakStart('long');
+                }
             } else {
                 setSessionType('shortBreak');
                 setCurrentSession(currentSession + 1);
                 setShowBreakReminders(true);
                 breakRemindersTriggered.current = 'shortBreak';
+                vibrationService.breakStart();
+                if (settings.notifications) {
+                    notificationService.showBreakStart('short');
+                }
             }
         } else {
             setSessionType('work');
@@ -290,9 +310,14 @@ export function TimerWithTitle({ onSessionComplete, selectedTaskId, selectedTask
                 handleStart();
             }, 1000);
         }
-    }, [sessionType, currentSession, totalSessions, settings, selectedTaskId, onSessionComplete, onTaskSessionComplete, currentSessionId, totalTime, audioService]);
+    }, [sessionType, currentSession, totalSessions, settings, selectedTaskId, onSessionComplete, onTaskSessionComplete, currentSessionId, totalTime, audioService, vibrationService, notificationService]);
 
-    const handleStart = useCallback(() => {
+    const handleStart = useCallback(async () => {
+        // Request notification permission on first use
+        if (settings.notifications) {
+            await notificationService.requestPermissionOnFirstUse();
+        }
+
         if (!isActive) {
             setCurrentSessionId(Date.now().toString());
         }
@@ -302,22 +327,28 @@ export function TimerWithTitle({ onSessionComplete, selectedTaskId, selectedTask
 
         // Resume audio if it was paused
         audioService.resumeAudio();
-    }, [isActive, sessionType, audioService]);
+
+        // Vibrate on start
+        vibrationService.timerStart();
+    }, [isActive, sessionType, audioService, vibrationService, notificationService, settings.notifications]);
 
     const handlePause = useCallback(() => {
         setIsPaused(!isPaused);
         if (!isPaused) {
             audioService.pauseAudio();
+            vibrationService.timerPause();
         } else {
             audioService.resumeAudio();
+            vibrationService.buttonPress();
         }
-    }, [isPaused, sessionType, audioService]);
+    }, [isPaused, sessionType, audioService, vibrationService]);
 
     const handleReset = useCallback(() => {
         setIsActive(false);
         setIsPaused(false);
         setShowBreakReminders(false);
         audioService.stopAll();
+        vibrationService.timerStop();
 
         // Clear the saved session
         storageProvider.basic.clearCurrentSession();
@@ -339,7 +370,7 @@ export function TimerWithTitle({ onSessionComplete, selectedTaskId, selectedTask
 
         setTimeLeft(duration);
         setTotalTime(duration);
-    }, [sessionType, settings, audioService, storageProvider]);
+    }, [sessionType, settings, audioService, vibrationService, storageProvider]);
 
     const handleSkip = useCallback(() => {
         if (isActive) {

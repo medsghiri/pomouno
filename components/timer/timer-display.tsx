@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { Settings } from '@/lib/storage';
 import { StatisticsEngine } from '@/lib/statistics-engine';
 import AudioService from '@/lib/audio-service';
+import VibrationService from '@/lib/vibration-service';
 
 interface TimerDisplayProps {
   timeLeft: number;
@@ -54,6 +55,7 @@ export function TimerDisplay({
   });
   const [isAudioServiceReady, setIsAudioServiceReady] = useState(false);
   const audioService = AudioService.getInstance();
+  const vibrationService = VibrationService.getInstance();
 
   useEffect(() => {
     setMounted(true);
@@ -141,6 +143,29 @@ export function TimerDisplay({
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Wrapper functions to add vibration feedback
+  const handleStartClick = () => {
+    vibrationService.buttonPress();
+    onStart();
+  };
+
+  const handlePauseClick = () => {
+    vibrationService.buttonPress();
+    onPause();
+  };
+
+  const handleStopClick = () => {
+    vibrationService.buttonPress();
+    onStop();
+  };
+
+  const handleSessionTypeChange = (type: 'work' | 'shortBreak' | 'longBreak') => {
+    if (!isActive) {
+      vibrationService.buttonPress();
+      onSessionTypeChange(type);
+    }
   };
 
   // Calculate progress percentage
@@ -429,7 +454,7 @@ export function TimerDisplay({
               ? "bg-red-500/20 ring-2 ring-red-500/50 dark:bg-red-500/20 dark:ring-red-400/50"
               : "bg-white/10 hover:bg-white/15 dark:bg-gray-800/30 dark:hover:bg-gray-700/40"
           )}
-          onClick={() => !isActive && onSessionTypeChange('work')}
+          onClick={() => handleSessionTypeChange('work')}
         >
           <div className="text-center">
             <div className={cn(
@@ -461,7 +486,7 @@ export function TimerDisplay({
               ? "bg-green-500/20 ring-2 ring-green-500/50 dark:bg-green-500/20 dark:ring-green-400/50"
               : "bg-white/10 hover:bg-white/15 dark:bg-gray-800/30 dark:hover:bg-gray-700/40"
           )}
-          onClick={() => !isActive && onSessionTypeChange('shortBreak')}
+          onClick={() => handleSessionTypeChange('shortBreak')}
         >
           <div className="text-center">
             <div className={cn(
@@ -493,7 +518,7 @@ export function TimerDisplay({
               ? "bg-blue-500/20 ring-2 ring-blue-500/50 dark:bg-blue-500/20 dark:ring-blue-400/50"
               : "bg-white/10 hover:bg-white/15 dark:bg-gray-800/30 dark:hover:bg-gray-700/40"
           )}
-          onClick={() => !isActive && onSessionTypeChange('longBreak')}
+          onClick={() => handleSessionTypeChange('longBreak')}
         >
           <div className="text-center">
             <div className={cn(
@@ -520,7 +545,7 @@ export function TimerDisplay({
       <div className="flex items-center justify-center gap-3 sm:gap-4 px-4">
         {!isActive ? (
           <Button
-            onClick={onStart}
+            onClick={handleStartClick}
             size="lg"
             className="px-6 sm:px-12 py-3 sm:py-4 text-base sm:text-lg font-medium bg-white/20 hover:bg-white/30 text-gray-900 dark:text-gray-100 transition-all duration-200 backdrop-blur-sm dark:bg-gray-700/50 dark:hover:bg-gray-600/50"
           >
@@ -531,7 +556,7 @@ export function TimerDisplay({
         ) : (
           <div className="flex gap-2 sm:gap-3">
             <Button
-              onClick={isPaused ? onStart : onPause}
+              onClick={isPaused ? handleStartClick : handlePauseClick}
               size="lg"
               className="px-4 sm:px-8 py-3 sm:py-4 bg-white/20 hover:bg-white/30 text-gray-900 dark:text-gray-100 transition-all duration-200 backdrop-blur-sm dark:bg-gray-700/50 dark:hover:bg-gray-600/50"
             >
@@ -549,7 +574,7 @@ export function TimerDisplay({
             </Button>
 
             <Button
-              onClick={onStop}
+              onClick={handleStopClick}
               size="lg"
               variant="outline"
               className="px-4 sm:px-8 py-3 sm:py-4 bg-white/10 hover:bg-white/20 text-gray-900 dark:text-gray-100 transition-all duration-200 backdrop-blur-sm dark:bg-gray-800/30 dark:hover:bg-gray-700/40"

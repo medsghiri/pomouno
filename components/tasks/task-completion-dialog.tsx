@@ -1,17 +1,20 @@
 "use client";
 
+import { useState } from 'react';
+
 
 import { CheckCircle, Clock, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { DifficultySelectionDialog } from './difficulty-selection-dialog';
 import type { Task } from '@/lib/advanced-storage-service';
 
 interface TaskCompletionDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     task: Task | null;
-    onTaskComplete: () => void;
+    onTaskComplete: (difficulty?: 'easy' | 'medium' | 'hard') => void;
     onContinueWorking: () => void;
     todaysTaskSessions?: number;
 }
@@ -24,10 +27,25 @@ export function TaskCompletionDialog({
     onContinueWorking,
     todaysTaskSessions
 }: TaskCompletionDialogProps) {
+    const [showDifficultyDialog, setShowDifficultyDialog] = useState(false);
+
     if (!task) return null;
 
     const handleComplete = () => {
+        // For spaced repetition tasks, show difficulty dialog
+        if (task.spacedRepetition?.enabled) {
+            setShowDifficultyDialog(true);
+            return;
+        }
+
+        // For regular and recurring tasks, complete directly
         onTaskComplete();
+        onOpenChange(false);
+    };
+
+    const handleDifficultySelect = (difficulty: 'easy' | 'medium' | 'hard') => {
+        onTaskComplete(difficulty);
+        setShowDifficultyDialog(false);
         onOpenChange(false);
     };
 
@@ -78,13 +96,7 @@ export function TaskCompletionDialog({
                                         {task.description}
                                     </p>
                                 )}
-                                <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-muted-foreground">
-                                    <span>Today: {(todaysTaskSessions || 0)}</span>
-                                    {task.estimatedSessions > 0 && (
-                                        <span>Goal: {task.estimatedSessions}</span>
-                                    )}
-                                    <span>Total: {task.sessionsCompleted}</span>
-                                </div>
+
                             </div>
                         </div>
                     </div>
@@ -211,11 +223,39 @@ export function TaskCompletionDialog({
 
                     {task.recurring?.enabled && (
                         <div className="text-xs text-muted-foreground text-center p-2 bg-red-50 dark:bg-red-900/20 rounded">
-                            🔄 This recurring task will be available again tomorrow.
+                            🔄 This recurring task will be available again {(() => {
+                                const pattern = task.recurring?.pattern;
+                                switch (pattern) {
+                                    case 'daily':
+                                        return 'tomorrow';
+                                    case 'weekdays':
+                                        return 'on the next weekday';
+                                    case 'weekly':
+                                        return 'next week';
+                                    case 'monthly':
+                                        return 'next month';
+                                    case 'specific-days':
+                                        return 'on the next scheduled day';
+                                    case 'custom':
+                                        const interval = task.recurring?.interval || 1;
+                                        return `in ${interval} day${interval > 1 ? 's' : ''}`;
+                                    default:
+                                        return 'according to its schedule';
+                                }
+                            })()}.
                         </div>
                     )}
                 </div>
             </DialogContent>
+
+            {/* Difficulty Selection Dialog for Spaced Repetition */}
+            <DifficultySelectionDialog
+                open={showDifficultyDialog}
+                onOpenChange={setShowDifficultyDialog}
+                taskTitle={task.title}
+                currentInterval={task.spacedRepetition?.interval || 1}
+                onDifficultySelect={handleDifficultySelect}
+            />
         </Dialog>
     );
 }

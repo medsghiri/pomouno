@@ -341,18 +341,12 @@ export function TimerApp({
         }
     }, [storageService, selectedTask, toast]);
 
-    const handleTaskComplete = useCallback(async () => {
+    const handleTaskComplete = useCallback(async (difficulty?: 'easy' | 'medium' | 'hard') => {
         if (!storageService || !selectedTask) return;
 
         try {
-            if (selectedTask.spacedRepetition?.enabled) {
-                // For spaced repetition, we need to show difficulty dialog
-                // This will be handled by the task manager's existing logic
-                await storageService.completeTask(selectedTask.id);
-            } else {
-                // For regular and recurring tasks
-                await storageService.completeTask(selectedTask.id);
-            }
+            // Pass difficulty for spaced repetition tasks
+            await storageService.completeTask(selectedTask.id, difficulty);
 
             toast({
                 title: "Task completed!",

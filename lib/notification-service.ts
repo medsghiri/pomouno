@@ -63,7 +63,11 @@ class NotificationService {
      * Show a notification if permission is granted
      */
     show(title: string, options?: NotificationOptions): Notification | null {
-        if (!this.isSupported() || Notification.permission !== 'granted') {
+        if (!this.isSupported()) {
+            return null;
+        }
+
+        if (Notification.permission !== 'granted') {
             return null;
         }
 
@@ -79,14 +83,18 @@ class NotificationService {
         try {
             const notification = new Notification(title, defaultOptions);
 
-            // Auto-close after 5 seconds
+            notification.onclick = () => {
+                window.focus();
+                notification.close();
+            };
+
+            // Auto-close after 8 seconds (longer for mobile)
             setTimeout(() => {
                 notification.close();
-            }, 5000);
+            }, 8000);
 
             return notification;
         } catch (error) {
-            console.error('Error showing notification:', error);
             return null;
         }
     }
@@ -128,16 +136,44 @@ class NotificationService {
      * Request permission on first timer start
      */
     async requestPermissionOnFirstUse(): Promise<void> {
-        if (!this.permissionRequested && this.isSupported() && Notification.permission === 'default') {
+        if (!this.isSupported()) {
+            console.log('Notifications not supported');
+            return;
+        }
+
+        if (Notification.permission === 'granted') {
+            console.log('Notifications already granted');
+            return;
+        }
+
+        if (Notification.permission === 'denied') {
+            console.log('Notifications denied by user');
+            return;
+        }
+
+        if (!this.permissionRequested && Notification.permission === 'default') {
+            this.permissionRequested = true;
+
             // Show a user-friendly prompt before requesting permission
             const userWantsNotifications = window.confirm(
                 'PomoUno can send you notifications when your focus sessions and breaks are complete. Would you like to enable notifications?'
             );
 
             if (userWantsNotifications) {
-                await this.requestPermission();
-            } else {
-                this.permissionRequested = true; // Don't ask again
+                try {
+                    const permission = await Notification.requestPermission();
+                    console.log('Notification permission result:', permission);
+
+                    if (permission === 'granted') {
+                        // Test notification to ensure it works
+                        this.show('PomoUno Notifications Enabled!', {
+                            body: 'You\'ll now receive notifications when your sessions complete.',
+                            tag: 'test-notification'
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error requesting notification permission:', error);
+                }
             }
         }
     }

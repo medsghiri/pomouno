@@ -3,8 +3,16 @@
  */
 class VibrationService {
     private static instance: VibrationService;
+    private isEnabled: boolean = true;
+    private hasUserInteracted: boolean = false;
 
-    private constructor() { }
+    private constructor() {
+        // Test vibration support on initialization
+        this.testVibrationSupport();
+
+        // Listen for first user interaction
+        this.setupUserInteractionListener();
+    }
 
     static getInstance(): VibrationService {
         if (!VibrationService.instance) {
@@ -14,82 +22,134 @@ class VibrationService {
     }
 
     /**
-     * Check if vibration is supported
+     * Setup listener for first user interaction (required for vibration on mobile)
+     */
+    private setupUserInteractionListener(): void {
+        const handleFirstInteraction = () => {
+            this.hasUserInteracted = true;
+            // Remove listeners after first interaction
+            document.removeEventListener('touchstart', handleFirstInteraction);
+            document.removeEventListener('click', handleFirstInteraction);
+            document.removeEventListener('keydown', handleFirstInteraction);
+        };
+
+        document.addEventListener('touchstart', handleFirstInteraction, { passive: true });
+        document.addEventListener('click', handleFirstInteraction);
+        document.addEventListener('keydown', handleFirstInteraction);
+    }
+
+    /**
+     * Test if vibration actually works on this device
+     */
+    private testVibrationSupport(): void {
+        if (!('vibrate' in navigator)) {
+            this.isEnabled = false;
+            return;
+        }
+
+        // iOS Safari blocks vibration API for web apps
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        if (isIOS) {
+            this.isEnabled = false;
+            return;
+        }
+
+        this.isEnabled = true;
+    }
+
+    /**
+     * Check if vibration is supported and enabled
      */
     isSupported(): boolean {
-        return 'vibrate' in navigator;
+        return this.isEnabled && 'vibrate' in navigator && this.hasUserInteracted;
+    }
+
+    /**
+     * Safe vibration method with error handling
+     */
+    private safeVibrate(pattern: number | number[]): boolean {
+        if (!this.isSupported()) {
+            return false;
+        }
+
+        try {
+            const result = navigator.vibrate(pattern);
+            return result;
+        } catch (error) {
+            console.warn('Vibration failed:', error);
+            this.isEnabled = false; // Disable if it fails
+            return false;
+        }
     }
 
     /**
      * Vibrate for button interactions (short pulse)
      */
-    buttonPress(): void {
-        if (this.isSupported()) {
-            navigator.vibrate(50); // Short 50ms vibration
-        }
+    buttonPress(): boolean {
+        return this.safeVibrate(50);
     }
 
     /**
      * Vibrate for timer start
      */
-    timerStart(): void {
-        if (this.isSupported()) {
-            navigator.vibrate([100, 50, 100]); // Double pulse pattern
-        }
+    timerStart(): boolean {
+        return this.safeVibrate([100, 50, 100]);
     }
 
     /**
      * Vibrate for timer pause
      */
-    timerPause(): void {
-        if (this.isSupported()) {
-            navigator.vibrate(150); // Medium vibration
-        }
+    timerPause(): boolean {
+        return this.safeVibrate(150);
     }
 
     /**
      * Vibrate for timer stop/reset
      */
-    timerStop(): void {
-        if (this.isSupported()) {
-            navigator.vibrate([200, 100, 200]); // Strong double pulse
-        }
+    timerStop(): boolean {
+        return this.safeVibrate([200, 100, 200]);
     }
 
     /**
      * Vibrate for session completion
      */
-    sessionComplete(): void {
-        if (this.isSupported()) {
-            navigator.vibrate([300, 100, 300, 100, 300]); // Triple pulse pattern
-        }
+    sessionComplete(): boolean {
+        return this.safeVibrate([300, 100, 300, 100, 300]);
     }
 
     /**
      * Vibrate for break start
      */
-    breakStart(): void {
-        if (this.isSupported()) {
-            navigator.vibrate([200, 150, 200, 150, 400]); // Break rhythm pattern
-        }
+    breakStart(): boolean {
+        return this.safeVibrate([200, 150, 200, 150, 400]);
     }
 
     /**
      * Custom vibration pattern
      */
-    vibrate(pattern: number | number[]): void {
-        if (this.isSupported()) {
-            navigator.vibrate(pattern);
-        }
+    vibrate(pattern: number | number[]): boolean {
+        return this.safeVibrate(pattern);
     }
 
     /**
      * Stop all vibrations
      */
-    stop(): void {
+    stop(): boolean {
         if (this.isSupported()) {
-            navigator.vibrate(0);
+            return this.safeVibrate(0);
         }
+        return false;
+    }
+
+    /**
+     * Get vibration status for debugging
+     */
+    getStatus(): { supported: boolean; enabled: boolean; userInteracted: boolean } {
+        return {
+            supported: 'vibrate' in navigator,
+            enabled: this.isEnabled,
+            userInteracted: this.hasUserInteracted
+        };
     }
 }
 

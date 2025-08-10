@@ -147,23 +147,30 @@ export function TimerDisplay({
 
   // Wrapper functions to add vibration feedback
   const handleStartClick = () => {
-    vibrationService.buttonPress();
+    // Vibrate immediately on user gesture (required for mobile)
+    const vibrateResult = vibrationService.buttonPress();
+    console.log('Start button vibration result:', vibrateResult);
     onStart();
   };
 
   const handlePauseClick = () => {
-    vibrationService.buttonPress();
+    // Vibrate immediately on user gesture (required for mobile)
+    const vibrateResult = vibrationService.buttonPress();
+    console.log('Pause button vibration result:', vibrateResult);
     onPause();
   };
 
   const handleStopClick = () => {
-    vibrationService.buttonPress();
+    // Vibrate immediately on user gesture (required for mobile)
+    const vibrateResult = vibrationService.buttonPress();
+    console.log('Stop button vibration result:', vibrateResult);
     onStop();
   };
 
   const handleSessionTypeChange = (type: 'work' | 'shortBreak' | 'longBreak') => {
     if (!isActive) {
-      vibrationService.buttonPress();
+      const vibrateResult = vibrationService.buttonPress();
+      console.log('Session type change vibration result:', vibrateResult);
       onSessionTypeChange(type);
     }
   };

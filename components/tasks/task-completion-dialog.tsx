@@ -50,7 +50,7 @@ export function TaskCompletionDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-lg w-[95vw] max-w-[95vw] sm:w-full">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Clock className="w-5 h-5 text-green-600" />
@@ -67,18 +67,18 @@ export function TaskCompletionDialog({
                         <div className="flex items-start gap-3">
                             <div className="text-2xl">{getTaskTypeIcon()}</div>
                             <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <h3 className="font-medium text-foreground">{task.title}</h3>
-                                    <Badge variant="secondary" className="text-xs">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
+                                    <h3 className="font-medium text-foreground break-words">{task.title}</h3>
+                                    <Badge variant="secondary" className="text-xs self-start sm:self-auto">
                                         {getTaskTypeLabel()}
                                     </Badge>
                                 </div>
                                 {task.description && (
-                                    <p className="text-sm text-muted-foreground mb-2">
+                                    <p className="text-sm text-muted-foreground mb-2 break-words">
                                         {task.description}
                                     </p>
                                 )}
-                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-muted-foreground">
                                     <span>Today: {(todaysTaskSessions || 0)}</span>
                                     {task.estimatedSessions > 0 && (
                                         <span>Goal: {task.estimatedSessions}</span>
@@ -143,47 +143,60 @@ export function TaskCompletionDialog({
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex gap-3">
+                    <div className="flex flex-col sm:flex-row gap-3">
                         {/* For tasks that haven't reached estimated sessions, prioritize continue working */}
                         {task.estimatedSessions > 0 && (todaysTaskSessions || 0) < task.estimatedSessions && !task.spacedRepetition?.enabled && !task.recurring?.enabled ? (
                             <>
                                 <Button
                                     onClick={handleContinue}
-                                    className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                                    className="flex-1 bg-red-600 hover:bg-red-700 text-white min-h-[44px]"
                                 >
                                     <Target className="w-4 h-4 mr-2" />
-                                    Continue Working
+                                    <span className="hidden sm:inline">Continue Working</span>
+                                    <span className="sm:hidden">Continue</span>
                                 </Button>
                                 <Button
                                     onClick={handleComplete}
                                     variant="outline"
-                                    className="flex-1"
+                                    className="flex-1 min-h-[44px]"
                                 >
                                     <CheckCircle className="w-4 h-4 mr-2" />
-                                    Mark as Complete
+                                    <span className="hidden sm:inline">Mark as Complete</span>
+                                    <span className="sm:hidden">Complete</span>
                                 </Button>
                             </>
                         ) : (
                             <>
                                 <Button
                                     onClick={handleComplete}
-                                    className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                                    className="flex-1 bg-red-600 hover:bg-red-700 text-white min-h-[44px]"
                                 >
                                     <CheckCircle className="w-4 h-4 mr-2" />
-                                    {task.spacedRepetition?.enabled
-                                        ? "Mark as Reviewed"
-                                        : task.recurring?.enabled
-                                            ? "Complete Today's Session"
-                                            : "Mark as Complete"
-                                    }
+                                    <span className="hidden sm:inline">
+                                        {task.spacedRepetition?.enabled
+                                            ? "Mark as Reviewed"
+                                            : task.recurring?.enabled
+                                                ? "Complete Today's Session"
+                                                : "Mark as Complete"
+                                        }
+                                    </span>
+                                    <span className="sm:hidden">
+                                        {task.spacedRepetition?.enabled
+                                            ? "Reviewed"
+                                            : task.recurring?.enabled
+                                                ? "Complete"
+                                                : "Complete"
+                                        }
+                                    </span>
                                 </Button>
                                 <Button
                                     onClick={handleContinue}
                                     variant="outline"
-                                    className="flex-1"
+                                    className="flex-1 min-h-[44px]"
                                 >
                                     <Target className="w-4 h-4 mr-2" />
-                                    Continue Working
+                                    <span className="hidden sm:inline">Continue Working</span>
+                                    <span className="sm:hidden">Continue</span>
                                 </Button>
                             </>
                         )}

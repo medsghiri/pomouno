@@ -116,8 +116,9 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
         };
 
         // Listen for session completion to refresh task sessions
-        const handleSessionCompleted = async (event: CustomEvent) => {
-            const session = event.detail;
+        const handleSessionCompleted = async (event: Event) => {
+            const customEvent = event as CustomEvent;
+            const session = customEvent.detail;
             // If it's a work session with a task, update that specific task's session count
             if (session?.type === 'work' && session?.taskId && storageService) {
                 try {
@@ -138,11 +139,11 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
         };
 
         window.addEventListener('firebaseDataSynced', handleFirebaseDataSynced);
-        window.addEventListener('sessionCompleted', handleSessionCompleted as EventListener);
+        window.addEventListener('sessionCompleted', handleSessionCompleted);
 
         return () => {
             window.removeEventListener('firebaseDataSynced', handleFirebaseDataSynced);
-            window.removeEventListener('sessionCompleted', handleSessionCompleted as EventListener);
+            window.removeEventListener('sessionCompleted', handleSessionCompleted);
         };
     }, [storageService]);
 

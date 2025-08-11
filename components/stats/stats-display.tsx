@@ -324,7 +324,7 @@ export function StatsDisplay() {
             window.removeEventListener('taskCompleted', handleStatsUpdate);
             window.removeEventListener('breakReminderCompleted', handleStatsUpdate);
         };
-    }, [user]);
+    }, [user, storageService]);
 
     const formatTime = (minutes: number) => {
         const hours = Math.floor(minutes / 60);
@@ -348,7 +348,9 @@ export function StatsDisplay() {
     const getBreakReminderStats = (): BreakReminderStats[] => {
         if (!user) return [];
 
-        const today = new Date().toISOString().split('T')[0];
+        const today = new Date();
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+        const todayEnd = todayStart + (24 * 60 * 60 * 1000) - 1;
 
         return breakReminders.map(reminder => {
             const allCompletions = breakReminderCompletions.filter(
@@ -356,7 +358,7 @@ export function StatsDisplay() {
             );
 
             const todayCompletions = allCompletions.filter(
-                completion => completion.date === today
+                completion => completion.completedAt >= todayStart && completion.completedAt <= todayEnd
             );
 
             return {
@@ -569,22 +571,7 @@ export function StatsDisplay() {
                                         Today: {stat.todayCount}
                                     </Badge>
                                 </div>
-                                <div className="flex justify-between text-xs text-muted-foreground">
-                                    <span>This week: {weeklyCount}</span>
-                                </div>
-                                {stat.todayCount > 0 && (
-                                    <div className="mt-2">
-                                        <div className="w-full bg-accent/30 rounded-full h-1">
-                                            <div
-                                                className="bg-primary h-1 rounded-full transition-all duration-300"
-                                                style={{ width: `${Math.min((stat.todayCount / 8) * 100, 100)}%` }}
-                                            />
-                                        </div>
-                                        <div className="text-xs text-muted-foreground mt-1 text-center">
-                                            {stat.todayCount >= 8 ? '🎯 Great job!' : `${8 - stat.todayCount} more to reach daily goal`}
-                                        </div>
-                                    </div>
-                                )}
+
                             </div>
                         );
                     })}

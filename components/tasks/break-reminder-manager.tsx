@@ -34,12 +34,14 @@ export function BreakReminderManager() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [categories, setCategories] = useState<BreakReminderCategory[]>([]);
     const [loading, setLoading] = useState(false);
+    const [todaysCompletions, setTodaysCompletions] = useState<any[]>([]);
 
     // Form state
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [category, setCategory] = useState<string>('hydration');
     const [enabled, setEnabled] = useState(true);
+    const [breakType, setBreakType] = useState<'all' | 'short' | 'long'>('all');
 
     const { toast } = useToast();
     const { user } = useAuth();
@@ -59,6 +61,7 @@ export function BreakReminderManager() {
         if (storageService) {
             loadReminders();
             loadCategories();
+            loadTodaysCompletions();
         }
     }, [storageService]);
 
@@ -96,6 +99,17 @@ export function BreakReminderManager() {
         }
     };
 
+    const loadTodaysCompletions = async () => {
+        if (!storageService) return;
+
+        try {
+            const completions = await storageService.getTodaysBreakReminderCompletions();
+            setTodaysCompletions(completions);
+        } catch (error) {
+            console.error('Failed to load today\'s completions:', error);
+        }
+    };
+
     const loadReminders = async () => {
         if (!storageService) return;
 
@@ -130,25 +144,29 @@ export function BreakReminderManager() {
                 title: 'Drink Water',
                 description: 'Stay hydrated! Take a sip of water.',
                 category: 'hydration',
-                enabled: false // Disabled by default as per requirements
+                enabled: false, // Disabled by default as per requirements
+                breakType: 'all' as const
             },
             {
                 title: 'Stretch',
                 description: 'Stand up and do some light stretching.',
                 category: 'movement',
-                enabled: false
+                enabled: false,
+                breakType: 'all' as const
             },
             {
                 title: 'Deep Breathing',
                 description: 'Take 5 deep breaths to relax.',
                 category: 'rest',
-                enabled: false
+                enabled: false,
+                breakType: 'long' as const
             },
             {
                 title: 'Walk Around',
                 description: 'Take a short walk to get your blood flowing.',
                 category: 'movement',
-                enabled: false
+                enabled: false,
+                breakType: 'long' as const
             },
         ];
 
@@ -170,6 +188,7 @@ export function BreakReminderManager() {
         setDescription('');
         setCategory('hydration');
         setEnabled(true);
+        setBreakType('all');
         setEditingId(null);
     };
 
@@ -193,6 +212,7 @@ export function BreakReminderManager() {
                 description: description.trim(),
                 category,
                 enabled,
+                breakType,
             };
 
             if (editingId) {
@@ -236,6 +256,7 @@ export function BreakReminderManager() {
         setDescription(reminder.description || '');
         setCategory(reminder.category);
         setEnabled(reminder.enabled);
+        setBreakType((reminder as any).breakType || 'all'); // Default to 'all' if not set
         setEditingId(reminder.id);
         setShowAddDialog(true);
     };
@@ -294,6 +315,8 @@ export function BreakReminderManager() {
         try {
             const updatedReminder = await storageService.incrementBreakReminderCount(id);
             setReminders(prev => prev.map(r => r.id === id ? updatedReminder : r));
+            // Reload today's completions to get updated count
+            await loadTodaysCompletions();
         } catch (error) {
             console.error('Failed to increment count:', error);
             toast({
@@ -310,6 +333,8 @@ export function BreakReminderManager() {
         try {
             const updatedReminder = await storageService.decrementBreakReminderCount(id);
             setReminders(prev => prev.map(r => r.id === id ? updatedReminder : r));
+            // Reload today's completions to get updated count
+            await loadTodaysCompletions();
         } catch (error) {
             console.error('Failed to decrement count:', error);
             toast({
@@ -323,6 +348,10 @@ export function BreakReminderManager() {
     const getCategoryInfo = (categoryId: string) => {
         const category = categories.find(cat => cat.id === categoryId || cat.name.toLowerCase() === categoryId);
         return category || { name: 'Custom', icon: '📝', color: '#6B7280' };
+    };
+
+    const getTodaysCount = (reminderId: string) => {
+        return todaysCompletions.filter(completion => completion.reminderId === reminderId).length;
     };
 
     // Show empty state for unauthenticated users
@@ -472,6 +501,14 @@ export function BreakReminderManager() {
                                                     >
                                                         {reminder.enabled ? 'Enabled' : 'Disabled'}
                                                     </Badge>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="text-xs"
+                                                    >
+                                                        {(reminder as any).breakType === 'short' ? 'Short Breaks' :
+                                                            (reminder as any).breakType === 'long' ? 'Long Breaks' :
+                                                                'All Breaks'}
+                                                    </Badge>
                                                 </div>
 
                                                 <div className="flex items-center justify-between">
@@ -481,13 +518,13 @@ export function BreakReminderManager() {
                                                             variant="ghost"
                                                             size="sm"
                                                             onClick={() => decrementCount(reminder.id)}
-                                                            disabled={loading || reminder.completionCount <= 0}
+                                                            disabled={loading || getTodaysCount(reminder.id) <= 0}
                                                             className="h-6 w-6 p-0 hover:bg-red-100 hover:text-red-600"
                                                         >
                                                             <Minus className="w-3 h-3" />
                                                         </Button>
                                                         <span className="text-sm font-medium min-w-[2rem] text-center">
-                                                            {reminder.completionCount || 0}
+                                                            {getTodaysCount(reminder.id)}
                                                         </span>
                                                         <Button
                                                             variant="ghost"
@@ -532,7 +569,7 @@ export function BreakReminderManager() {
 
                                             {/* Today's count display */}
                                             <div className="text-xs text-muted-foreground">
-                                                Today: {reminder.completionCount || 0} times
+                                                Today: {getTodaysCount(reminder.id)} times
                                                 {reminder.lastCompleted && (
                                                     <span className="ml-2">
                                                         • Last: {new Date(reminder.lastCompleted).toLocaleTimeString()}
@@ -595,6 +632,20 @@ export function BreakReminderManager() {
                                             </div>
                                         </SelectItem>
                                     ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div>
+                            <Label htmlFor="breakType">Show During</Label>
+                            <Select value={breakType} onValueChange={(value: 'all' | 'short' | 'long') => setBreakType(value)} disabled={loading}>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Breaks</SelectItem>
+                                    <SelectItem value="short">Short Breaks Only</SelectItem>
+                                    <SelectItem value="long">Long Breaks Only</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

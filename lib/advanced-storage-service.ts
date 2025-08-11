@@ -93,6 +93,7 @@ export interface BreakReminder {
     category: string;
     enabled: boolean;
     createdAt: number;
+    breakType?: 'all' | 'short' | 'long'; // Which break types to show during
 
     // Simplified - no frequency, just a counter
     completionCount: number;
@@ -160,6 +161,7 @@ export interface CreateBreakReminderRequest {
     description: string;
     category: string;
     enabled?: boolean;
+    breakType?: 'all' | 'short' | 'long'; // Which break types to show during
 }
 
 export interface CreateCategoryRequest {

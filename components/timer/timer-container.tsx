@@ -234,21 +234,23 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
   // Show break reminders when break starts
   useEffect(() => {
     if (sessionType !== 'work' && isActive) {
-      setShowBreakReminders(true);
-      // Show Sonner notifications for break reminders only once per break session
+      // Only show break reminders if they haven't been manually closed for this session
       const breakType = sessionType === 'shortBreak' ? 'short' : 'long';
       const sessionKey = `${sessionType}-${currentSession}`;
 
       if (breakRemindersTriggered.current !== sessionKey) {
-        // Break reminders are now handled by the BreakReminderDisplay component
+        setShowBreakReminders(true);
         breakRemindersTriggered.current = sessionKey;
       }
     } else {
-      setShowBreakReminders(false);
-      breakRemindersTriggered.current = null;
-      // Clear completed reminders when starting a work session
-      if (sessionType === 'work' && isActive) {
-        localStorage.removeItem('currentBreakRemindersCompleted');
+      // Only auto-hide when switching to work session or stopping timer
+      if (sessionType === 'work' || !isActive) {
+        setShowBreakReminders(false);
+        breakRemindersTriggered.current = null;
+        // Clear completed reminders when starting a work session
+        if (sessionType === 'work' && isActive) {
+          localStorage.removeItem('currentBreakRemindersCompleted');
+        }
       }
     }
   }, [sessionType, isActive, currentSession]);
@@ -452,7 +454,7 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
   };
 
   return (
-    <div className="space-y-4">
+    <>
       <TimerDisplay
         timeLeft={timeLeft}
         totalTime={totalTime}
@@ -470,7 +472,7 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
         currentTask={currentTask}
       />
 
-      {/* Break Reminders */}
+      {/* Break Reminders Dialog */}
       <BreakReminderDisplay
         breakType={sessionType === 'shortBreak' ? 'short' : 'long'}
         isVisible={showBreakReminders}
@@ -478,6 +480,6 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
         onClose={handleCloseBreakReminders}
         onRemindersCompleted={handleRemindersCompleted}
       />
-    </div>
+    </>
   );
 }

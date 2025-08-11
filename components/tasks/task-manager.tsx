@@ -237,13 +237,10 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
     const loadTasks = async () => {
         if (storageService) {
             try {
-                console.log('Loading tasks from Firebase...');
                 const firebaseTasks = await storageService.getTasks();
-                console.log('Loaded tasks:', firebaseTasks.length, 'tasks');
 
                 // Filter and sort tasks properly
                 const activeTasks = firebaseTasks.filter(task => !task.archivedAt);
-                console.log('Active tasks:', activeTasks.length);
 
                 setTasks(activeTasks);
 
@@ -446,17 +443,6 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
 
             const canComplete = today.getTime() !== lastCompletedDate.getTime();
 
-            if (task.title === 'duolingo test') {
-                console.log(`Duolingo test canComplete check:`, {
-                    canComplete,
-                    today: today.toISOString(),
-                    lastCompletedDate: lastCompletedDate.toISOString(),
-                    lastCompleted: lastCompleted,
-                    todayTime: today.getTime(),
-                    lastCompletedTime: lastCompletedDate.getTime()
-                });
-            }
-
             return canComplete;
         } catch (error) {
             console.error(`Error checking if recurring task can be completed "${task.title}":`, error, task.recurring);
@@ -467,59 +453,53 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
     // Helper function to check if recurring task is due and available
     const isRecurringTaskDueAndAvailable = (task: Task): boolean => {
         if (!task.recurring?.enabled) {
-            if (task.title === 'duolingo test') {
-                console.log(`Duolingo test: Not enabled for recurring`, task.recurring);
-            }
             return false;
         }
 
         try {
             const now = new Date();
             now.setHours(0, 0, 0, 0);
+            const todayDay = now.getDay();
 
-            // Check if nextDue exists and is valid
-            if (!task.recurring.nextDue || typeof task.recurring.nextDue !== 'number') {
-                console.warn(`Invalid nextDue for recurring task "${task.title}":`, task.recurring.nextDue);
-                return false;
+            // First check if today matches the recurring pattern
+            let isScheduledForToday = false;
+
+            switch (task.recurring.pattern) {
+                case 'daily':
+                    isScheduledForToday = true;
+                    break;
+                case 'weekdays':
+                    isScheduledForToday = todayDay !== 0 && todayDay !== 6; // Not Sunday or Saturday
+                    break;
+                case 'specific-days':
+                    isScheduledForToday = task.recurring.daysOfWeek?.includes(todayDay) || false;
+                    break;
+                case 'weekly':
+                    // For weekly, check if it's the same day of week as when task was created
+                    const createdDate = new Date(task.createdAt);
+                    isScheduledForToday = todayDay === createdDate.getDay();
+                    break;
+                case 'custom':
+                    // For custom interval, check if enough days have passed since last completion
+                    if (task.recurring.lastCompleted) {
+                        const lastCompletedDate = new Date(task.recurring.lastCompleted);
+                        lastCompletedDate.setHours(0, 0, 0, 0);
+                        const daysSinceLastCompleted = Math.floor((now.getTime() - lastCompletedDate.getTime()) / (24 * 60 * 60 * 1000));
+                        isScheduledForToday = daysSinceLastCompleted >= (task.recurring.interval || 1);
+                    } else {
+                        // Never completed, so it's due
+                        isScheduledForToday = true;
+                    }
+                    break;
+                default:
+                    isScheduledForToday = false;
             }
 
-            const nextDue = new Date(task.recurring.nextDue);
-            nextDue.setHours(0, 0, 0, 0);
+            // Then check if it can be completed (not already completed today)
+            const canComplete = canCompleteRecurringTask(task);
 
-            // Check if task is due (nextDue is today or in the past)
-            const isDue = nextDue.getTime() <= now.getTime();
 
-            if (task.title === 'duolingo test') {
-                console.log(`Duolingo test due check:`, {
-                    nextDue: nextDue.toISOString(),
-                    now: now.toISOString(),
-                    isDue,
-                    nextDueTime: nextDue.getTime(),
-                    nowTime: now.getTime()
-                });
-            }
-
-            // For daily pattern, always show if due and can be completed
-            if (task.recurring.pattern === 'daily') {
-                return isDue && canCompleteRecurringTask(task);
-            }
-
-            // For specific-days pattern, also check if today matches the pattern
-            if (task.recurring.pattern === 'specific-days' && task.recurring.daysOfWeek) {
-                const todayDay = now.getDay();
-                const isScheduledDay = task.recurring.daysOfWeek.includes(todayDay);
-                return isDue && isScheduledDay && canCompleteRecurringTask(task);
-            }
-
-            // For weekdays pattern, check if today is a weekday
-            if (task.recurring.pattern === 'weekdays') {
-                const todayDay = now.getDay();
-                const isWeekday = todayDay !== 0 && todayDay !== 6; // Not Sunday or Saturday
-                return isDue && isWeekday && canCompleteRecurringTask(task);
-            }
-
-            // For other patterns, just check if due and can be completed
-            return isDue && canCompleteRecurringTask(task);
+            return isScheduledForToday && canComplete;
         } catch (error) {
             console.error(`Error checking recurring task "${task.title}":`, error, task.recurring);
             return false;
@@ -813,46 +793,19 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
         let filtered;
 
         if (showCompleted) {
-            // Show all tasks when showing completed
+            // When showing completed, show ALL tasks but don't filter by completion status
             filtered = tasks;
         } else {
-            // Filter tasks based on their current state
+            // Filter tasks based on their current state - only show tasks that are actionable today
             filtered = tasks.filter(task => {
-                // Debug logging for duolingo test
-                if (task.title === 'duolingo test') {
-                    console.log(`Duolingo test initial filter check:`, {
-                        completed: task.completed,
-                        hasRecurring: !!task.recurring?.enabled,
-                        hasSpaced: !!task.spacedRepetition?.enabled
-                    });
-                }
-
                 // Regular completed tasks - hide them
                 if (task.completed && !task.recurring?.enabled && !task.spacedRepetition?.enabled) {
-                    if (task.title === 'duolingo test') {
-                        console.log(`Duolingo test: Filtered out as regular completed task`);
-                    }
                     return false;
                 }
 
-                // Recurring tasks - show if due today and not completed today
+                // Recurring tasks - show if scheduled for today and not completed today
                 if (task.recurring?.enabled) {
-                    const isDueAndAvailable = isRecurringTaskDueAndAvailable(task);
-                    const canComplete = canCompleteRecurringTask(task);
-
-                    // Debug logging for duolingo test
-                    if (task.title === 'duolingo test') {
-                        console.log(`Duolingo test filtering:`, {
-                            isDueAndAvailable,
-                            canComplete,
-                            completed: task.completed,
-                            nextDue: task.recurring.nextDue ? new Date(task.recurring.nextDue).toISOString() : 'none',
-                            lastCompleted: task.recurring.lastCompleted ? new Date(task.recurring.lastCompleted).toISOString() : 'never',
-                            willShow: isDueAndAvailable
-                        });
-                    }
-
-                    return isDueAndAvailable;
+                    return isRecurringTaskDueAndAvailable(task);
                 }
 
                 // Spaced repetition tasks - show if due for review (including overdue tasks)
@@ -873,27 +826,11 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
                     const isDue = nextReview.getTime() <= now.getTime();
                     const canReview = canCompleteSpacedRepetitionTask(task);
 
-                    // Debug logging for spaced repetition tasks
-                    if (task.title.toLowerCase().includes('spaced') || task.title.toLowerCase().includes('test')) {
-                        console.log(`Spaced repetition task "${task.title}":`, {
-                            isDue,
-                            canReview,
-                            nextReviewDate: nextReview.toISOString(),
-                            now: now.toISOString(),
-                            lastReviewed: task.spacedRepetition.lastReviewed ? new Date(task.spacedRepetition.lastReviewed).toISOString() : 'never',
-                            reviewCount: task.spacedRepetition.reviewCount,
-                            willShow: isDue && canReview
-                        });
-                    }
-
                     // Show if due (including overdue) and can be reviewed
                     return isDue && canReview;
                 }
 
                 // Regular tasks - show if not completed
-                if (task.title === 'duolingo test') {
-                    console.log(`Duolingo test: Treated as regular task, completed=${task.completed}, willShow=${!task.completed}`);
-                }
                 return !task.completed;
             });
         }
@@ -1205,33 +1142,77 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
                                 <div className="flex gap-3 items-center">
                                     {/* Checkbox - and title */}
                                     <div className="flex-shrink-0 w-5 mt-0.5">
-                                        <Checkbox
-                                            checked={
-                                                (task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) ||
+                                        {(() => {
+                                            const isCompleted = (task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) ||
                                                 (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
-                                                (task.recurring?.enabled && !canCompleteRecurringTask(task))
-                                            }
-                                            onCheckedChange={() => toggleTask(task.id)}
-                                            className="data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
-                                        />
+                                                (task.recurring?.enabled && !canCompleteRecurringTask(task));
+
+                                            const isActionable = showCompleted ?
+                                                // In show completed mode, only allow if task is actually due/actionable today
+                                                (task.recurring?.enabled ? isRecurringTaskDueAndAvailable(task) :
+                                                    task.spacedRepetition?.enabled ? (canCompleteSpacedRepetitionTask(task) &&
+                                                        task.spacedRepetition.nextReviewDate &&
+                                                        new Date(task.spacedRepetition.nextReviewDate).setHours(0, 0, 0, 0) <= new Date().setHours(0, 0, 0, 0)) :
+                                                        !task.completed) :
+                                                // In normal mode, all visible tasks are actionable
+                                                true;
+
+                                            return (
+                                                <Checkbox
+                                                    checked={isCompleted}
+                                                    onCheckedChange={() => {
+                                                        if (isActionable) {
+                                                            toggleTask(task.id);
+                                                        }
+                                                    }}
+                                                    disabled={showCompleted && !isActionable}
+                                                    className={cn(
+                                                        "data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600",
+                                                        showCompleted && !isActionable && "opacity-50 cursor-not-allowed"
+                                                    )}
+                                                />
+                                            );
+                                        })()}
                                     </div>
                                     <div>
-                                        <span
-                                            className={cn(
-                                                "cursor-pointer transition-colors block text-sm font-medium",
-                                                ((task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) ||
-                                                    (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
-                                                    (task.recurring?.enabled && !canCompleteRecurringTask(task)))
-                                                    ? "line-through text-muted-foreground"
-                                                    : "text-foreground hover:text-foreground"
-                                            )}
-                                            onClick={() => !(task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) &&
-                                                !(task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) &&
-                                                !(task.recurring?.enabled && !canCompleteRecurringTask(task)) &&
-                                                startEditing(task)}
-                                        >
-                                            {task.title}
-                                        </span>
+                                        {(() => {
+                                            const isCompleted = (task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) ||
+                                                (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
+                                                (task.recurring?.enabled && !canCompleteRecurringTask(task));
+
+                                            const isActionable = showCompleted ?
+                                                (task.recurring?.enabled ? isRecurringTaskDueAndAvailable(task) :
+                                                    task.spacedRepetition?.enabled ? (canCompleteSpacedRepetitionTask(task) &&
+                                                        task.spacedRepetition.nextReviewDate &&
+                                                        new Date(task.spacedRepetition.nextReviewDate).setHours(0, 0, 0, 0) <= new Date().setHours(0, 0, 0, 0)) :
+                                                        !task.completed) :
+                                                true;
+
+                                            return (
+                                                <span
+                                                    className={cn(
+                                                        "cursor-pointer transition-colors block text-sm font-medium",
+                                                        isCompleted
+                                                            ? "line-through text-muted-foreground"
+                                                            : showCompleted && !isActionable
+                                                                ? "text-muted-foreground opacity-60"
+                                                                : "text-foreground hover:text-foreground"
+                                                    )}
+                                                    onClick={() => {
+                                                        if (!isCompleted && isActionable) {
+                                                            startEditing(task);
+                                                        }
+                                                    }}
+                                                >
+                                                    {task.title}
+                                                    {showCompleted && !isActionable && (
+                                                        <span className="text-xs text-muted-foreground ml-2">
+                                                            (not due today)
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                                 {/* Content area - aligned with checkbox */}
@@ -1380,54 +1361,70 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
 
                                     </div>
                                     <div className='flex float-right gap-1'>
-                                        {/* Focus Play Button - only show for incomplete tasks */}
-                                        {!((task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) ||
-                                            (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
-                                            (task.recurring?.enabled && !canCompleteRecurringTask(task))) && onStartFocusSession && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="default"
-                                                    onClick={() => onStartFocusSession(task.id)}
-                                                    disabled={isTimerActive}
-                                                    className={cn(
-                                                        "h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
-                                                        isTimerActive && task.id === selectedTaskId && "bg-red-100 text-red-600"
+                                        {(() => {
+                                            const isCompleted = (task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) ||
+                                                (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
+                                                (task.recurring?.enabled && !canCompleteRecurringTask(task));
+
+                                            const isActionable = showCompleted ?
+                                                (task.recurring?.enabled ? isRecurringTaskDueAndAvailable(task) :
+                                                    task.spacedRepetition?.enabled ? (canCompleteSpacedRepetitionTask(task) &&
+                                                        task.spacedRepetition.nextReviewDate &&
+                                                        new Date(task.spacedRepetition.nextReviewDate).setHours(0, 0, 0, 0) <= new Date().setHours(0, 0, 0, 0)) :
+                                                        !task.completed) :
+                                                true;
+
+                                            return (
+                                                <>
+                                                    {/* Focus Play Button - only show for actionable tasks */}
+                                                    {!isCompleted && isActionable && onStartFocusSession && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="default"
+                                                            onClick={() => onStartFocusSession(task.id)}
+                                                            disabled={isTimerActive}
+                                                            className={cn(
+                                                                "h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
+                                                                isTimerActive && task.id === selectedTaskId && "bg-red-100 text-red-600"
+                                                            )}
+                                                            title={
+                                                                isTimerActive && task.id === selectedTaskId
+                                                                    ? "Currently working on this task"
+                                                                    : isTimerActive
+                                                                        ? "Timer is already active"
+                                                                        : "Start focus session for this task"
+                                                            }
+                                                        >
+                                                            <Play className="w-3 h-3" />
+                                                        </Button>
                                                     )}
-                                                    title={
-                                                        isTimerActive && task.id === selectedTaskId
-                                                            ? "Currently working on this task"
-                                                            : isTimerActive
-                                                                ? "Timer is already active"
-                                                                : "Start focus session for this task"
-                                                    }
-                                                >
-                                                    <Play className="w-3 h-3" />
-                                                </Button>
-                                            )}
 
-                                        {!((task.completed && !task.spacedRepetition?.enabled && !task.recurring?.enabled) ||
-                                            (task.spacedRepetition?.enabled && !canCompleteSpacedRepetitionTask(task)) ||
-                                            (task.recurring?.enabled && !canCompleteRecurringTask(task))) && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={() => startEditing(task)}
-                                                    className="h-8 w-8 p-0 hover:bg-accent bg-accent cursor-pointer"
-                                                >
-                                                    <Edit3 className="w-3 h-3" />
-                                                </Button>
-                                            )}
+                                                    {/* Edit Button - only show for actionable tasks */}
+                                                    {!isCompleted && isActionable && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => startEditing(task)}
+                                                            className="h-8 w-8 p-0 hover:bg-accent bg-accent cursor-pointer"
+                                                        >
+                                                            <Edit3 className="w-3 h-3" />
+                                                        </Button>
+                                                    )}
 
-                                        <div>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() => deleteTask(task.id)}
-                                                className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive bg-accent cursor-pointer"
-                                            >
-                                                <Trash2 className="w-3 h-3" />
-                                            </Button>
-                                        </div>
+                                                    {/* Delete Button - always show */}
+                                                    <div>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => deleteTask(task.id)}
+                                                            className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive bg-accent cursor-pointer"
+                                                        >
+                                                            <Trash2 className="w-3 h-3" />
+                                                        </Button>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
 

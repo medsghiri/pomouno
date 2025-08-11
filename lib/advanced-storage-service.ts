@@ -280,21 +280,6 @@ export class AdvancedStorageService {
                         // Keep completedAt for historical tracking but don't mark as completed
                     }
 
-                    // Debug logging for duolingo test
-                    if (task.title === 'duolingo test') {
-                        console.log(`Duolingo test task data:`, {
-                            completed: task.completed,
-                            recurring: task.recurring,
-                            nextDue: task.recurring.nextDue ? new Date(task.recurring.nextDue).toISOString() : 'none',
-                            lastCompleted: task.recurring.lastCompleted ? new Date(task.recurring.lastCompleted).toISOString() : 'never',
-                            rawData: {
-                                recurringEnabled: data.recurringEnabled,
-                                recurringNextDue: data.recurringNextDue,
-                                recurringLastCompleted: data.recurringLastCompleted,
-                                completed: data.completed
-                            }
-                        });
-                    }
                 }
 
                 if (data.spacedRepetitionEnabled) {

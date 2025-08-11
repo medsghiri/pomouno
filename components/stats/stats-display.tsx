@@ -597,12 +597,12 @@ export function StatsDisplay() {
         return (
             <FeatureGate feature="statistics">
                 <div className="space-y-6">
-                    <div className="flex items-center justify-between mb-6">
+                    {/* <div className="flex items-center justify-between mb-6">
                         <h2 className="text-2xl font-bold flex items-center gap-2 text-foreground">
                             <TrendingUp className="w-6 h-6" />
                             Statistics
                         </h2>
-                    </div>
+                    </div> */}
 
                     <Tabs value="today" className="space-y-6">
                         <TabsList className="grid w-full grid-cols-4">
@@ -676,11 +676,6 @@ export function StatsDisplay() {
     if (!user) {
         return (
             <div className="h-full flex flex-col">
-                {/* Header */}
-                <div className="p-4 pr-16 border-b flex items-center justify-between">
-                    <h2 className="text-xl font-semibold text-foreground">Statistics</h2>
-                </div>
-
                 {/* Empty state content */}
                 <div className="flex-1 flex items-center justify-center p-8">
                     <div className="text-center max-w-md">
@@ -730,10 +725,7 @@ export function StatsDisplay() {
         <FeatureGate feature="statistics">
             <div className="space-y-6">
                 <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold flex items-center gap-2 text-foreground">
-                        <TrendingUp className="w-6 h-6" />
-                        Statistics
-                    </h2>
+
                     {user && activeTab === 'month' && (
                         <div className="flex items-center gap-2">
                             <Button

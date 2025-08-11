@@ -34,7 +34,6 @@ class NotificationService {
      */
     async requestPermission(): Promise<NotificationPermission | null> {
         if (!this.isSupported()) {
-            console.log('Notifications not supported in this browser');
             return null;
         }
 
@@ -48,7 +47,6 @@ class NotificationService {
 
             try {
                 const permission = await Notification.requestPermission();
-                console.log('Notification permission:', permission);
                 return permission;
             } catch (error) {
                 console.error('Error requesting notification permission:', error);
@@ -137,17 +135,14 @@ class NotificationService {
      */
     async requestPermissionOnFirstUse(): Promise<void> {
         if (!this.isSupported()) {
-            console.log('Notifications not supported');
             return;
         }
 
         if (Notification.permission === 'granted') {
-            console.log('Notifications already granted');
             return;
         }
 
         if (Notification.permission === 'denied') {
-            console.log('Notifications denied by user');
             return;
         }
 
@@ -162,7 +157,6 @@ class NotificationService {
             if (userWantsNotifications) {
                 try {
                     const permission = await Notification.requestPermission();
-                    console.log('Notification permission result:', permission);
 
                     if (permission === 'granted') {
                         // Test notification to ensure it works

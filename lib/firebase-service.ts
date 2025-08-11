@@ -35,28 +35,6 @@ function removeUndefinedFields(obj: any): any {
 }
 
 export class FirebaseService {
-  // Test function to verify Firebase permissions
-  static async testFirebaseConnection(user: User) {
-    try {
-      // Test 1: Try to write to users collection
-      const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, {
-        testField: 'test',
-        timestamp: serverTimestamp()
-      }, { merge: true });
-
-      // Test 2: Try to read from users collection
-      const userDoc = await getDoc(userRef);
-      if (!userDoc.exists()) {
-        throw new Error('User profile read test failed - document does not exist');
-      }
-
-      return true;
-    } catch (error) {
-      console.error('❌ Firebase connection test failed:', error);
-      throw error;
-    }
-  }
 
   // User profile management with proper indexing
   static async saveUserProfile(user: User) {
@@ -92,11 +70,8 @@ export class FirebaseService {
       const newSessions = sessions.filter(session => !existingSessionIds.has(session.id));
 
       if (newSessions.length === 0) {
-        console.log('No new sessions to save - all already exist');
         return;
       }
-
-      console.log(`Saving ${newSessions.length} new sessions (${sessions.length - newSessions.length} duplicates skipped)`);
 
       const batch = writeBatch(db);
       const sessionsRef = collection(db, 'users', user.uid, 'sessions');
@@ -104,7 +79,6 @@ export class FirebaseService {
       newSessions.forEach(session => {
         // Validate session data before saving
         if (!session.id || !session.type || typeof session.duration !== 'number' || typeof session.timestamp !== 'number') {
-          console.warn('Skipping invalid session:', session);
           return;
         }
 
@@ -128,10 +102,8 @@ export class FirebaseService {
       });
 
       await batch.commit();
-      console.log(`✅ Successfully saved ${newSessions.length} sessions to Firebase`);
 
     } catch (error) {
-      console.error('❌ Error saving sessions to Firebase:', error);
       throw error;
     }
   }
@@ -270,9 +242,7 @@ export class FirebaseService {
       });
 
       await batch.commit();
-      console.log(`✅ Successfully saved ${tasks.length} tasks to Firebase (${newTasks.length} new, ${tasksToUpdate.length} updated)`);
     } catch (error) {
-      console.error('Error in saveTasks:', error);
       throw error;
     }
   }
@@ -393,44 +363,26 @@ export class FirebaseService {
       // Wait a bit to ensure auth token is fully ready
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Test Firebase connection first
-      await this.testFirebaseConnection(user);
-
       // Save user profile first
-      try {
-        await this.saveUserProfile(user);
-      } catch (profileError) {
-        console.error('❌ User profile save failed:', profileError);
-        throw profileError;
-      }
+      await this.saveUserProfile(user);
 
       // Validate and migrate sessions
       if (localData.sessions && Array.isArray(localData.sessions) && localData.sessions.length > 0) {
-        try {
-          const validSessions = localData.sessions.filter((session: any) =>
-            session.id && session.type && typeof session.duration === 'number' && session.timestamp
-          );
-          if (validSessions.length > 0) {
-            await this.saveSessions(user, validSessions);
-          }
-        } catch (sessionsError) {
-          console.error('❌ Sessions migration failed:', sessionsError);
-          throw sessionsError;
+        const validSessions = localData.sessions.filter((session: any) =>
+          session.id && session.type && typeof session.duration === 'number' && session.timestamp
+        );
+        if (validSessions.length > 0) {
+          await this.saveSessions(user, validSessions);
         }
       }
 
       // Validate and migrate tasks
       if (localData.tasks && Array.isArray(localData.tasks) && localData.tasks.length > 0) {
-        try {
-          const validTasks = localData.tasks.filter((task: any) =>
-            task.id && task.title && typeof task.completed === 'boolean'
-          );
-          if (validTasks.length > 0) {
-            await this.saveTasks(user, validTasks);
-          }
-        } catch (tasksError) {
-          console.error('❌ Tasks migration failed:', tasksError);
-          throw tasksError;
+        const validTasks = localData.tasks.filter((task: any) =>
+          task.id && task.title && typeof task.completed === 'boolean'
+        );
+        if (validTasks.length > 0) {
+          await this.saveTasks(user, validTasks);
         }
       }
 
@@ -454,7 +406,6 @@ export class FirebaseService {
             await this.saveBreakReminders(user, validReminders);
           }
         } catch (remindersError) {
-          console.error('❌ Break reminders migration failed:', remindersError);
           // Don't throw - continue with other data
         }
       }
@@ -469,14 +420,12 @@ export class FirebaseService {
             await this.saveBreakReminderCompletions(user, validCompletions);
           }
         } catch (completionsError) {
-          console.error('❌ Break reminder completions migration failed:', completionsError);
           // Don't throw - continue with other data
         }
       }
 
       return true;
     } catch (error) {
-      console.error('❌ Migration error:', error);
       throw error;
     }
   }
@@ -493,7 +442,6 @@ export class FirebaseService {
       try {
         await user.getIdToken();
       } catch (tokenError) {
-        console.warn('User token invalid, skipping break reminders sync:', tokenError);
         return;
       }
 
@@ -522,9 +470,7 @@ export class FirebaseService {
       });
 
       await batch.commit();
-      console.log(`✅ Successfully saved ${reminders.length} break reminders to Firebase`);
     } catch (error) {
-      console.error('Error in saveBreakReminders:', error);
       throw error;
     }
   }
@@ -673,7 +619,6 @@ export class FirebaseService {
         }
       };
     } catch (error) {
-      console.error('Error exporting user data:', error);
       throw error;
     }
   }
@@ -685,7 +630,6 @@ export class FirebaseService {
       const docSnap = await getDoc(userRef);
       return docSnap.exists() ? docSnap.data() : null;
     } catch (error) {
-      console.error('Error getting user profile:', error);
       return null;
     }
   }
@@ -742,9 +686,7 @@ export class FirebaseService {
       // Commit all deletions
       await batch.commit();
 
-      console.log('User progress reset successfully');
     } catch (error) {
-      console.error('Error resetting user progress:', error);
       throw error;
     }
   }
@@ -762,10 +704,7 @@ export class FirebaseService {
       // Delete user settings
       const settingsRef = doc(db, 'settings', user.uid);
       await deleteDoc(settingsRef);
-
-      console.log('User data deleted successfully');
     } catch (error) {
-      console.error('Error deleting user data:', error);
       throw error;
     }
   }

@@ -76,7 +76,6 @@ class VibrationService {
             const result = navigator.vibrate(pattern);
             return result;
         } catch (error) {
-            console.warn('Vibration failed:', error);
             this.isEnabled = false; // Disable if it fails
             return false;
         }

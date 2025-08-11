@@ -3,17 +3,18 @@ import { Logo } from '@/components/logo';
 
 export function HeroSection() {
     return (
-        <div className="text-center space-y-8 py-12">
+        <div className="text-center space-y-8 py-4">
             {/* Hero Logo and Title */}
             <div className="flex flex-col items-center space-y-4">
-                <div className="flex items-center gap-4">
+                <h2 className="text-3xl font-bold mb-4">What is PomoUno?</h2>
+                {/* <div className="flex items-center gap-4">
                     <Logo className="w-16 h-16" />
-                    <h1 className="text-4xl md:text-6xl font-bold text-foreground">
+                    <h1 className="text-xl md:text-6xl font-bold text-foreground">
                         PomoUno
                     </h1>
-                </div>
-                <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl">
-                    Your simple, beautiful productivity companion
+                </div> */}
+                <p className=" text-muted-foreground max-w-2xl">
+                    PomoUno combines the proven Pomodoro Technique with intelligent task management, spaced repetition learning, and wellness-focused breaks. It is more than just a timer; it is a complete productivity ecosystem that adapts to the way you work and learn.
                 </p>
             </div>
 
@@ -31,7 +32,7 @@ export function HeroSection() {
                 </p>
             </div>
 
-            {/* Feature Highlights */}
+            {/* Feature Highlights
             <div className="grid md:grid-cols-4 gap-6 max-w-4xl mx-auto">
                 <div className="text-center">
                     <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full w-fit mx-auto mb-3">
@@ -64,7 +65,7 @@ export function HeroSection() {
                     <h3 className="font-semibold text-foreground">Progress Stats</h3>
                     <p className="text-sm text-muted-foreground">Track your growth</p>
                 </div>
-            </div>
+            </div> */}
         </div>
     );
 }

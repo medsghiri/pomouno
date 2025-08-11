@@ -138,28 +138,11 @@ export function AuthModal({ isOpen, onClose, onSuccess, defaultTab = 'signup' }:
     }
   };
 
-  const benefits = [
-    {
-      icon: Cloud,
-      title: "Never lose progress",
-      description: "All your data is safely stored in the cloud"
-    },
-    {
-      icon: TrendingUp,
-      title: "Advanced analytics",
-      description: "Track your productivity trends over time"
-    },
-    {
-      icon: Smartphone,
-      title: "Multi-device sync",
-      description: "Access your data from anywhere"
-    }
-  ];
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg max-h-[90vh]">
-        <DialogHeader className="space-y-3">
+        <DialogHeader className="space-y-4">
           <DialogTitle className="text-center text-2xl font-bold text-foreground">
             Welcome to PomoUno
           </DialogTitle>
@@ -169,23 +152,6 @@ export function AuthModal({ isOpen, onClose, onSuccess, defaultTab = 'signup' }:
         </DialogHeader>
 
         <ScrollArea className="max-h-[70vh]">
-          {/* Benefits Section */}
-          <div className="space-y-3 py-4">
-            {benefits.map((benefit, index) => {
-              const Icon = benefit.icon;
-              return (
-                <div key={index} className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-200 dark:border-red-800/30">
-                  <div className="p-2 bg-red-100 dark:bg-red-900/40 rounded-full">
-                    <Icon className="w-4 h-4 text-red-600 dark:text-red-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{benefit.title}</p>
-                    <p className="text-xs text-muted-foreground">{benefit.description}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
 
           <Separator />
 
@@ -208,7 +174,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, defaultTab = 'signup' }:
             Continue with Google
           </Button>
 
-          <div className="relative">
+          <div className="relative my-2">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t" />
             </div>
@@ -233,7 +199,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, defaultTab = 'signup' }:
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="signup" className="space-y-4 mt-6">
+            <TabsContent value="signup" className="space-y-4 mt-6 mx-1">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
@@ -314,7 +280,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, defaultTab = 'signup' }:
               </form>
             </TabsContent>
 
-            <TabsContent value="signin" className="space-y-4 mt-6">
+            <TabsContent value="signin" className="space-y-4 mt-6 mx-1">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="signin-email">Email</Label>

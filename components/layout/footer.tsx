@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Github, Heart, Coffee } from 'lucide-react';
+import { Github, Heart } from 'lucide-react';
 import { Logo } from '@/components/logo';
 
 export function Footer() {
@@ -46,30 +46,16 @@ export function Footer() {
                 </div>
 
                 {/* Bottom Bar */}
-                <div className="mt-8 pt-8 border-t border-accent/50">
-                    <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span>© 2025 PomoUno. All rights reserved.</span>
-                            <span className="hidden md:inline">•</span>
+                <div className="mt-8 pt-8 border-accent/50">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-muted-foreground text-center sm:text-left">
                             <span className="flex items-center gap-1">
-                                Made with <Heart className="w-4 h-4 text-red-500" /> for productivity
+                                Made with Kiro and <Heart className="w-3 h-3 text-red-500" />
                             </span>
                         </div>
 
-                        <div className="flex items-center gap-4">
-                            <a
-                                href="https://buymeacoffee.com/pomouno"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                            >
-                                <Coffee className="w-4 h-4" />
-                                Support Us
-                            </a>
-                            <span className="text-muted-foreground/50">•</span>
-                            <span className="text-sm text-muted-foreground/75">
-                                v1.0.0
-                            </span>
+                        <div className="flex items-center gap-2 sm:gap-4 text-sm">
+                            <span>© 2025 PomoUno. All rights reserved.</span>
                         </div>
                     </div>
                 </div>

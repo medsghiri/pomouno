@@ -347,11 +347,11 @@ export function BreakReminderManager() {
                         <div className="space-y-3 mb-6">
                             <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                 <span className="text-base">💧</span>
-                                <span>Hydration and nutrition (examples)</span>
+                                <span>Hydration and nutrition</span>
                             </div>
                             <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                 <span className="text-base">🏃</span>
-                                <span>Movement and stretching (examples)</span>
+                                <span>Movement and stretching</span>
                             </div>
                             <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                 <span className="text-base">🧘</span>

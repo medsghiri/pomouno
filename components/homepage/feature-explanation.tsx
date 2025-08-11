@@ -1,52 +1,10 @@
-import { Clock, Brain, Target, TrendingUp, GraduationCap, Briefcase, Zap, DollarSign, CheckCircle, Coffee, Music, BarChart3, Moon, Cloud } from 'lucide-react';
+import { Brain, Target, DollarSign, Music, BarChart3, Moon, Cloud, Coffee } from 'lucide-react';
 
 export function FeatureExplanation() {
     return (
-        <div className="bg-background/10 backdrop-blur-sm rounded-2xl p-8 text-foreground space-y-8">
-            <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold mb-4">What is PomoUno?</h2>
-                <p className="text-lg text-muted-foreground">
-                    Your simple, beautiful productivity companion
-                </p>
-            </div>
+        <div className="rounded-2xl p-8 text-foreground space-y-8">
 
             <div className="grid md:grid-cols-2 gap-8">
-                <div>
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
-                            <GraduationCap className="w-6 h-6 text-red-600 dark:text-red-400" />
-                        </div>
-                        <h3 className="text-xl font-semibold">Perfect for Students</h3>
-                    </div>
-                    <p className="text-muted-foreground leading-relaxed mb-4">
-                        Whether you're cramming for finals, working on a thesis, or just trying to get through daily homework,
-                        PomoUno helps you break down overwhelming tasks into manageable 25-minute chunks.
-                        Many students report improved focus and reduced procrastination after just a few sessions.
-                    </p>
-                    <p className="text-muted-foreground leading-relaxed">
-                        Track how many sessions each subject requires, build consistent study habits, and watch your
-                        academic performance improve as you develop better time management skills.
-                    </p>
-                </div>
-
-                <div>
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
-                            <Briefcase className="w-6 h-6 text-red-600 dark:text-red-400" />
-                        </div>
-                        <h3 className="text-xl font-semibold">Great for Remote Workers</h3>
-                    </div>
-                    <p className="text-muted-foreground leading-relaxed mb-4">
-                        Working from home can be full of distractions. PomoUno helps you maintain professional-level
-                        focus even when you're surrounded by household temptations. The structured work-break cycle
-                        keeps you energized throughout the day.
-                    </p>
-                    <p className="text-muted-foreground leading-relaxed">
-                        Use task tracking to show your productivity to managers, break reminders to maintain health
-                        during long work sessions, and statistics to optimize your most productive hours.
-                    </p>
-                </div>
-
                 <div>
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">

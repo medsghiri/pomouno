@@ -146,7 +146,7 @@ export function SpacedRepetitionCalendar({ className }: SpacedRepetitionCalendar
             case 'hard':
                 return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400';
             default:
-                return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400';
+                return 'bg-accent text-accent-foreground';
         }
     };
 
@@ -154,8 +154,8 @@ export function SpacedRepetitionCalendar({ className }: SpacedRepetitionCalendar
         return (
             <Card className={className}>
                 <CardContent className="p-6 text-center">
-                    <Brain className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                    <Brain className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">
                         Sign in to view your spaced repetition schedule
                     </p>
                 </CardContent>
@@ -176,11 +176,11 @@ export function SpacedRepetitionCalendar({ className }: SpacedRepetitionCalendar
             <CardContent className="space-y-4">
                 {upcomingReviews.length === 0 ? (
                     <div className="text-center py-4">
-                        <CalendarDays className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <CalendarDays className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground">
                             No spaced repetition tasks scheduled
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                             Create tasks with spaced repetition enabled to see your review schedule
                         </p>
                     </div>
@@ -188,9 +188,9 @@ export function SpacedRepetitionCalendar({ className }: SpacedRepetitionCalendar
                     <>
                         <div className="space-y-2">
                             {upcomingReviews.map((reviewDate, index) => (
-                                <div key={index} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                                <div key={index} className="flex items-center justify-between p-2 rounded-lg bg-accent/50">
                                     <div className="flex items-center gap-2">
-                                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        <div className="text-sm font-medium text-foreground">
                                             {formatDate(reviewDate.date)}
                                         </div>
                                         <Badge variant="secondary" className="text-xs">
@@ -260,7 +260,7 @@ export function SpacedRepetitionCalendar({ className }: SpacedRepetitionCalendar
                                             </h4>
                                             <div className="space-y-1">
                                                 {selectedDateTasks.map((task) => (
-                                                    <div key={task.id} className="flex items-center justify-between p-2 rounded bg-gray-50 dark:bg-gray-800">
+                                                    <div key={task.id} className="flex items-center justify-between p-2 rounded bg-accent/50">
                                                         <span className="text-sm truncate flex-1 mr-2">
                                                             {task.title}
                                                         </span>

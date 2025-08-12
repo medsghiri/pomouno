@@ -120,7 +120,7 @@ export function DifficultySelectionDialog({
                                             Next: {option.nextReview} day{option.nextReview !== 1 ? 's' : ''}
                                         </Badge>
                                     </div>
-                                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                                    <p className="text-sm text-muted-foreground">
                                         {option.description}
                                     </p>
                                 </div>

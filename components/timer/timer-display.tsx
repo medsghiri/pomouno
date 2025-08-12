@@ -192,11 +192,11 @@ export function TimerDisplay({
               stroke="currentColor"
               strokeWidth="8"
               fill="none"
-              className="text-gray-300 dark:text-gray-700"
+              className="text-muted-foreground/30"
             />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-gray-900 dark:text-gray-100 text-6xl font-light tracking-tight">
+            <div className="text-foreground text-6xl font-light tracking-tight">
               25:00
             </div>
           </div>
@@ -303,7 +303,7 @@ export function TimerDisplay({
             stroke="currentColor"
             strokeWidth="8"
             fill="none"
-            className="text-gray-300/30 dark:text-gray-700/30"
+            className="text-muted-foreground/20"
           />
           {/* Progress Circle */}
           <circle
@@ -323,7 +323,7 @@ export function TimerDisplay({
         {/* Timer Display */}
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center">
-            <div className="text-gray-900 dark:text-gray-100 text-4xl sm:text-6xl md:text-7xl font-light tracking-tight leading-none">
+            <div className="text-foreground text-4xl sm:text-6xl md:text-7xl font-light tracking-tight leading-none">
               {formatTime(timeLeft)}
             </div>
             <div className={cn("text-xs sm:text-sm font-medium mt-1 sm:mt-2 uppercase tracking-wide", getProgressColor())}>
@@ -334,7 +334,7 @@ export function TimerDisplay({
       </div>
 
       {/* Status Message - Moved below the timer */}
-      <div className="text-gray-700 dark:text-gray-300 text-base sm:text-lg px-4 text-center">
+      <div className="text-muted-foreground text-base sm:text-lg px-4 text-center">
         {isActive && !isPaused && (
           <span className="animate-pulse">
             {sessionType === 'work'
@@ -364,8 +364,8 @@ export function TimerDisplay({
       {/* Task Progress - Show when working on a task */}
       {currentTask && sessionType === 'work' && currentTask.estimatedSessions > 0 && (
         <div className="px-4 max-w-md mx-auto">
-          <div className="bg-white/10 dark:bg-gray-800/30 rounded-lg p-3 backdrop-blur-sm">
-            <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+          <div className="bg-accent/20 rounded-lg p-3 backdrop-blur-sm">
+            <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
               <span>Task Progress</span>
               <span>{todaysTaskSessions || 0} / {currentTask.estimatedSessions} sessions</span>
             </div>
@@ -378,7 +378,7 @@ export function TimerDisplay({
               />
             </div>
             {currentTask.description && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+              <p className="text-xs text-muted-foreground mt-2 text-center">
                 {currentTask.description}
               </p>
             )}

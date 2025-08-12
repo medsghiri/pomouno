@@ -1209,6 +1209,44 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
 
     const filteredTasks = getFilteredTasks();
 
+    // Helper function to check if any filters are active
+    const hasActiveFilters = (): boolean => {
+        return priorityFilter !== 'all' ||
+            typeFilter !== 'all' ||
+            categoryFilter !== 'all' ||
+            dueDateFilter !== 'all' ||
+            showCompleted;
+    };
+
+    // Helper function to get active filter descriptions
+    const getActiveFilterDescription = (): string => {
+        const filters: string[] = [];
+
+        if (priorityFilter !== 'all') {
+            filters.push(`Priority: ${priorityFilter === 'none' ? 'No Priority' : priorityFilter}`);
+        }
+        if (typeFilter !== 'all') {
+            filters.push(`Type: ${typeFilter === 'regular' ? 'Regular' : typeFilter === 'recurring' ? 'Recurring' : typeFilter === 'spaced' ? 'Spaced Repetition' : typeFilter}`);
+        }
+        if (categoryFilter !== 'all') {
+            filters.push(`Category: ${categoryFilter === 'none' ? 'No Category' : categoryFilter}`);
+        }
+        if (dueDateFilter !== 'all') {
+            const dueDateLabels = {
+                'overdue': 'Overdue',
+                'today': 'Due Today',
+                'week': 'Due This Week',
+                'no-date': 'No Due Date'
+            };
+            filters.push(`Due Date: ${dueDateLabels[dueDateFilter as keyof typeof dueDateLabels] || dueDateFilter}`);
+        }
+        if (showCompleted) {
+            filters.push('Showing completed tasks');
+        }
+
+        return filters.join(', ');
+    };
+
     // Get today's stats from LocalStorage for daily view
     const todayStats = LocalStorage.getTodaysStats();
 
@@ -1424,7 +1462,37 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
                     {filteredTasks.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                             <Target className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                            <p>No tasks yet. Add your first task below!</p>
+                            {hasActiveFilters() ? (
+                                <div className="space-y-2">
+                                    <p className="font-medium">No tasks match your current filters</p>
+                                    <p className="text-sm">
+                                        Active filters: {getActiveFilterDescription()}
+                                    </p>
+                                    <div className="flex flex-col sm:flex-row gap-2 justify-center mt-4">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                setPriorityFilter('all');
+                                                setTypeFilter('all');
+                                                setCategoryFilter('all');
+                                                setDueDateFilter('all');
+                                                setShowCompleted(false);
+                                            }}
+                                            className="text-xs"
+                                        >
+                                            Clear All Filters
+                                        </Button>
+                                        {tasks.length > 0 && (
+                                            <p className="text-xs text-muted-foreground self-center">
+                                                You have {tasks.length} total task{tasks.length !== 1 ? 's' : ''}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <p>No tasks yet. Add your first task below!</p>
+                            )}
                         </div>
                     ) : (
                         filteredTasks.map((task) => (

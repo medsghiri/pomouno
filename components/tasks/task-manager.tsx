@@ -65,6 +65,7 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
     const [priorityFilter, setPriorityFilter] = useState<'all' | 'high' | 'medium' | 'low' | 'none'>('all');
     const [typeFilter, setTypeFilter] = useState<'all' | 'regular' | 'recurring' | 'spaced'>('all');
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
+    const [dueDateFilter, setDueDateFilter] = useState<'all' | 'overdue' | 'today' | 'week' | 'no-date'>('all');
 
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
     const [editingTitle, setEditingTitle] = useState('');
@@ -78,6 +79,11 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
 
     // Spaced repetition states
     const [editingSpacedRepetition, setEditingSpacedRepetition] = useState(false);
+
+    // Due date/time states
+    const [editingDueDate, setEditingDueDate] = useState<string>('');
+    const [editingDueTime, setEditingDueTime] = useState<string>('');
+    const [editingHasDueTime, setEditingHasDueTime] = useState(false);
 
     // Recurring task states
     const [editingRecurring, setEditingRecurring] = useState(false);
@@ -450,6 +456,205 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
         }
     };
 
+    // Helper function to check if a task is overdue
+    const isTaskOverdue = (task: Task): boolean => {
+        // For recurring tasks, check if they should have been completed by now
+        if (task.recurring?.enabled) {
+            // If the task is available today but hasn't been completed, it's not overdue
+            // Recurring tasks are only overdue if they were due in the past and not completed
+            if (!task.recurring.nextDue) return false;
+
+            const now = new Date();
+            const nextDue = new Date(task.recurring.nextDue);
+
+            // If task has specific time, use it
+            if (task.hasDueTime && task.dueTime) {
+                const [hours, minutes] = task.dueTime.split(':').map(Number);
+                nextDue.setHours(hours, minutes, 0, 0);
+                return now.getTime() > nextDue.getTime() && !canCompleteRecurringTask(task);
+            } else {
+                // If no specific time, consider overdue at end of day
+                nextDue.setHours(23, 59, 59, 999);
+                return now.getTime() > nextDue.getTime() && !canCompleteRecurringTask(task);
+            }
+        }
+
+        // For spaced repetition tasks, check if review is overdue
+        if (task.spacedRepetition?.enabled) {
+            if (!task.spacedRepetition.nextReviewDate) return false;
+
+            const now = new Date();
+            const reviewDate = new Date(task.spacedRepetition.nextReviewDate);
+
+            // Spaced repetition is overdue if past the review date and not reviewed today
+            return now.getTime() > reviewDate.getTime() && canCompleteSpacedRepetitionTask(task);
+        }
+
+        // For regular tasks, use the original logic
+        if (!task.dueDate) return false;
+
+        const now = new Date();
+        const dueDate = new Date(task.dueDate);
+
+        if (task.hasDueTime && task.dueTime) {
+            // If task has specific time, compare with current time
+            const [hours, minutes] = task.dueTime.split(':').map(Number);
+            dueDate.setHours(hours, minutes, 0, 0);
+            return now.getTime() > dueDate.getTime();
+        } else {
+            // If task only has date, compare dates (overdue if past end of due date)
+            dueDate.setHours(23, 59, 59, 999);
+            return now.getTime() > dueDate.getTime();
+        }
+    };
+
+    // Helper function to check if a task is due today
+    const isTaskDueToday = (task: Task): boolean => {
+        // For recurring tasks, check if they're scheduled for today
+        if (task.recurring?.enabled) {
+            return isRecurringTaskDueAndAvailable(task);
+        }
+
+        // For spaced repetition tasks, check if review is due today
+        if (task.spacedRepetition?.enabled) {
+            if (!task.spacedRepetition.nextReviewDate) return false;
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            const reviewDate = new Date(task.spacedRepetition.nextReviewDate);
+            reviewDate.setHours(0, 0, 0, 0);
+
+            return reviewDate.getTime() >= today.getTime() && reviewDate.getTime() < tomorrow.getTime();
+        }
+
+        // For regular tasks, use the original logic
+        if (!task.dueDate) return false;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const dueDate = new Date(task.dueDate);
+        dueDate.setHours(0, 0, 0, 0);
+
+        return dueDate.getTime() >= today.getTime() && dueDate.getTime() < tomorrow.getTime();
+    };
+
+    // Helper function to format due date/time for display
+    const formatDueDateTime = (task: Task): string => {
+        // For recurring tasks, show when they're due based on pattern
+        if (task.recurring?.enabled) {
+            if (isRecurringTaskDueAndAvailable(task)) {
+                let dateStr = 'Today';
+                if (task.hasDueTime && task.dueTime) {
+                    const [hours, minutes] = task.dueTime.split(':').map(Number);
+                    const timeStr = new Date(0, 0, 0, hours, minutes).toLocaleTimeString([], {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                    });
+                    return `${dateStr} at ${timeStr}`;
+                }
+                return dateStr;
+            } else {
+                // Show next due date for recurring tasks
+                if (task.recurring.nextDue) {
+                    const nextDue = new Date(task.recurring.nextDue);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const tomorrow = new Date(today);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    const nextDueStart = new Date(task.recurring.nextDue);
+                    nextDueStart.setHours(0, 0, 0, 0);
+
+                    let dateStr = '';
+                    if (nextDueStart.getTime() === today.getTime()) {
+                        dateStr = 'Today';
+                    } else if (nextDueStart.getTime() === tomorrow.getTime()) {
+                        dateStr = 'Tomorrow';
+                    } else {
+                        dateStr = nextDue.toLocaleDateString();
+                    }
+
+                    if (task.hasDueTime && task.dueTime) {
+                        const [hours, minutes] = task.dueTime.split(':').map(Number);
+                        const timeStr = new Date(0, 0, 0, hours, minutes).toLocaleTimeString([], {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                        });
+                        return `${dateStr} at ${timeStr}`;
+                    }
+                    return dateStr;
+                }
+            }
+        }
+
+        // For spaced repetition tasks, show review date
+        if (task.spacedRepetition?.enabled && task.spacedRepetition.nextReviewDate) {
+            const reviewDate = new Date(task.spacedRepetition.nextReviewDate);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const reviewDateStart = new Date(task.spacedRepetition.nextReviewDate);
+            reviewDateStart.setHours(0, 0, 0, 0);
+
+            let dateStr = '';
+            if (reviewDateStart.getTime() === today.getTime()) {
+                dateStr = 'Today';
+            } else if (reviewDateStart.getTime() === tomorrow.getTime()) {
+                dateStr = 'Tomorrow';
+            } else {
+                dateStr = reviewDate.toLocaleDateString();
+            }
+
+            // Spaced repetition reviews typically have a default time
+            const reviewTime = reviewDate.toLocaleTimeString([], {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+            return `${dateStr} at ${reviewTime}`;
+        }
+
+        // For regular tasks, use the original logic
+        if (!task.dueDate) return '';
+
+        const dueDate = new Date(task.dueDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const dueDateStart = new Date(task.dueDate);
+        dueDateStart.setHours(0, 0, 0, 0);
+
+        let dateStr = '';
+        if (dueDateStart.getTime() === today.getTime()) {
+            dateStr = 'Today';
+        } else if (dueDateStart.getTime() === tomorrow.getTime()) {
+            dateStr = 'Tomorrow';
+        } else {
+            dateStr = dueDate.toLocaleDateString();
+        }
+
+        if (task.hasDueTime && task.dueTime) {
+            const [hours, minutes] = task.dueTime.split(':').map(Number);
+            const timeStr = new Date(0, 0, 0, hours, minutes).toLocaleTimeString([], {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+            return `${dateStr} at ${timeStr}`;
+        }
+
+        return dateStr;
+    };
+
     // Helper function to check if recurring task is due and available
     const isRecurringTaskDueAndAvailable = (task: Task): boolean => {
         if (!task.recurring?.enabled) {
@@ -516,6 +721,16 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
         setEditingCategory(task.category || 'none');
         setEditingAutoComplete(task.autoComplete || false);
 
+        // Due date/time
+        if (task.dueDate) {
+            const dueDate = new Date(task.dueDate);
+            setEditingDueDate(dueDate.toISOString().split('T')[0]); // YYYY-MM-DD format
+        } else {
+            setEditingDueDate('');
+        }
+        setEditingDueTime(task.dueTime || '');
+        setEditingHasDueTime(task.hasDueTime || false);
+
         // Spaced repetition
         setEditingSpacedRepetition(task.spacedRepetition?.enabled || false);
 
@@ -557,7 +772,10 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
                         description: editingDescription.trim() || undefined,
                         estimatedSessions: editingEstimate,
                         priority: editingPriorityEnabled ? editingPriority : undefined,
-                        category: editingCategory && editingCategory !== 'none' ? editingCategory.trim() : undefined
+                        category: editingCategory && editingCategory !== 'none' ? editingCategory.trim() : undefined,
+                        dueDate: editingDueDate ? new Date(editingDueDate).getTime() : undefined,
+                        dueTime: editingHasDueTime ? editingDueTime : undefined,
+                        hasDueTime: editingHasDueTime
                     };
 
                     // Handle spaced repetition
@@ -662,6 +880,9 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
                         estimatedSessions: editingEstimate,
                         priority: editingPriorityEnabled ? editingPriority : undefined,
                         category: editingCategory && editingCategory !== 'none' ? editingCategory.trim() : undefined,
+                        dueDate: editingDueDate ? new Date(editingDueDate).getTime() : undefined,
+                        dueTime: editingHasDueTime ? editingDueTime : undefined,
+                        hasDueTime: editingHasDueTime,
                         tags: []
                     };
 
@@ -865,7 +1086,95 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
             }
         }
 
+        if (dueDateFilter !== 'all') {
+            switch (dueDateFilter) {
+                case 'overdue':
+                    filtered = filtered.filter(task => {
+                        // For recurring tasks, check if they're overdue based on their pattern
+                        if (task.recurring?.enabled) {
+                            return isRecurringTaskDueAndAvailable(task) && isTaskOverdue(task);
+                        }
+                        // For spaced repetition, check if review is overdue
+                        if (task.spacedRepetition?.enabled) {
+                            if (!task.spacedRepetition.nextReviewDate) return false;
+                            const now = new Date();
+                            const reviewDate = new Date(task.spacedRepetition.nextReviewDate);
+                            return now.getTime() > reviewDate.getTime();
+                        }
+                        // For regular tasks, use standard overdue check
+                        return isTaskOverdue(task);
+                    });
+                    break;
+                case 'today':
+                    filtered = filtered.filter(task => {
+                        // For recurring tasks, check if they're due today based on pattern
+                        if (task.recurring?.enabled) {
+                            return isRecurringTaskDueAndAvailable(task);
+                        }
+                        // For spaced repetition, check if review is due today
+                        if (task.spacedRepetition?.enabled) {
+                            if (!task.spacedRepetition.nextReviewDate) return false;
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const tomorrow = new Date(today);
+                            tomorrow.setDate(tomorrow.getDate() + 1);
+                            const reviewDate = new Date(task.spacedRepetition.nextReviewDate);
+                            reviewDate.setHours(0, 0, 0, 0);
+                            return reviewDate.getTime() >= today.getTime() && reviewDate.getTime() < tomorrow.getTime();
+                        }
+                        // For regular tasks, use standard due today check
+                        return isTaskDueToday(task);
+                    });
+                    break;
+                case 'week':
+                    const weekFromNow = new Date();
+                    weekFromNow.setDate(weekFromNow.getDate() + 7);
+                    filtered = filtered.filter(task => {
+                        // For recurring tasks, if they're due today, they're within the week
+                        if (task.recurring?.enabled) {
+                            return isRecurringTaskDueAndAvailable(task);
+                        }
+                        // For spaced repetition, check if review is within the week
+                        if (task.spacedRepetition?.enabled) {
+                            if (!task.spacedRepetition.nextReviewDate) return false;
+                            const reviewDate = new Date(task.spacedRepetition.nextReviewDate);
+                            return reviewDate.getTime() <= weekFromNow.getTime();
+                        }
+                        // For regular tasks, check if due date is within the week
+                        if (!task.dueDate) return false;
+                        const dueDate = new Date(task.dueDate);
+                        return dueDate.getTime() <= weekFromNow.getTime();
+                    });
+                    break;
+                case 'no-date':
+                    filtered = filtered.filter(task => {
+                        // Recurring and spaced repetition tasks always have effective due dates
+                        if (task.recurring?.enabled || task.spacedRepetition?.enabled) {
+                            return false;
+                        }
+                        // Only regular tasks without due dates
+                        return !task.dueDate;
+                    });
+                    break;
+            }
+        }
+
         return filtered.sort((a, b) => {
+            // First, sort by due date urgency
+            const aOverdue = isTaskOverdue(a);
+            const bOverdue = isTaskOverdue(b);
+            const aDueToday = isTaskDueToday(a);
+            const bDueToday = isTaskDueToday(b);
+
+            // Overdue tasks come first
+            if (aOverdue && !bOverdue) return -1;
+            if (!aOverdue && bOverdue) return 1;
+
+            // Then due today tasks
+            if (aDueToday && !bDueToday && !aOverdue && !bOverdue) return -1;
+            if (!aDueToday && bDueToday && !aOverdue && !bOverdue) return 1;
+
+            // Then by priority
             const priorityOrder = { high: 3, medium: 2, low: 1, none: 0 };
             const aPriority = priorityOrder[a.priority || 'none'];
             const bPriority = priorityOrder[b.priority || 'none'];
@@ -874,6 +1183,7 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
                 return bPriority - aPriority;
             }
 
+            // Finally by creation date
             return b.createdAt - a.createdAt;
         });
     };
@@ -1032,7 +1342,7 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
                 <div className="grid grid-cols-3 gap-4 text-center">
                     <div className="bg-accent dark:bg-accent/50 rounded-lg p-3">
                         <div className="text-lg font-semibold text-current">{totalTasks}</div>
-                        <div className="text-xs text-accent-foreground">Total Tasks</div>
+                        <div className="text-xs text-accent-foreground">{showCompleted ? 'All Tasks' : dueDateFilter === 'all' ? 'Active Tasks' : dueDateFilter === 'overdue' ? 'Overdue' : dueDateFilter === 'today' ? 'Due Today' : dueDateFilter === 'week' ? 'Due This Week' : 'No Due Date'}</div>
                     </div>
                     <div className="bg-accent dark:bg-accent/50 rounded-lg p-3">
                         <div className="text-lg font-semibold text-current">{completedCount}</div>
@@ -1045,49 +1355,66 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
                 </div>
 
                 {/* Filters */}
-                <div className="grid grid-cols-3 gap-2">
-                    <Select value={priorityFilter} onValueChange={(value: any) => setPriorityFilter(value)}>
-                        <SelectTrigger className="text-xs focus:ring-2 focus:ring-ring focus:ring-offset-2">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Priority</SelectItem>
-                            <SelectItem value="high">High</SelectItem>
-                            <SelectItem value="medium">Medium</SelectItem>
-                            <SelectItem value="low">Low</SelectItem>
-                            <SelectItem value="none">No Priority</SelectItem>
-                        </SelectContent>
-                    </Select>
+                <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                        <Select value={priorityFilter} onValueChange={(value: any) => setPriorityFilter(value)}>
+                            <SelectTrigger className="text-xs focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Priority</SelectItem>
+                                <SelectItem value="high">High</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="low">Low</SelectItem>
+                                <SelectItem value="none">No Priority</SelectItem>
+                            </SelectContent>
+                        </Select>
 
-                    <Select value={typeFilter} onValueChange={(value: any) => setTypeFilter(value)}>
-                        <SelectTrigger className="text-xs focus:ring-2 focus:ring-ring focus:ring-offset-2">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Types</SelectItem>
-                            <SelectItem value="regular">Regular</SelectItem>
-                            <SelectItem value="recurring">Recurring</SelectItem>
-                            <SelectItem value="spaced">Spaced Rep</SelectItem>
-                        </SelectContent>
-                    </Select>
+                        <Select value={typeFilter} onValueChange={(value: any) => setTypeFilter(value)}>
+                            <SelectTrigger className="text-xs focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Types</SelectItem>
+                                <SelectItem value="regular">Regular</SelectItem>
+                                <SelectItem value="recurring">Recurring</SelectItem>
+                                <SelectItem value="spaced">Spaced Rep</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
 
-                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                        <SelectTrigger className="text-xs focus:ring-2 focus:ring-ring focus:ring-offset-2">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Categories</SelectItem>
-                            <SelectItem value="none">No Category</SelectItem>
-                            {availableCategories.map((category) => (
-                                <SelectItem key={category.id} value={category.name}>
-                                    <div className="flex items-center gap-2">
-                                        {category.icon && <span>{category.icon}</span>}
-                                        <span>{category.name}</span>
-                                    </div>
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <div className="grid grid-cols-2 gap-2">
+                        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                            <SelectTrigger className="text-xs focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Categories</SelectItem>
+                                <SelectItem value="none">No Category</SelectItem>
+                                {availableCategories.map((category) => (
+                                    <SelectItem key={category.id} value={category.name}>
+                                        <div className="flex items-center gap-2">
+                                            {category.icon && <span>{category.icon}</span>}
+                                            <span>{category.name}</span>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={dueDateFilter} onValueChange={(value: any) => setDueDateFilter(value)}>
+                            <SelectTrigger className="text-xs focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Due Dates</SelectItem>
+                                <SelectItem value="overdue">⚠️ Overdue</SelectItem>
+                                <SelectItem value="today">📅 Due Today</SelectItem>
+                                <SelectItem value="week">📆 Due This Week</SelectItem>
+                                <SelectItem value="no-date">🗓️ No Due Date</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
 
 
@@ -1330,27 +1657,44 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
                                         </div>
                                     )}
 
-                                    {/* Line 7: Priority and Created date */}
-                                    <div className='w-full flex justify-between items-center'>
-                                        <div>
-                                            {task.priority && (
-                                                <Badge
-                                                    variant="secondary"
-                                                    className={cn(
-                                                        "text-xs",
-                                                        task.priority === 'high' && "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
-                                                        task.priority === 'medium' && "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400",
-                                                        task.priority === 'low' && "bg-primary/10 text-primary"
-                                                    )}
-                                                >
-                                                    {task.priority}
-                                                </Badge>
-                                            )}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                            Created: {task.createdAt && !isNaN(task.createdAt) && task.createdAt > 0
-                                                ? new Date(task.createdAt).toLocaleDateString()
-                                                : 'Unknown'}
+                                    {/* Line 7: Priority, Due Date, and Created date */}
+                                    <div className='w-full space-y-2'>
+                                        <div className='flex justify-between items-center'>
+                                            <div className="flex items-center gap-2">
+                                                {task.priority && (
+                                                    <Badge
+                                                        variant="secondary"
+                                                        className={cn(
+                                                            "text-xs",
+                                                            task.priority === 'high' && "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
+                                                            task.priority === 'medium' && "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400",
+                                                            task.priority === 'low' && "bg-primary/10 text-primary"
+                                                        )}
+                                                    >
+                                                        {task.priority}
+                                                    </Badge>
+                                                )}
+                                                {task.dueDate && (
+                                                    <Badge
+                                                        variant="secondary"
+                                                        className={cn(
+                                                            "text-xs",
+                                                            isTaskOverdue(task) && "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
+                                                            isTaskDueToday(task) && !isTaskOverdue(task) && "bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400",
+                                                            !isTaskOverdue(task) && !isTaskDueToday(task) && "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
+                                                        )}
+                                                    >
+                                                        {isTaskOverdue(task) && '⚠️ '}
+                                                        {isTaskDueToday(task) && !isTaskOverdue(task) && '📅 '}
+                                                        Due: {formatDueDateTime(task)}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">
+                                                Created: {task.createdAt && !isNaN(task.createdAt) && task.createdAt > 0
+                                                    ? new Date(task.createdAt).toLocaleDateString()
+                                                    : 'Unknown'}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1446,6 +1790,9 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
                             setEditingPriorityEnabled(false);
                             setEditingCategory('none');
                             setEditingAutoComplete(false);
+                            setEditingDueDate('');
+                            setEditingDueTime('');
+                            setEditingHasDueTime(false);
                             setEditingSpacedRepetition(false);
                             setEditingRecurring(false);
                             setEditingRecurringPattern('daily');
@@ -1518,6 +1865,40 @@ export function TaskManager({ onStartFocusSession, isTimerActive, selectedTaskId
                                         onChange={setEditingEstimate}
                                         max={8}
                                     />
+                                </div>
+                            </div>
+
+                            {/* Due Date/Time Section */}
+                            <div>
+                                <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Due Date (Optional)</Label>
+                                <div className="mt-2 space-y-3">
+                                    <Input
+                                        type="date"
+                                        value={editingDueDate}
+                                        onChange={(e) => setEditingDueDate(e.target.value)}
+                                        className="w-full"
+                                    />
+
+                                    <div className="flex items-center space-x-2">
+                                        <Switch
+                                            id="edit-has-due-time"
+                                            checked={editingHasDueTime}
+                                            onCheckedChange={setEditingHasDueTime}
+                                            className="data-[state=checked]:bg-red-600"
+                                        />
+                                        <Label htmlFor="edit-has-due-time" className="text-sm">Set specific time</Label>
+                                    </div>
+
+                                    {editingHasDueTime && (
+                                        <div className="ml-6">
+                                            <Input
+                                                type="time"
+                                                value={editingDueTime}
+                                                onChange={(e) => setEditingDueTime(e.target.value)}
+                                                className="w-full"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

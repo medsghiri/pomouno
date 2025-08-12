@@ -35,6 +35,11 @@ export interface Task {
     completedAt?: number;
     archivedAt?: number;
 
+    // Due date/time fields
+    dueDate?: number; // Timestamp for when task is due
+    dueTime?: string; // Time in HH:MM format (24-hour)
+    hasDueTime?: boolean; // Whether the task has a specific time or just a date
+
     // Task type specific fields
     spacedRepetition?: SpacedRepetitionData;
     recurring?: RecurringData;
@@ -149,6 +154,9 @@ export interface CreateTaskRequest {
     title: string;
     description?: string;
     estimatedSessions: number;
+    dueDate?: number;
+    dueTime?: string;
+    hasDueTime?: boolean;
     spacedRepetition?: Omit<SpacedRepetitionData, 'reviewCount' | 'lastReviewed'>;
     recurring?: Omit<RecurringData, 'lastCompleted'>;
     category?: string;
@@ -349,11 +357,11 @@ export class AdvancedStorageService {
                 // If the task is overdue (nextDue is before today), update it
                 if (nextDue.getTime() < nowTimestamp) {
                     // Calculate the next appropriate due date
-                    let newNextDue = this.calculateNextRecurringDate(nowTimestamp, task.recurring);
+                    let newNextDue = this.calculateNextRecurringDate(nowTimestamp, task.recurring, task);
 
                     // For tasks that are significantly overdue, we might need to calculate multiple intervals
                     while (newNextDue.getTime() < nowTimestamp) {
-                        newNextDue = this.calculateNextRecurringDate(newNextDue.getTime(), task.recurring);
+                        newNextDue = this.calculateNextRecurringDate(newNextDue.getTime(), task.recurring, task);
                     }
 
                     const updatedTask = {
@@ -526,6 +534,15 @@ export class AdvancedStorageService {
                 createdAt: now
             };
 
+            // Handle due date - if no due date is set for regular tasks, default to today
+            if (!taskData.spacedRepetition?.enabled && !taskData.recurring?.enabled && !taskData.dueDate) {
+                // For regular tasks without a due date, set it to today
+                const today = new Date();
+                today.setHours(23, 59, 59, 999); // End of today
+                task.dueDate = today.getTime();
+                task.hasDueTime = false;
+            }
+
             // Initialize spaced repetition if enabled - store as flattened fields to avoid serialization issues
             if (taskData.spacedRepetition?.enabled) {
                 const spacedData: SpacedRepetitionData = {
@@ -533,7 +550,7 @@ export class AdvancedStorageService {
                     difficulty: taskData.spacedRepetition.difficulty || 'medium', // Default to medium for new tasks
                     reviewCount: 0,
                     interval: 1, // Start with 1 day interval
-                    nextReviewDate: now, // Available immediately for first review
+                    nextReviewDate: taskData.dueDate || now, // Use due date if provided, otherwise available immediately
                     lastReviewed: undefined,
                     easeFactor: taskData.spacedRepetition.easeFactor || 2.5 // Default SM-2 ease factor
                 };
@@ -553,10 +570,20 @@ export class AdvancedStorageService {
 
             // Initialize recurring if enabled - store as flattened fields to avoid serialization issues
             if (taskData.recurring?.enabled) {
-                // Set nextDue to start of today if not provided
-                const nextDue = taskData.recurring.nextDue || now;
-                const nextDueDate = new Date(nextDue);
-                nextDueDate.setHours(0, 0, 0, 0); // Ensure start of day in local time
+                // Set nextDue based on due date/time or default to today
+                let nextDueDate: Date;
+                if (taskData.dueDate) {
+                    nextDueDate = new Date(taskData.dueDate);
+                    if (taskData.hasDueTime && taskData.dueTime) {
+                        const [hours, minutes] = taskData.dueTime.split(':').map(Number);
+                        nextDueDate.setHours(hours, minutes, 0, 0);
+                    } else {
+                        nextDueDate.setHours(0, 0, 0, 0);
+                    }
+                } else {
+                    nextDueDate = new Date(now);
+                    nextDueDate.setHours(0, 0, 0, 0); // Start of today
+                }
 
                 // Store as flattened fields to avoid Firebase serialization issues
                 task.recurringEnabled = true;
@@ -733,7 +760,7 @@ export class AdvancedStorageService {
                 }
 
                 // Calculate next due date from completion time
-                const nextDue = this.calculateNextRecurringDate(now, task.recurring);
+                const nextDue = this.calculateNextRecurringDate(now, task.recurring, task);
 
 
 
@@ -888,13 +915,13 @@ export class AdvancedStorageService {
         // Calculate next review date
         const nextReviewDate = new Date();
         nextReviewDate.setDate(nextReviewDate.getDate() + newInterval);
-        nextReviewDate.setHours(0, 0, 0, 0); // Set to start of day
+        nextReviewDate.setHours(9, 0, 0, 0); // Set to 9 AM by default for spaced repetition
 
         return { nextReviewDate, newInterval, easeFactor };
     }
 
     // Calculate next recurring date based on local time
-    private calculateNextRecurringDate(fromDate: number, recurring: RecurringData): Date {
+    private calculateNextRecurringDate(fromDate: number, recurring: RecurringData, task?: Task): Date {
         const date = new Date(fromDate);
         const nextDate = new Date(date);
 
@@ -968,8 +995,15 @@ export class AdvancedStorageService {
                 nextDate.setDate(nextDate.getDate() + 1);
         }
 
-        // Ensure the result is set to start of day in local time
-        nextDate.setHours(0, 0, 0, 0);
+        // If the task has a specific due time, preserve it for the next occurrence
+        if (task?.hasDueTime && task?.dueTime) {
+            const [hours, minutes] = task.dueTime.split(':').map(Number);
+            nextDate.setHours(hours, minutes, 0, 0);
+        } else {
+            // Ensure the result is set to start of day in local time
+            nextDate.setHours(0, 0, 0, 0);
+        }
+
         return nextDate;
     }
 

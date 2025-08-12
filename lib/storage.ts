@@ -464,6 +464,9 @@ export interface Task {
   createdAt: number;
   completedAt?: number;
   archivedAt?: number;
+  dueDate?: number;
+  dueTime?: string;
+  hasDueTime?: boolean;
   category?: string;
   priority?: 'low' | 'medium' | 'high';
   tags?: string[];

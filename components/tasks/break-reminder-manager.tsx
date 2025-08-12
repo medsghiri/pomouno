@@ -401,8 +401,8 @@ export function BreakReminderManager() {
   if (!user) {
     return (
       <div className="h-full flex flex-col">
-        {/* Header */}
-        <div className="p-4 pr-16 border-b flex items-center justify-between">
+        {/* Header - Fixed position */}
+        <div className="sticky top-0 z-10 bg-background p-4 pr-16 border-b flex items-center justify-between">
           <h2 className="text-xl font-semibold text-foreground">
             Break Reminders
           </h2>
@@ -457,8 +457,8 @@ export function BreakReminderManager() {
 
   return (
     <FeatureGate feature="break-reminders">
-      {/* Header */}
-      <div className="p-4 pr-16 border-b flex items-center justify-between">
+      {/* Header - Fixed position */}
+      <div className="sticky top-0 z-10 bg-background p-4 pr-16 border-b flex items-center justify-between">
         <h2 className="text-xl font-semibold text-foreground">
           Break Reminders
         </h2>

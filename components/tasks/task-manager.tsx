@@ -1491,8 +1491,8 @@ export function TaskManager({
   if (!user) {
     return (
       <div className="h-full flex flex-col">
-        {/* Header */}
-        <div className="p-4 pr-16 border-b flex items-center justify-between">
+        {/* Header - Fixed position */}
+        <div className="sticky top-0 z-10 bg-background p-4 pr-16 border-b flex items-center justify-between">
           <h2 className="text-xl font-semibold text-foreground">Tasks</h2>
         </div>
 
@@ -1555,8 +1555,8 @@ export function TaskManager({
         onDifficultySelect={handleDifficultySelect}
       />
 
-      {/* Sheet Header with add button and 3-dots menu */}
-      <div className="p-4 pr-16 border-b flex items-center justify-between">
+      {/* Sheet Header with add button and 3-dots menu - Fixed position */}
+      <div className="sticky top-0 z-10 bg-background p-4 pr-16 border-b flex items-center justify-between">
         <h2 className="text-xl font-semibold text-foreground">Tasks</h2>
         <div className="flex items-center gap-2">
           <Button
@@ -1682,7 +1682,12 @@ export function TaskManager({
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
                 <SelectItem value="regular">Regular</SelectItem>
-                <SelectItem value="recurring">Recurring</SelectItem>
+                <SelectItem value="recurring">
+                  <div className="flex items-center gap-2">
+                    <Repeat className="w-3 h-3" />
+                    Recurring
+                  </div>
+                </SelectItem>
                 <SelectItem value="spaced">Spaced Rep</SelectItem>
               </SelectContent>
             </Select>
@@ -1871,7 +1876,7 @@ export function TaskManager({
                           }}
                           disabled={showCompleted && !isActionable}
                           className={cn(
-                            "data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600",
+                            "data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600 rounded-full",
                             showCompleted &&
                               !isActionable &&
                               "opacity-50 cursor-not-allowed"
@@ -2047,7 +2052,6 @@ export function TaskManager({
                           className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 flex items-center gap-1"
                         >
                           <Repeat className="w-3 h-3" />
-                          Recurring
                         </Badge>
                       )}
 
@@ -2277,7 +2281,7 @@ export function TaskManager({
           </DialogHeader>
 
           <ScrollArea className="max-h-[60vh]">
-            <div className="space-y-4 space-x-1 px-1">
+            <div className="space-y-4 space-x-1 px-2">
               <div>
                 <Label htmlFor="edit-title">Title</Label>
                 <Input

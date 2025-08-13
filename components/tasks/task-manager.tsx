@@ -73,6 +73,7 @@ import { AdvancedStorageService } from "@/lib/advanced-storage-service";
 import type { Task, TaskCategory } from "@/lib/advanced-storage-service";
 import { TaskCompletionAnimation } from "./task-completion-animation";
 import { DifficultySelectionDialog } from "./difficulty-selection-dialog";
+import { Logo } from "@/components/logo";
 
 import { FeatureGate } from "@/components/auth/feature-gate";
 import { useToast } from "@/hooks/use-toast";
@@ -1926,45 +1927,73 @@ export function TaskManager({
                       <div className="space-y-1">
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <div className="flex items-center gap-2">
-                            {/* Show completed sessions as pomodoro timer circles */}
+                            {/* Show completed sessions as pomodoro timer logos */}
                             <div className="flex items-center gap-1">
                               {Array.from(
                                 { length: task.estimatedSessions },
                                 (_, index) => (
-                                  <div
-                                    key={index}
-                                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                                      index < (todaysTaskSessions[task.id] || 0)
-                                        ? "bg-red-500 border-red-600"
-                                        : "bg-background border-muted-foreground/30"
-                                    }`}
-                                  >
+                                  <div key={index} className="w-6 h-6">
                                     {index <
-                                      (todaysTaskSessions[task.id] || 0) && (
-                                      <div className="w-1 h-1 bg-white rounded-full"></div>
+                                    (todaysTaskSessions[task.id] || 0) ? (
+                                      <Logo className="w-6 h-6" />
+                                    ) : (
+                                      <svg
+                                        width="50"
+                                        height="50"
+                                        viewBox="0 0 100 100"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        className="w-6 h-6"
+                                      >
+                                        {/* Main timer body - disabled/empty state */}
+                                        <circle
+                                          cx="50"
+                                          cy="50"
+                                          r="35"
+                                          fill="#FECACA"
+                                          stroke="#B91C1C"
+                                          strokeWidth="4"
+                                        />
+                                        {/* Clock hands pointing to 1 o'clock - disabled */}
+                                        <line
+                                          x1="50"
+                                          y1="50"
+                                          x2="50"
+                                          y2="32"
+                                          stroke="#B91C1C"
+                                          strokeWidth="4"
+                                          strokeLinecap="round"
+                                          opacity="0.4"
+                                        />
+                                        <line
+                                          x1="50"
+                                          y1="50"
+                                          x2="58"
+                                          y2="42"
+                                          stroke="#B91C1C"
+                                          strokeWidth="3"
+                                          strokeLinecap="round"
+                                          opacity="0.4"
+                                        />
+                                        {/* Center dot - disabled */}
+                                        <circle
+                                          cx="50"
+                                          cy="50"
+                                          r="3"
+                                          fill="#B91C1C"
+                                          opacity="0.4"
+                                        />
+                                      </svg>
                                     )}
                                   </div>
                                 )
                               )}
                             </div>
-                            <span>
+                            {/* <span>
                               {todaysTaskSessions[task.id] || 0}/
                               {task.estimatedSessions}
-                            </span>
+                            </span> */}
                           </div>
-                        </div>
-                        <div className="w-full bg-accent rounded-full h-1.5">
-                          <div
-                            className="bg-red-600 h-1.5 rounded-full transition-all duration-300"
-                            style={{
-                              width: `${Math.min(
-                                ((todaysTaskSessions[task.id] || 0) /
-                                  task.estimatedSessions) *
-                                  100,
-                                100
-                              )}%`,
-                            }}
-                          />
                         </div>
                       </div>
                     )}
@@ -2004,15 +2033,6 @@ export function TaskManager({
                       )}
                     </div>
                   )}
-
-                  {/* Line 7: Priority, Due Date, and Created date */}
-                  <div className="w-full">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        {/* Priority flag moved to button row */}
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 <div className="flex items-center justify-between w-full mt-1">
@@ -2030,9 +2050,9 @@ export function TaskManager({
                                   task.priority === "high" &&
                                     "text-red-500 fill-red-500",
                                   task.priority === "medium" &&
-                                    "text-yellow-500 fill-yellow-500",
+                                    "text-orange-500 fill-orange-500",
                                   task.priority === "low" &&
-                                    "text-blue-500 fill-blue-500"
+                                    "text-yellow-500 fill-yellow-500"
                                 )}
                               />
                             </div>

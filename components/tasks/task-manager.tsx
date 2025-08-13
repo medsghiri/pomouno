@@ -80,6 +80,12 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 
+// Utility function to truncate text
+const truncateText = (text: string, maxLength: number): string => {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength).trim() + "...";
+};
+
 // Default color palette for categories (matching settings page)
 const DEFAULT_COLORS = [
   "#EF4444", // Red
@@ -1879,7 +1885,7 @@ export function TaskManager({
                               <Brain className="w-5 h-5" />
                             </span>
                           )}
-                          {task.title}
+                          {truncateText(task.title, 50)}
                           {showCompleted && !isActionable && (
                             <span className="text-xs text-muted-foreground ml-2">
                               (not due today)
@@ -2002,7 +2008,7 @@ export function TaskManager({
                   {task.description && (
                     <div>
                       <p className="text-sm text-muted-foreground">
-                        {task.description}
+                        {truncateText(task.description, 100)}
                       </p>
                     </div>
                   )}

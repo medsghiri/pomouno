@@ -18,6 +18,7 @@ import {
   Calendar,
   CalendarDays,
   Repeat,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -117,6 +118,8 @@ export function TaskManager({
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showInfoDialog, setShowInfoDialog] = useState(false);
+  const [infoTask, setInfoTask] = useState<Task | null>(null);
   const [editingDescription, setEditingDescription] = useState("");
   const [editingEstimate, setEditingEstimate] = useState(0);
   const [editingPriority, setEditingPriority] = useState<
@@ -1795,13 +1798,13 @@ export function TaskManager({
               <Card
                 key={task.id}
                 className={cn(
-                  "p-3 sm:p-4 rounded-lg border transition-all duration-200 space-y-1 relative",
+                  "p-3 rounded-lg transition-all duration-200 space-y-2 relative border-0",
                   task.completed ||
                     (task.spacedRepetition?.enabled &&
                       !canCompleteSpacedRepetitionTask(task)) ||
                     (task.recurring?.enabled && !canCompleteRecurringTask(task))
-                    ? "bg-background border-accent hover:bg-accent/50"
-                    : "bg-background border-accent hover:bg-accent/50",
+                    ? "bg-accent/20 hover:bg-accent/30"
+                    : "bg-accent/10 hover:bg-accent/20",
                   // Highlight selected task if timer is active
                   isTimerActive &&
                     task.id === selectedTaskId &&
@@ -1885,7 +1888,7 @@ export function TaskManager({
                       );
                     })()}
                   </div>
-                  <div>
+                  <div className="flex-1 flex items-center justify-between">
                     {(() => {
                       const isCompleted =
                         (task.completed &&
@@ -1937,7 +1940,7 @@ export function TaskManager({
                   </div>
                 </div>
                 {/* Content area - aligned with checkbox */}
-                <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex-1 min-w-0 space-y-1">
                   {/* Line 4: Progress (if exists) */}
                   {settings.showTaskEstimation &&
                     !(
@@ -1977,7 +1980,6 @@ export function TaskManager({
                               {task.estimatedSessions}
                             </span>
                           </div>
-                          <span>Total: {task.sessionsCompleted}</span>
                         </div>
                         <div className="w-full bg-accent rounded-full h-1.5">
                           <div
@@ -2049,7 +2051,8 @@ export function TaskManager({
                       {task.recurring?.enabled && (
                         <Badge
                           variant="secondary"
-                          className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 flex items-center gap-1"
+                          className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 flex items-center gap-1 cursor-help"
+                          title="Recurring Task"
                         >
                           <Repeat className="w-3 h-3" />
                         </Badge>
@@ -2058,9 +2061,10 @@ export function TaskManager({
                       {task.spacedRepetition?.enabled && (
                         <Badge
                           variant="secondary"
-                          className="text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400"
+                          className="text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400 cursor-help"
+                          title="Spaced Repetition"
                         >
-                          Spaced
+                          🧠
                         </Badge>
                       )}
 
@@ -2076,7 +2080,7 @@ export function TaskManager({
                   )}
 
                   {/* Line 7: Priority, Due Date, and Created date */}
-                  <div className="w-full space-y-2">
+                  <div className="w-full">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
                         {task.priority && (
@@ -2118,19 +2122,11 @@ export function TaskManager({
                           </Badge>
                         )}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Created:{" "}
-                        {task.createdAt &&
-                        !isNaN(task.createdAt) &&
-                        task.createdAt > 0
-                          ? new Date(task.createdAt).toLocaleDateString()
-                          : "Unknown"}
-                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between w-full mt-2">
+                <div className="flex items-center justify-between w-full mt-1">
                   {/* Line 3: Priority badge (if exists) */}
                   <div className="flex justify-start items-start"></div>
                   <div className="flex float-right gap-1">
@@ -2197,6 +2193,20 @@ export function TaskManager({
                               <Edit3 className="w-3 h-3" />
                             </Button>
                           )}
+
+                          {/* Info Button - always show */}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setInfoTask(task);
+                              setShowInfoDialog(true);
+                            }}
+                            className="h-8 w-8 p-0 hover:bg-accent bg-accent cursor-pointer"
+                            title="View task details"
+                          >
+                            <Info className="w-3 h-3" />
+                          </Button>
 
                           {/* Delete Button - always show */}
                           <div>
@@ -2270,6 +2280,213 @@ export function TaskManager({
           </div>
         )}
       </div>
+
+      {/* Task Info Dialog */}
+      <Dialog open={showInfoDialog} onOpenChange={setShowInfoDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Info className="w-5 h-5" />
+              Task Details
+            </DialogTitle>
+          </DialogHeader>
+
+          {infoTask && (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">
+                  Title
+                </Label>
+                <p className="text-base font-medium mt-1">{infoTask.title}</p>
+              </div>
+
+              {infoTask.description && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Description
+                  </Label>
+                  <p className="text-sm mt-1 text-muted-foreground">
+                    {infoTask.description}
+                  </p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                {infoTask.estimatedSessions > 0 && (
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">
+                      Estimated Sessions
+                    </Label>
+                    <p className="text-sm mt-1">{infoTask.estimatedSessions}</p>
+                  </div>
+                )}
+
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Sessions Completed
+                  </Label>
+                  <p className="text-sm mt-1">{infoTask.sessionsCompleted}</p>
+                </div>
+              </div>
+
+              {infoTask.priority && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Priority
+                  </Label>
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "text-xs mt-1",
+                      infoTask.priority === "high" &&
+                        "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
+                      infoTask.priority === "medium" &&
+                        "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400",
+                      infoTask.priority === "low" &&
+                        "bg-primary/10 text-primary"
+                    )}
+                  >
+                    {infoTask.priority}
+                  </Badge>
+                </div>
+              )}
+
+              {infoTask.category && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Category
+                  </Label>
+                  <div className="mt-1">
+                    {(() => {
+                      const category = availableCategories.find(
+                        (cat) => cat.name === infoTask.category
+                      );
+                      return (
+                        <Badge
+                          variant="secondary"
+                          className="text-xs"
+                          style={{
+                            backgroundColor: category?.color
+                              ? `${category.color}20`
+                              : "#6B728020",
+                            color: category?.color || "#6B7280",
+                            borderColor: category?.color || "#6B7280",
+                          }}
+                        >
+                          {category?.icon && (
+                            <span className="mr-1">{category.icon}</span>
+                          )}
+                          {infoTask.category}
+                        </Badge>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {(infoTask.dueDate ||
+                (infoTask.recurring?.enabled && infoTask.recurring.nextDue) ||
+                (infoTask.spacedRepetition?.enabled &&
+                  infoTask.spacedRepetition.nextReviewDate)) && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Due Date
+                  </Label>
+                  <p className="text-sm mt-1">{formatDueDateTime(infoTask)}</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Created
+                  </Label>
+                  <p className="text-sm mt-1">
+                    {infoTask.createdAt &&
+                    !isNaN(infoTask.createdAt) &&
+                    infoTask.createdAt > 0
+                      ? new Date(infoTask.createdAt).toLocaleDateString()
+                      : "Unknown"}
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Status
+                  </Label>
+                  <p className="text-sm mt-1">
+                    {infoTask.completed ? "Completed" : "Active"}
+                  </p>
+                </div>
+              </div>
+
+              {infoTask.recurring?.enabled && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Recurring Pattern
+                  </Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Repeat className="w-4 h-4" />
+                    <span className="text-sm capitalize">
+                      {infoTask.recurring.pattern}
+                    </span>
+                    {infoTask.recurring.interval &&
+                      infoTask.recurring.interval > 1 && (
+                        <span className="text-sm text-muted-foreground">
+                          (every {infoTask.recurring.interval}{" "}
+                          {infoTask.recurring.pattern === "daily"
+                            ? "days"
+                            : infoTask.recurring.pattern}
+                          )
+                        </span>
+                      )}
+                  </div>
+                </div>
+              )}
+
+              {infoTask.spacedRepetition?.enabled && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Spaced Repetition
+                  </Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge
+                      variant="secondary"
+                      className="text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400"
+                    >
+                      Review Count: {infoTask.spacedRepetition.reviewCount || 0}
+                    </Badge>
+                    {infoTask.spacedRepetition.difficulty && (
+                      <Badge variant="outline" className="text-xs">
+                        Last: {infoTask.spacedRepetition.difficulty}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-between pt-4">
+            <Button
+              onClick={() => {
+                if (infoTask) {
+                  setShowInfoDialog(false);
+                  startEditing(infoTask);
+                }
+              }}
+              variant="default"
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              <Edit3 className="w-4 h-4 mr-2" />
+              Edit Task
+            </Button>
+            <Button onClick={() => setShowInfoDialog(false)} variant="outline">
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Task Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>

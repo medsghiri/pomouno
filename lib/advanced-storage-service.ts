@@ -35,10 +35,8 @@ export interface Task {
     completedAt?: number;
     archivedAt?: number;
 
-    // Due date/time fields
+    // Due date field
     dueDate?: number; // Timestamp for when task is due
-    dueTime?: string; // Time in HH:MM format (24-hour)
-    hasDueTime?: boolean; // Whether the task has a specific time or just a date
 
     // Task type specific fields
     spacedRepetition?: SpacedRepetitionData;
@@ -155,8 +153,6 @@ export interface CreateTaskRequest {
     description?: string;
     estimatedSessions: number;
     dueDate?: number;
-    dueTime?: string;
-    hasDueTime?: boolean;
     spacedRepetition?: Omit<SpacedRepetitionData, 'reviewCount' | 'lastReviewed'>;
     recurring?: Omit<RecurringData, 'lastCompleted'>;
     category?: string;
@@ -540,7 +536,6 @@ export class AdvancedStorageService {
                 const today = new Date();
                 today.setHours(23, 59, 59, 999); // End of today
                 task.dueDate = today.getTime();
-                task.hasDueTime = false;
             }
 
             // Initialize spaced repetition if enabled - store as flattened fields to avoid serialization issues
@@ -570,16 +565,11 @@ export class AdvancedStorageService {
 
             // Initialize recurring if enabled - store as flattened fields to avoid serialization issues
             if (taskData.recurring?.enabled) {
-                // Set nextDue based on due date/time or default to today
+                // Set nextDue based on due date or default to today
                 let nextDueDate: Date;
                 if (taskData.dueDate) {
                     nextDueDate = new Date(taskData.dueDate);
-                    if (taskData.hasDueTime && taskData.dueTime) {
-                        const [hours, minutes] = taskData.dueTime.split(':').map(Number);
-                        nextDueDate.setHours(hours, minutes, 0, 0);
-                    } else {
-                        nextDueDate.setHours(0, 0, 0, 0);
-                    }
+                    nextDueDate.setHours(0, 0, 0, 0);
                 } else {
                     nextDueDate = new Date(now);
                     nextDueDate.setHours(0, 0, 0, 0); // Start of today
@@ -995,14 +985,8 @@ export class AdvancedStorageService {
                 nextDate.setDate(nextDate.getDate() + 1);
         }
 
-        // If the task has a specific due time, preserve it for the next occurrence
-        if (task?.hasDueTime && task?.dueTime) {
-            const [hours, minutes] = task.dueTime.split(':').map(Number);
-            nextDate.setHours(hours, minutes, 0, 0);
-        } else {
-            // Ensure the result is set to start of day in local time
-            nextDate.setHours(0, 0, 0, 0);
-        }
+        // Ensure the result is set to start of day in local time
+        nextDate.setHours(0, 0, 0, 0);
 
         return nextDate;
     }

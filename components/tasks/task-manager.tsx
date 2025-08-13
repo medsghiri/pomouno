@@ -19,6 +19,8 @@ import {
   CalendarDays,
   Repeat,
   Info,
+  ChevronDown,
+  Brain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -38,6 +40,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
@@ -132,10 +140,11 @@ export function TaskManager({
   // Spaced repetition states
   const [editingSpacedRepetition, setEditingSpacedRepetition] = useState(false);
 
-  // Due date/time states
-  const [editingDueDate, setEditingDueDate] = useState<string>("");
-  const [editingDueTime, setEditingDueTime] = useState<string>("");
-  const [editingHasDueTime, setEditingHasDueTime] = useState(false);
+  // Due date states
+  const [editingDueDate, setEditingDueDate] = useState<Date | undefined>(
+    undefined
+  );
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   // Recurring task states
   const [editingRecurring, setEditingRecurring] = useState(false);
@@ -546,20 +555,11 @@ export function TaskManager({
       const now = new Date();
       const nextDue = new Date(task.recurring.nextDue);
 
-      // If task has specific time, use it
-      if (task.hasDueTime && task.dueTime) {
-        const [hours, minutes] = task.dueTime.split(":").map(Number);
-        nextDue.setHours(hours, minutes, 0, 0);
-        return (
-          now.getTime() > nextDue.getTime() && !canCompleteRecurringTask(task)
-        );
-      } else {
-        // If no specific time, consider overdue at end of day
-        nextDue.setHours(23, 59, 59, 999);
-        return (
-          now.getTime() > nextDue.getTime() && !canCompleteRecurringTask(task)
-        );
-      }
+      // Consider overdue at end of day
+      nextDue.setHours(23, 59, 59, 999);
+      return (
+        now.getTime() > nextDue.getTime() && !canCompleteRecurringTask(task)
+      );
     }
 
     // For spaced repetition tasks, check if review is overdue
@@ -582,16 +582,9 @@ export function TaskManager({
     const now = new Date();
     const dueDate = new Date(task.dueDate);
 
-    if (task.hasDueTime && task.dueTime) {
-      // If task has specific time, compare with current time
-      const [hours, minutes] = task.dueTime.split(":").map(Number);
-      dueDate.setHours(hours, minutes, 0, 0);
-      return now.getTime() > dueDate.getTime();
-    } else {
-      // If task only has date, compare dates (overdue if past end of due date)
-      dueDate.setHours(23, 59, 59, 999);
-      return now.getTime() > dueDate.getTime();
-    }
+    // Compare dates (overdue if past end of due date)
+    dueDate.setHours(23, 59, 59, 999);
+    return now.getTime() > dueDate.getTime();
   };
 
   // Helper function to check if a task is due today
@@ -636,25 +629,12 @@ export function TaskManager({
     );
   };
 
-  // Helper function to format due date/time for display
+  // Helper function to format due date for display
   const formatDueDateTime = (task: Task): string => {
     // For recurring tasks, show when they're due based on pattern
     if (task.recurring?.enabled) {
       if (isRecurringTaskDueAndAvailable(task)) {
-        let dateStr = "Today";
-        if (task.hasDueTime && task.dueTime) {
-          const [hours, minutes] = task.dueTime.split(":").map(Number);
-          const timeStr = new Date(0, 0, 0, hours, minutes).toLocaleTimeString(
-            [],
-            {
-              hour: "numeric",
-              minute: "2-digit",
-              hour12: true,
-            }
-          );
-          return `${dateStr} at ${timeStr}`;
-        }
-        return dateStr;
+        return "Today";
       } else {
         // Show next due date for recurring tasks
         if (task.recurring.nextDue) {
@@ -666,31 +646,13 @@ export function TaskManager({
           const nextDueStart = new Date(task.recurring.nextDue);
           nextDueStart.setHours(0, 0, 0, 0);
 
-          let dateStr = "";
           if (nextDueStart.getTime() === today.getTime()) {
-            dateStr = "Today";
+            return "Today";
           } else if (nextDueStart.getTime() === tomorrow.getTime()) {
-            dateStr = "Tomorrow";
+            return "Tomorrow";
           } else {
-            dateStr = nextDue.toLocaleDateString();
+            return nextDue.toLocaleDateString();
           }
-
-          if (task.hasDueTime && task.dueTime) {
-            const [hours, minutes] = task.dueTime.split(":").map(Number);
-            const timeStr = new Date(
-              0,
-              0,
-              0,
-              hours,
-              minutes
-            ).toLocaleTimeString([], {
-              hour: "numeric",
-              minute: "2-digit",
-              hour12: true,
-            });
-            return `${dateStr} at ${timeStr}`;
-          }
-          return dateStr;
         }
       }
     }
@@ -708,22 +670,13 @@ export function TaskManager({
       const reviewDateStart = new Date(task.spacedRepetition.nextReviewDate);
       reviewDateStart.setHours(0, 0, 0, 0);
 
-      let dateStr = "";
       if (reviewDateStart.getTime() === today.getTime()) {
-        dateStr = "Today";
+        return "Today";
       } else if (reviewDateStart.getTime() === tomorrow.getTime()) {
-        dateStr = "Tomorrow";
+        return "Tomorrow";
       } else {
-        dateStr = reviewDate.toLocaleDateString();
+        return reviewDate.toLocaleDateString();
       }
-
-      // Spaced repetition reviews typically have a default time
-      const reviewTime = reviewDate.toLocaleTimeString([], {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      });
-      return `${dateStr} at ${reviewTime}`;
     }
 
     // For regular tasks, use the original logic
@@ -737,26 +690,13 @@ export function TaskManager({
     const dueDateStart = new Date(task.dueDate);
     dueDateStart.setHours(0, 0, 0, 0);
 
-    let dateStr = "";
     if (dueDateStart.getTime() === today.getTime()) {
-      dateStr = "Today";
+      return "Today";
     } else if (dueDateStart.getTime() === tomorrow.getTime()) {
-      dateStr = "Tomorrow";
+      return "Tomorrow";
     } else {
-      dateStr = dueDate.toLocaleDateString();
+      return dueDate.toLocaleDateString();
     }
-
-    if (task.hasDueTime && task.dueTime) {
-      const [hours, minutes] = task.dueTime.split(":").map(Number);
-      const timeStr = new Date(0, 0, 0, hours, minutes).toLocaleTimeString([], {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      });
-      return `${dateStr} at ${timeStr}`;
-    }
-
-    return dateStr;
   };
 
   // Helper function to check if recurring task is due and available
@@ -833,15 +773,12 @@ export function TaskManager({
     setEditingCategory(task.category || "none");
     setEditingAutoComplete(task.autoComplete || false);
 
-    // Due date/time
+    // Due date
     if (task.dueDate) {
-      const dueDate = new Date(task.dueDate);
-      setEditingDueDate(dueDate.toISOString().split("T")[0]); // YYYY-MM-DD format
+      setEditingDueDate(new Date(task.dueDate));
     } else {
-      setEditingDueDate("");
+      setEditingDueDate(undefined);
     }
-    setEditingDueTime(task.dueTime || "");
-    setEditingHasDueTime(task.hasDueTime || false);
 
     // Spaced repetition
     setEditingSpacedRepetition(task.spacedRepetition?.enabled || false);
@@ -892,11 +829,7 @@ export function TaskManager({
               editingCategory && editingCategory !== "none"
                 ? editingCategory.trim()
                 : undefined,
-            dueDate: editingDueDate
-              ? new Date(editingDueDate).getTime()
-              : undefined,
-            dueTime: editingHasDueTime ? editingDueTime : undefined,
-            hasDueTime: editingHasDueTime,
+            dueDate: editingDueDate ? editingDueDate.getTime() : undefined,
           };
 
           // Handle spaced repetition
@@ -1016,11 +949,7 @@ export function TaskManager({
               editingCategory && editingCategory !== "none"
                 ? editingCategory.trim()
                 : undefined,
-            dueDate: editingDueDate
-              ? new Date(editingDueDate).getTime()
-              : undefined,
-            dueTime: editingHasDueTime ? editingDueTime : undefined,
-            hasDueTime: editingHasDueTime,
+            dueDate: editingDueDate ? editingDueDate.getTime() : undefined,
             tags: [],
           };
 
@@ -1573,9 +1502,7 @@ export function TaskManager({
               setEditingPriorityEnabled(false);
               setEditingCategory("none");
               setEditingAutoComplete(false);
-              setEditingDueDate("");
-              setEditingDueTime("");
-              setEditingHasDueTime(false);
+              setEditingDueDate(undefined);
               setEditingSpacedRepetition(false);
               setEditingRecurring(false);
               setEditingRecurringPattern("daily");
@@ -1798,7 +1725,7 @@ export function TaskManager({
               <Card
                 key={task.id}
                 className={cn(
-                  "p-3 rounded-lg transition-all duration-200 space-y-2 relative border-0",
+                  "p-3 rounded-lg transition-all duration-200 space-y-2 relative border-0 gap-1",
                   task.completed ||
                     (task.spacedRepetition?.enabled &&
                       !canCompleteSpacedRepetitionTask(task)) ||
@@ -1841,9 +1768,9 @@ export function TaskManager({
                     }}
                   />
                 )}
-                <div className="flex gap-3 items-center">
+                <div className="flex gap-2 items-center">
                   {/* Checkbox - and title */}
-                  <div className="flex-shrink-0 w-5 mt-0.5">
+                  <div className="flex-shrink-0  mt-0.5">
                     {(() => {
                       const isCompleted =
                         (task.completed &&
@@ -1879,7 +1806,7 @@ export function TaskManager({
                           }}
                           disabled={showCompleted && !isActionable}
                           className={cn(
-                            "data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600 rounded-full",
+                            "data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600 rounded-full w-5 h-5 broder-2 hover:bg-red-600 cursor-pointer",
                             showCompleted &&
                               !isActionable &&
                               "opacity-50 cursor-not-allowed"
@@ -1915,7 +1842,7 @@ export function TaskManager({
                       return (
                         <span
                           className={cn(
-                            "cursor-pointer transition-colors block text-sm font-medium",
+                            "cursor-pointer flex transition-colors items-center gap-1 text-sm font-medium",
                             isCompleted
                               ? "line-through text-muted-foreground"
                               : showCompleted && !isActionable
@@ -1928,6 +1855,22 @@ export function TaskManager({
                             }
                           }}
                         >
+                          {task.recurring?.enabled && (
+                            <span
+                              className="text-xs cursor-help"
+                              title="Recurring Task"
+                            >
+                              <Repeat className="w-4 h-4" />
+                            </span>
+                          )}
+                          {task.spacedRepetition?.enabled && (
+                            <span
+                              className="text-xscursor-help text-"
+                              title="Spaced Repetition"
+                            >
+                              <Brain className="w-5 h-5" />
+                            </span>
+                          )}
                           {task.title}
                           {showCompleted && !isActionable && (
                             <span className="text-xs text-muted-foreground ml-2">
@@ -1941,6 +1884,28 @@ export function TaskManager({
                 </div>
                 {/* Content area - aligned with checkbox */}
                 <div className="flex-1 min-w-0 space-y-1">
+                  {task.dueDate && (
+                    <Badge
+                      variant="secondary"
+                      className={cn(
+                        "text-xs"
+                        // isTaskOverdue(task) &&
+                        //   "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
+                        // isTaskDueToday(task) &&
+                        //   !isTaskOverdue(task) &&
+                        //   "bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400",
+                        // !isTaskOverdue(task) &&
+                        //   !isTaskDueToday(task) &&
+                        //   "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
+                      )}
+                    >
+                      {isTaskOverdue(task) && "⚠️ "}
+                      {isTaskDueToday(task) && !isTaskOverdue(task) && (
+                        <Calendar className="w-3 h-3 mr-1" />
+                      )}
+                      Due: {formatDueDateTime(task)}
+                    </Badge>
+                  )}
                   {/* Line 4: Progress (if exists) */}
                   {settings.showTaskEstimation &&
                     !(
@@ -2048,26 +2013,6 @@ export function TaskManager({
                           );
                         })()}
 
-                      {task.recurring?.enabled && (
-                        <Badge
-                          variant="secondary"
-                          className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 flex items-center gap-1 cursor-help"
-                          title="Recurring Task"
-                        >
-                          <Repeat className="w-3 h-3" />
-                        </Badge>
-                      )}
-
-                      {task.spacedRepetition?.enabled && (
-                        <Badge
-                          variant="secondary"
-                          className="text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400 cursor-help"
-                          title="Spaced Repetition"
-                        >
-                          🧠
-                        </Badge>
-                      )}
-
                       {task.autoComplete && (
                         <Badge
                           variant="secondary"
@@ -2097,28 +2042,6 @@ export function TaskManager({
                             )}
                           >
                             {task.priority}
-                          </Badge>
-                        )}
-                        {task.dueDate && (
-                          <Badge
-                            variant="secondary"
-                            className={cn(
-                              "text-xs",
-                              isTaskOverdue(task) &&
-                                "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
-                              isTaskDueToday(task) &&
-                                !isTaskOverdue(task) &&
-                                "bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400",
-                              !isTaskOverdue(task) &&
-                                !isTaskDueToday(task) &&
-                                "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
-                            )}
-                          >
-                            {isTaskOverdue(task) && "⚠️ "}
-                            {isTaskDueToday(task) && !isTaskOverdue(task) && (
-                              <Calendar className="w-3 h-3 mr-1" />
-                            )}
-                            Due: {formatDueDateTime(task)}
                           </Badge>
                         )}
                       </div>
@@ -2161,7 +2084,7 @@ export function TaskManager({
                             onStartFocusSession && (
                               <Button
                                 size="sm"
-                                variant="default"
+                                variant="secondary"
                                 onClick={() => onStartFocusSession(task.id)}
                                 disabled={isTimerActive}
                                 className={cn(
@@ -2186,7 +2109,7 @@ export function TaskManager({
                           {!isCompleted && isActionable && (
                             <Button
                               size="sm"
-                              variant="ghost"
+                              variant="outline"
                               onClick={() => startEditing(task)}
                               className="h-8 w-8 p-0 hover:bg-accent bg-accent cursor-pointer"
                             >
@@ -2197,7 +2120,7 @@ export function TaskManager({
                           {/* Info Button - always show */}
                           <Button
                             size="sm"
-                            variant="ghost"
+                            variant="outline"
                             onClick={() => {
                               setInfoTask(task);
                               setShowInfoDialog(true);
@@ -2212,9 +2135,9 @@ export function TaskManager({
                           <div>
                             <Button
                               size="sm"
-                              variant="ghost"
+                              variant="outline"
                               onClick={() => deleteTask(task.id)}
-                              className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive bg-accent cursor-pointer"
+                              className="h-8 w-8 p-0 hover:bg-destructive/10  cursor-pointer"
                             >
                               <Trash2 className="w-3 h-3" />
                             </Button>
@@ -2242,9 +2165,7 @@ export function TaskManager({
               setEditingPriorityEnabled(false);
               setEditingCategory("none");
               setEditingAutoComplete(false);
-              setEditingDueDate("");
-              setEditingDueTime("");
-              setEditingHasDueTime(false);
+              setEditingDueDate(undefined);
               setEditingSpacedRepetition(false);
               setEditingRecurring(false);
               setEditingRecurringPattern("daily");
@@ -2533,41 +2454,56 @@ export function TaskManager({
                 </div>
               </div>
 
-              {/* Due Date/Time Section */}
+              {/* Due Date Section */}
               <div>
                 <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Due Date (Optional)
                 </Label>
                 <div className="mt-2 space-y-3">
-                  <Input
-                    type="date"
-                    value={editingDueDate}
-                    onChange={(e) => setEditingDueDate(e.target.value)}
-                    className="w-full"
-                  />
-
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="edit-has-due-time"
-                      checked={editingHasDueTime}
-                      onCheckedChange={setEditingHasDueTime}
-                      className="data-[state=checked]:bg-red-600"
-                    />
-                    <Label htmlFor="edit-has-due-time" className="text-sm">
-                      Set specific time
-                    </Label>
+                  <div className="flex flex-col gap-3">
+                    <Popover
+                      open={datePickerOpen}
+                      onOpenChange={setDatePickerOpen}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          id="date-picker"
+                          className="justify-between font-normal"
+                        >
+                          {editingDueDate
+                            ? editingDueDate.toLocaleDateString()
+                            : "Select date"}
+                          <ChevronDown className="w-4 h-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-auto overflow-hidden p-0"
+                        align="start"
+                      >
+                        <CalendarComponent
+                          mode="single"
+                          selected={editingDueDate}
+                          captionLayout="dropdown"
+                          onSelect={(date) => {
+                            setEditingDueDate(date);
+                            setDatePickerOpen(false);
+                          }}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    {editingDueDate && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingDueDate(undefined)}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Clear date
+                      </Button>
+                    )}
                   </div>
-
-                  {editingHasDueTime && (
-                    <div className="ml-6">
-                      <Input
-                        type="time"
-                        value={editingDueTime}
-                        onChange={(e) => setEditingDueTime(e.target.value)}
-                        className="w-full"
-                      />
-                    </div>
-                  )}
                 </div>
               </div>
 

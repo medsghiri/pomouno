@@ -21,6 +21,7 @@ import {
   Info,
   ChevronDown,
   Brain,
+  Flag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -45,6 +46,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -1865,7 +1872,7 @@ export function TaskManager({
                           )}
                           {task.spacedRepetition?.enabled && (
                             <span
-                              className="text-xscursor-help text-"
+                              className="text-xs cursor-help"
                               title="Spaced Repetition"
                             >
                               <Brain className="w-5 h-5" />
@@ -1971,11 +1978,10 @@ export function TaskManager({
                     </div>
                   )}
 
-                  {/* Line 6: Special badges and category (if exist) */}
+                  {/* Line 6: Special badges (if exist) */}
                   {(task.recurring?.enabled ||
                     task.spacedRepetition?.enabled ||
                     task.autoComplete ||
-                    task.category ||
                     (isTimerActive && task.id === selectedTaskId)) && (
                     <div className="flex items-center gap-2 flex-wrap">
                       {/* Currently Working Badge */}
@@ -1987,31 +1993,6 @@ export function TaskManager({
                           🎯 Currently Working
                         </Badge>
                       )}
-
-                      {task.category &&
-                        (() => {
-                          const category = availableCategories.find(
-                            (cat) => cat.name === task.category
-                          );
-                          return (
-                            <Badge
-                              variant="secondary"
-                              className="text-xs"
-                              style={{
-                                backgroundColor: category?.color
-                                  ? `${category.color}20`
-                                  : "#6B728020",
-                                color: category?.color || "#6B7280",
-                                borderColor: category?.color || "#6B7280",
-                              }}
-                            >
-                              {category?.icon && (
-                                <span className="mr-1">{category.icon}</span>
-                              )}
-                              {task.category}
-                            </Badge>
-                          );
-                        })()}
 
                       {task.autoComplete && (
                         <Badge
@@ -2028,30 +2009,70 @@ export function TaskManager({
                   <div className="w-full">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
-                        {task.priority && (
-                          <Badge
-                            variant="secondary"
-                            className={cn(
-                              "text-xs",
-                              task.priority === "high" &&
-                                "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
-                              task.priority === "medium" &&
-                                "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400",
-                              task.priority === "low" &&
-                                "bg-primary/10 text-primary"
-                            )}
-                          >
-                            {task.priority}
-                          </Badge>
-                        )}
+                        {/* Priority flag moved to button row */}
                       </div>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between w-full mt-1">
-                  {/* Line 3: Priority badge (if exists) */}
-                  <div className="flex justify-start items-start"></div>
+                  {/* Left side: Priority flag and category */}
+                  <div className="flex items-center gap-2">
+                    {/* Priority Flag */}
+                    {task.priority && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center">
+                              <Flag
+                                className={cn(
+                                  "w-4 h-4",
+                                  task.priority === "high" &&
+                                    "text-red-500 fill-red-500",
+                                  task.priority === "medium" &&
+                                    "text-yellow-500 fill-yellow-500",
+                                  task.priority === "low" &&
+                                    "text-blue-500 fill-blue-500"
+                                )}
+                              />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{`${
+                              task.priority.charAt(0).toUpperCase() +
+                              task.priority.slice(1)
+                            } Priority`}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+
+                    {/* Category Badge */}
+                    {task.category &&
+                      (() => {
+                        const category = availableCategories.find(
+                          (cat) => cat.name === task.category
+                        );
+                        return (
+                          <Badge
+                            variant="secondary"
+                            className="text-xs"
+                            style={{
+                              backgroundColor: category?.color
+                                ? `${category.color}20`
+                                : "#6B728020",
+                              color: category?.color || "#6B7280",
+                              borderColor: category?.color || "#6B7280",
+                            }}
+                          >
+                            {category?.icon && (
+                              <span className="mr-1">{category.icon}</span>
+                            )}
+                            {task.category}
+                          </Badge>
+                        );
+                      })()}
+                  </div>
                   <div className="flex float-right gap-1">
                     {(() => {
                       const isCompleted =
@@ -2255,20 +2276,22 @@ export function TaskManager({
                   <Label className="text-sm font-medium text-muted-foreground">
                     Priority
                   </Label>
-                  <Badge
-                    variant="secondary"
-                    className={cn(
-                      "text-xs mt-1",
-                      infoTask.priority === "high" &&
-                        "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
-                      infoTask.priority === "medium" &&
-                        "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400",
-                      infoTask.priority === "low" &&
-                        "bg-primary/10 text-primary"
-                    )}
-                  >
-                    {infoTask.priority}
-                  </Badge>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Flag
+                      className={cn(
+                        "w-4 h-4",
+                        infoTask.priority === "high" &&
+                          "text-red-500 fill-red-500",
+                        infoTask.priority === "medium" &&
+                          "text-yellow-500 fill-yellow-500",
+                        infoTask.priority === "low" &&
+                          "text-blue-500 fill-blue-500"
+                      )}
+                    />
+                    <span className="text-sm capitalize">
+                      {infoTask.priority}
+                    </span>
+                  </div>
                 </div>
               )}
 

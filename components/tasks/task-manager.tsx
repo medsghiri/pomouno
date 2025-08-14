@@ -73,6 +73,7 @@ import { AdvancedStorageService } from "@/lib/advanced-storage-service";
 import type { Task, TaskCategory } from "@/lib/advanced-storage-service";
 import { TaskCompletionAnimation } from "./task-completion-animation";
 import { DifficultySelectionDialog } from "./difficulty-selection-dialog";
+import { TaskCompletionEstimation } from "./task-completion-estimation";
 import { Logo } from "@/components/logo";
 
 import { FeatureGate } from "@/components/auth/feature-gate";
@@ -149,7 +150,6 @@ export function TaskManager({
   >("medium");
   const [editingPriorityEnabled, setEditingPriorityEnabled] = useState(false);
   const [editingCategory, setEditingCategory] = useState("");
-  const [editingAutoComplete, setEditingAutoComplete] = useState(false);
 
   // Spaced repetition states
   const [editingSpacedRepetition, setEditingSpacedRepetition] = useState(false);
@@ -785,7 +785,6 @@ export function TaskManager({
     setEditingPriority(task.priority || "medium");
     setEditingPriorityEnabled(!!task.priority);
     setEditingCategory(task.category || "none");
-    setEditingAutoComplete(task.autoComplete || false);
 
     // Due date
     if (task.dueDate) {
@@ -1515,7 +1514,6 @@ export function TaskManager({
               setEditingPriority("medium");
               setEditingPriorityEnabled(false);
               setEditingCategory("none");
-              setEditingAutoComplete(false);
               setEditingDueDate(undefined);
               setEditingSpacedRepetition(false);
               setEditingRecurring(false);
@@ -2016,7 +2014,6 @@ export function TaskManager({
                   {/* Line 6: Special badges (if exist) */}
                   {(task.recurring?.enabled ||
                     task.spacedRepetition?.enabled ||
-                    task.autoComplete ||
                     (isTimerActive && task.id === selectedTaskId)) && (
                     <div className="flex items-center gap-2 flex-wrap">
                       {/* Currently Working Badge */}
@@ -2026,15 +2023,6 @@ export function TaskManager({
                           className="text-xs bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400 animate-pulse"
                         >
                           🎯 Currently Working
-                        </Badge>
-                      )}
-
-                      {task.autoComplete && (
-                        <Badge
-                          variant="secondary"
-                          className="text-xs bg-primary/10 text-primary"
-                        >
-                          Auto-complete
                         </Badge>
                       )}
                     </div>
@@ -2211,7 +2199,6 @@ export function TaskManager({
               setEditingPriority("medium");
               setEditingPriorityEnabled(false);
               setEditingCategory("none");
-              setEditingAutoComplete(false);
               setEditingDueDate(undefined);
               setEditingSpacedRepetition(false);
               setEditingRecurring(false);
@@ -2226,6 +2213,9 @@ export function TaskManager({
             Add Task
           </Button>
         </Card>
+
+        {/* Task Completion Estimation - positioned at bottom */}
+        <TaskCompletionEstimation tasks={filteredTasks} />
 
         {/* Completed tasks summary */}
         {!showCompleted && completedCount > 0 && (
@@ -2624,18 +2614,6 @@ export function TaskManager({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="edit-auto-complete"
-                  checked={editingAutoComplete}
-                  onCheckedChange={setEditingAutoComplete}
-                  className="data-[state=checked]:bg-red-600"
-                />
-                <Label htmlFor="edit-auto-complete" className="text-sm">
-                  Auto-complete when sessions are done
-                </Label>
               </div>
 
               {/* Spaced Repetition Section */}

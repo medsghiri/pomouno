@@ -50,7 +50,6 @@ export interface BasicSettings {
 
 // Legacy interface for backward compatibility
 export interface Settings extends BasicSettings {
-  autoCompleteTask: boolean;
   showTaskEstimation: boolean;
 }
 
@@ -103,7 +102,6 @@ const DEFAULT_BASIC_SETTINGS: BasicSettings = {
 // Legacy default settings for backward compatibility
 const DEFAULT_SETTINGS: Settings = {
   ...DEFAULT_BASIC_SETTINGS,
-  autoCompleteTask: false,
   showTaskEstimation: true,
 };
 
@@ -468,7 +466,6 @@ export interface Task {
   category?: string;
   priority?: 'low' | 'medium' | 'high';
   tags?: string[];
-  autoComplete?: boolean;
   spacedRepetition?: {
     enabled: boolean;
     difficulty: 'easy' | 'medium' | 'hard';

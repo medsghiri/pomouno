@@ -65,7 +65,6 @@ export interface Task {
     category?: string;
     priority?: 'low' | 'medium' | 'high';
     tags?: string[];
-    autoComplete?: boolean;
 }
 
 export interface SpacedRepetitionData {

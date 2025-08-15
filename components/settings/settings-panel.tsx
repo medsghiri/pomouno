@@ -67,12 +67,9 @@ interface SettingsPanelProps {
 export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
   const { user, storageProvider } = useAuth();
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
-  const [hasChanges, setHasChanges] = useState(false);
   const [previewingAudio, setPreviewingAudio] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [autoSaveTimeout, setAutoSaveTimeout] = useState<NodeJS.Timeout | null>(
-    null
-  );
+  const [isUserChanging, setIsUserChanging] = useState(false);
 
   const { toast } = useToast();
   const audioService = AudioService.getInstance();
@@ -83,7 +80,10 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
     audioService.initialize();
 
     // Listen for settings updates from other components (like sound control popover)
+    // But ignore them if user is actively changing settings
     const handleSettingsUpdate = (event: CustomEvent) => {
+      if (isUserChanging) return; // Ignore external updates during user changes
+
       const updatedSettings = event.detail;
       setSettings((prevSettings) => {
         // Only update if settings have actually changed
@@ -126,25 +126,13 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
       );
       audioService.removeVolumeChangeCallback(handleVolumeChange);
     };
-  }, []);
+  }, [isUserChanging]);
 
-  // Listen for save event from parent
-  useEffect(() => {
-    const handleSave = () => {
-      if (hasChanges) {
-        saveSettings();
-      }
-    };
+  const handleSettingChange = async (key: keyof Settings, value: any) => {
+    setIsUserChanging(true); // Prevent external updates during user changes
 
-    window.addEventListener("saveSettings", handleSave);
-    return () => {
-      window.removeEventListener("saveSettings", handleSave);
-    };
-  }, [hasChanges]);
-
-  const handleSettingChange = (key: keyof Settings, value: any) => {
-    setSettings((prev) => ({ ...prev, [key]: value }));
-    setHasChanges(true);
+    const newSettings = { ...settings, [key]: value };
+    setSettings(newSettings);
     onSettingsChange?.();
 
     // Handle theme changes immediately
@@ -156,58 +144,50 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
       }
     }
 
-    // Trigger settings changed event
-    window.dispatchEvent(new CustomEvent("settingsChanged"));
+    // Save immediately to localStorage
+    LocalStorage.saveSettings(newSettings);
 
-    // Auto-save after 1 second of no changes
-    if (autoSaveTimeout) {
-      clearTimeout(autoSaveTimeout);
+    // Save to Firebase if user is logged in
+    if (user) {
+      try {
+        await FirebaseService.saveSettings(user, newSettings);
+      } catch (error) {
+        console.error("Failed to sync settings to cloud:", error);
+      }
     }
 
-    const timeout = setTimeout(() => {
-      saveSettings();
-    }, 1000);
+    // Dispatch update event for other components
+    window.dispatchEvent(
+      new CustomEvent("settingsUpdated", { detail: newSettings })
+    );
 
-    setAutoSaveTimeout(timeout);
+    // Reset user changing flag after a short delay
+    setTimeout(() => {
+      setIsUserChanging(false);
+    }, 100);
   };
 
   const saveSettings = async () => {
-    if (isSaving) return; // Prevent multiple simultaneous saves
+    // This function is now mainly used for reset functionality
+    LocalStorage.saveSettings(settings);
 
-    setIsSaving(true);
-
-    try {
-      LocalStorage.saveSettings(settings);
-      setHasChanges(false);
-
-      // Save to Firebase if user is logged in
-      if (user) {
-        try {
-          await FirebaseService.saveSettings(user, settings);
-        } catch (error) {
-          console.error("Failed to sync settings to cloud:", error);
-        }
+    if (user) {
+      try {
+        await FirebaseService.saveSettings(user, settings);
+      } catch (error) {
+        console.error("Failed to sync settings to cloud:", error);
       }
-
-      // Trigger a custom event to notify other components
-      window.dispatchEvent(
-        new CustomEvent("settingsUpdated", { detail: settings })
-      );
-    } finally {
-      setIsSaving(false);
     }
+
+    window.dispatchEvent(
+      new CustomEvent("settingsUpdated", { detail: settings })
+    );
   };
 
   const resetSettings = async () => {
-    // Clear any pending auto-save
-    if (autoSaveTimeout) {
-      clearTimeout(autoSaveTimeout);
-      setAutoSaveTimeout(null);
-    }
-
+    setIsUserChanging(true);
     setSettings(DEFAULT_SETTINGS);
     LocalStorage.saveSettings(DEFAULT_SETTINGS);
-    setHasChanges(false);
 
     // Save to Firebase if user is logged in
     if (user) {
@@ -227,6 +207,10 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
     window.dispatchEvent(
       new CustomEvent("settingsUpdated", { detail: DEFAULT_SETTINGS })
     );
+
+    setTimeout(() => {
+      setIsUserChanging(false);
+    }, 100);
   };
 
   const requestNotificationPermission = async () => {
@@ -273,16 +257,12 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
     }
   };
 
-  // Stop preview when component unmounts or audio changes
+  // Stop preview when component unmounts
   useEffect(() => {
     return () => {
       audioService.stopPreview();
-      // Clear auto-save timeout on unmount
-      if (autoSaveTimeout) {
-        clearTimeout(autoSaveTimeout);
-      }
     };
-  }, [autoSaveTimeout]);
+  }, []);
 
   const availableAudio = audioService.getAvailableAudio();
 
@@ -321,29 +301,6 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
           )}
         </div>
       </div>
-
-      {/* Auto-save Status */}
-      {(hasChanges || isSaving) && (
-        <div className="bg-blue-50/80 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
-          <div className="flex items-center justify-center gap-2">
-            {isSaving ? (
-              <>
-                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-sm text-blue-800 dark:text-blue-200">
-                  Saving settings...
-                </p>
-              </>
-            ) : hasChanges ? (
-              <>
-                <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                <p className="text-sm text-orange-800 dark:text-orange-200">
-                  Auto-saving in progress...
-                </p>
-              </>
-            ) : null}
-          </div>
-        </div>
-      )}
 
       {/* Timer Durations */}
       <div className="space-y-4">
@@ -878,7 +835,7 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                 <Label className="text-gray-900 dark:text-white font-medium py-1">
                   Session Audio Volume
                 </Label>
-                <div className="px-2">
+                <div className="py-2">
                   <Slider
                     value={[settings.soundVolume * 100]}
                     onValueChange={(value) => {
@@ -908,7 +865,7 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                 <Label className="text-gray-900 dark:text-white font-medium">
                   Notification Volume
                 </Label>
-                <div className="px-2">
+                <div className="py-2">
                   <Slider
                     value={[settings.notificationVolume * 100]}
                     onValueChange={(value) => {

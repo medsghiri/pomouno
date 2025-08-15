@@ -67,6 +67,56 @@ export function TimerApp({
   const { toast } = useToast();
   const router = useRouter();
 
+  const loadFirebaseSessions = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      // Get today's date range
+      const now = new Date();
+      const today =
+        now.getFullYear() +
+        "-" +
+        String(now.getMonth() + 1).padStart(2, "0") +
+        "-" +
+        String(now.getDate()).padStart(2, "0");
+
+      // Load sessions from Firebase for today
+      const firebaseSessions = await FirebaseService.getSessionsByDateRange(
+        user,
+        today,
+        today
+      );
+
+      if (firebaseSessions.length > 0) {
+        // Merge with local sessions (avoid duplicates)
+        const localSessions = LocalStorage.getAllSessions();
+        const existingIds = new Set(localSessions.map((s) => s.id));
+
+        const newSessions = firebaseSessions.filter(
+          (s) => !existingIds.has(s.id)
+        );
+
+        if (newSessions.length > 0) {
+          // Add new sessions to local storage
+          const allSessions = [...localSessions, ...newSessions];
+          LocalStorage.saveAllSessions(allSessions);
+
+          // Update today's sessions count
+          const todayStats = StatisticsEngine.calculateDailyStats(
+            allSessions,
+            [],
+            today
+          );
+          setSessionsCompleted(todayStats.sessions);
+
+          console.log(`✅ Synced ${newSessions.length} sessions from Firebase`);
+        }
+      }
+    } catch (error) {
+      console.error("❌ Failed to load Firebase sessions:", error);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (user) {
       const service = new AdvancedStorageService(user);
@@ -117,7 +167,12 @@ export function TimerApp({
       setShowDailyGoal(settings.showDailyGoal);
     };
 
-    const handleFirebaseDataSynced = () => {
+    const handleFirebaseDataSynced = async () => {
+      // Reload sessions from Firebase when data is synced
+      if (user) {
+        await loadFirebaseSessions();
+      }
+
       const now = new Date();
       const today =
         now.getFullYear() +
@@ -180,7 +235,7 @@ export function TimerApp({
       );
       window.removeEventListener("dataReset", handleDataReset as EventListener);
     };
-  }, []);
+  }, [user, loadFirebaseSessions]);
 
   const handleAuthSuccess = useCallback(async () => {
     if (!user) return;
@@ -189,12 +244,12 @@ export function TimerApp({
       const localData = LocalStorage.getAllData();
       await FirebaseService.migrateUserData(user, localData);
 
-      toast({
-        title: "Data synced successfully!",
-        description: `Imported ${
-          localData.sessions?.length || 0
-        } sessions and your settings.`,
-      });
+      // toast({
+      //   title: "Data synced successfully!",
+      //   description: `Imported ${
+      //     localData.sessions?.length || 0
+      //   } sessions and your settings.`,
+      // });
     } catch (error) {
       console.error("❌ Migration error:", error);
 
@@ -222,9 +277,36 @@ export function TimerApp({
   useEffect(() => {
     if (user && !loading) {
       handleAuthSuccess();
-      // Firebase sync is handled by the auth storage provider
+      // Load sessions from Firebase when user is authenticated
+      loadFirebaseSessions();
+
+      // Set up periodic sync every 60 seconds to check for new sessions
+      const syncInterval = setInterval(() => {
+        if (user) {
+          loadFirebaseSessions();
+        }
+      }, 60000); // 60 seconds (reduced frequency to avoid too many requests)
+
+      // Sync when user focuses back on the tab (in case they completed sessions elsewhere)
+      const handleFocus = () => {
+        if (user) {
+          loadFirebaseSessions();
+        }
+      };
+
+      window.addEventListener("focus", handleFocus);
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden && user) {
+          loadFirebaseSessions();
+        }
+      });
+
+      return () => {
+        clearInterval(syncInterval);
+        window.removeEventListener("focus", handleFocus);
+      };
     }
-  }, [user, loading, handleAuthSuccess]);
+  }, [user, loading, handleAuthSuccess, loadFirebaseSessions]);
 
   const handleSessionComplete = useCallback(
     async (session: PomodoroSession) => {

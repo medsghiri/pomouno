@@ -51,6 +51,7 @@ export interface BasicSettings {
 // Legacy interface for backward compatibility
 export interface Settings extends BasicSettings {
   showTaskEstimation: boolean;
+  showDailyGoal: boolean;
 }
 
 // Basic daily stats for localStorage (timer sessions only)
@@ -103,6 +104,7 @@ const DEFAULT_BASIC_SETTINGS: BasicSettings = {
 const DEFAULT_SETTINGS: Settings = {
   ...DEFAULT_BASIC_SETTINGS,
   showTaskEstimation: true,
+  showDailyGoal: true,
 };
 
 function safeJsonParse<T>(jsonString: string | null, defaultValue: T): T {

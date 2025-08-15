@@ -53,11 +53,11 @@ export function TimerApp({
   >("sessions");
   const [sessionsCompleted, setSessionsCompleted] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [dailyGoal, setDailyGoal] = useState(8);
+  const [showDailyGoal, setShowDailyGoal] = useState(true);
   const [showTaskCompletionDialog, setShowTaskCompletionDialog] =
     useState(false);
   const [storageService, setStorageService] =
@@ -105,6 +105,7 @@ export function TimerApp({
     const settings = LocalStorage.getSettings();
     setIsDarkMode(settings.darkMode);
     setDailyGoal(settings.dailySessionGoal);
+    setShowDailyGoal(settings.showDailyGoal);
   }, []);
 
   // Listen for theme changes and unsaved settings
@@ -113,11 +114,7 @@ export function TimerApp({
       const settings = event.detail;
       setIsDarkMode(settings.darkMode);
       setDailyGoal(settings.dailySessionGoal);
-      setHasUnsavedSettings(false);
-    };
-
-    const handleUnsavedSettings = () => {
-      setHasUnsavedSettings(true);
+      setShowDailyGoal(settings.showDailyGoal);
     };
 
     const handleFirebaseDataSynced = () => {
@@ -140,15 +137,12 @@ export function TimerApp({
       const settings = LocalStorage.getSettings();
       setDailyGoal(settings.dailySessionGoal);
       setIsDarkMode(settings.darkMode);
+      setShowDailyGoal(settings.showDailyGoal);
     };
 
     window.addEventListener(
       "settingsUpdated",
       handleSettingsUpdate as EventListener
-    );
-    window.addEventListener(
-      "settingsChanged",
-      handleUnsavedSettings as EventListener
     );
     window.addEventListener(
       "firebaseDataSynced",
@@ -179,10 +173,6 @@ export function TimerApp({
       window.removeEventListener(
         "settingsUpdated",
         handleSettingsUpdate as EventListener
-      );
-      window.removeEventListener(
-        "settingsChanged",
-        handleUnsavedSettings as EventListener
       );
       window.removeEventListener(
         "firebaseDataSynced",
@@ -468,16 +458,7 @@ export function TimerApp({
   };
 
   const handleCloseSettings = () => {
-    if (hasUnsavedSettings) {
-      const shouldSave = window.confirm(
-        "You have unsaved changes. Do you want to save them before closing?"
-      );
-      if (shouldSave) {
-        window.dispatchEvent(new CustomEvent("saveSettings"));
-      }
-    }
     setShowSettings(false);
-    setHasUnsavedSettings(false);
   };
 
   const getThemeClasses = () => {
@@ -537,55 +518,6 @@ export function TimerApp({
               todaysTaskSessions={todaysTaskSessions}
             />
 
-            {/* Daily Goal Progress */}
-            <div className="mt-6 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
-                    <Target className="w-5 h-5 text-red-600 dark:text-red-400" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground">
-                      {sessionsCompleted} / {dailyGoal}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      sessions today
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                    {Math.round((sessionsCompleted / dailyGoal) * 100)}%
-                  </div>
-                  <p className="text-xs text-muted-foreground">complete</p>
-                </div>
-              </div>
-
-              <div className="w-full bg-red-100 dark:bg-red-900/30 rounded-full h-3 mb-3">
-                <div
-                  className="bg-gradient-to-r from-red-500 to-orange-500 h-3 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
-                  style={{
-                    width: `${Math.min(
-                      (sessionsCompleted / dailyGoal) * 100,
-                      100
-                    )}%`,
-                  }}
-                >
-                  {sessionsCompleted > 0 && (
-                    <div className="w-2 h-2 bg-white rounded-full shadow-sm"></div>
-                  )}
-                </div>
-              </div>
-
-              <p className="text-sm text-center text-muted-foreground">
-                {sessionsCompleted >= dailyGoal
-                  ? "🎯 Daily goal achieved! Outstanding work!"
-                  : sessionsCompleted === 0
-                  ? "Ready to start your productive day?"
-                  : `${dailyGoal - sessionsCompleted} more to reach your goal`}
-              </p>
-            </div>
-
             {/* Productivity Tools */}
             <div className="mt-6 flex items-center justify-center space-x-3">
               <Button
@@ -628,6 +560,59 @@ export function TimerApp({
                 )}
               </Button>
             </div>
+
+            {/* Daily Goal Progress */}
+            {showDailyGoal && (
+              <div className="mt-6 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+                      <Target className="w-5 h-5 text-red-600 dark:text-red-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">
+                        {sessionsCompleted} / {dailyGoal}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        sessions today
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                      {Math.round((sessionsCompleted / dailyGoal) * 100)}%
+                    </div>
+                    <p className="text-xs text-muted-foreground">complete</p>
+                  </div>
+                </div>
+
+                <div className="w-full bg-red-100 dark:bg-red-900/30 rounded-full h-3 mb-3">
+                  <div
+                    className="bg-gradient-to-r from-red-500 to-orange-500 h-3 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
+                    style={{
+                      width: `${Math.min(
+                        (sessionsCompleted / dailyGoal) * 100,
+                        100
+                      )}%`,
+                    }}
+                  >
+                    {sessionsCompleted > 0 && (
+                      <div className="w-2 h-2 bg-white rounded-full shadow-sm"></div>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-sm text-center text-muted-foreground">
+                  {sessionsCompleted >= dailyGoal
+                    ? "🎯 Daily goal achieved! Outstanding work!"
+                    : sessionsCompleted === 0
+                    ? "Ready to start your productive day?"
+                    : `${
+                        dailyGoal - sessionsCompleted
+                      } more to reach your goal`}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -640,11 +625,6 @@ export function TimerApp({
               <h2 className="text-xl font-semibold flex items-center gap-2 text-foreground">
                 <Settings className="w-5 h-5 text-red-600 dark:text-red-400" />
                 Settings
-                {hasUnsavedSettings && (
-                  <span className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 px-2 py-1 rounded-full">
-                    Unsaved changes
-                  </span>
-                )}
               </h2>
               <button
                 onClick={handleCloseSettings}
@@ -655,9 +635,7 @@ export function TimerApp({
             </div>
             <ScrollArea className="h-[calc(90vh-120px)]">
               <div className="p-6">
-                <SettingsPanel
-                  onSettingsChange={() => setHasUnsavedSettings(true)}
-                />
+                <SettingsPanel />
               </div>
             </ScrollArea>
           </div>

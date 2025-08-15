@@ -25,7 +25,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { LocalStorage, Settings } from "@/lib/storage";
 import { CategoryManagement } from "@/components/settings/category-management";
 import {
-  Save,
   RotateCcw,
   Volume2,
   CheckSquare,
@@ -53,6 +52,7 @@ const DEFAULT_SETTINGS: Settings = {
   notificationVolume: 0.7,
   darkMode: false,
   showTaskEstimation: true,
+  showDailyGoal: true,
   focusAudio: "none",
   breakAudio: "none",
   notificationAudio: "notification-ping",
@@ -69,6 +69,10 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [hasChanges, setHasChanges] = useState(false);
   const [previewingAudio, setPreviewingAudio] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [autoSaveTimeout, setAutoSaveTimeout] = useState<NodeJS.Timeout | null>(
+    null
+  );
 
   const { toast } = useToast();
   const audioService = AudioService.getInstance();
@@ -154,34 +158,53 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
 
     // Trigger settings changed event
     window.dispatchEvent(new CustomEvent("settingsChanged"));
+
+    // Auto-save after 1 second of no changes
+    if (autoSaveTimeout) {
+      clearTimeout(autoSaveTimeout);
+    }
+
+    const timeout = setTimeout(() => {
+      saveSettings();
+    }, 1000);
+
+    setAutoSaveTimeout(timeout);
   };
 
   const saveSettings = async () => {
-    LocalStorage.saveSettings(settings);
-    setHasChanges(false);
+    if (isSaving) return; // Prevent multiple simultaneous saves
 
-    // Save to Firebase if user is logged in
-    if (user) {
-      try {
-        await FirebaseService.saveSettings(user, settings);
-      } catch (error) {
-        console.error("Failed to sync settings to cloud:", error);
+    setIsSaving(true);
+
+    try {
+      LocalStorage.saveSettings(settings);
+      setHasChanges(false);
+
+      // Save to Firebase if user is logged in
+      if (user) {
+        try {
+          await FirebaseService.saveSettings(user, settings);
+        } catch (error) {
+          console.error("Failed to sync settings to cloud:", error);
+        }
       }
+
+      // Trigger a custom event to notify other components
+      window.dispatchEvent(
+        new CustomEvent("settingsUpdated", { detail: settings })
+      );
+    } finally {
+      setIsSaving(false);
     }
-
-    toast({
-      title: "Settings saved",
-      description:
-        "Your preferences have been updated and will take effect immediately.",
-    });
-
-    // Trigger a custom event to notify other components
-    window.dispatchEvent(
-      new CustomEvent("settingsUpdated", { detail: settings })
-    );
   };
 
   const resetSettings = async () => {
+    // Clear any pending auto-save
+    if (autoSaveTimeout) {
+      clearTimeout(autoSaveTimeout);
+      setAutoSaveTimeout(null);
+    }
+
     setSettings(DEFAULT_SETTINGS);
     LocalStorage.saveSettings(DEFAULT_SETTINGS);
     setHasChanges(false);
@@ -254,8 +277,12 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
   useEffect(() => {
     return () => {
       audioService.stopPreview();
+      // Clear auto-save timeout on unmount
+      if (autoSaveTimeout) {
+        clearTimeout(autoSaveTimeout);
+      }
     };
-  }, []);
+  }, [autoSaveTimeout]);
 
   const availableAudio = audioService.getAvailableAudio();
 
@@ -294,6 +321,29 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
           )}
         </div>
       </div>
+
+      {/* Auto-save Status */}
+      {(hasChanges || isSaving) && (
+        <div className="bg-blue-50/80 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
+          <div className="flex items-center justify-center gap-2">
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  Saving settings...
+                </p>
+              </>
+            ) : hasChanges ? (
+              <>
+                <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+                <p className="text-sm text-orange-800 dark:text-orange-200">
+                  Auto-saving in progress...
+                </p>
+              </>
+            ) : null}
+          </div>
+        </div>
+      )}
 
       {/* Timer Durations */}
       <div className="space-y-4">
@@ -482,6 +532,29 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                 checked={settings.darkMode}
                 onCheckedChange={(checked) =>
                   handleSettingChange("darkMode", checked)
+                }
+              />
+            </div>
+          </Card>
+
+          <Card className="p-4 bg-white/10 backdrop-blur-sm text-gray-900 dark:text-white dark:bg-gray-800/50">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <Label
+                  htmlFor="show-daily-goal"
+                  className="text-gray-900 dark:text-white font-medium"
+                >
+                  Show daily goal progress
+                </Label>
+                <p className="text-xs text-gray-700 dark:text-gray-400">
+                  Display daily session goal progress card
+                </p>
+              </div>
+              <Switch
+                id="show-daily-goal"
+                checked={settings.showDailyGoal}
+                onCheckedChange={(checked) =>
+                  handleSettingChange("showDailyGoal", checked)
                 }
               />
             </div>
@@ -868,38 +941,17 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
       {/* Bottom Action Buttons */}
       <Separator className="border-gray-300/20 dark:border-gray-700/20" />
 
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
-          <Button
-            onClick={resetSettings}
-            variant="outline"
-            size="sm"
-            className="text-xs bg-white/10 hover:bg-white/20 text-gray-700 dark:text-gray-300 transition-all duration-200 backdrop-blur-sm dark:bg-gray-800/30 dark:hover:bg-gray-700/40"
-          >
-            <RotateCcw className="w-3 h-3 mr-1" />
-            Reset
-          </Button>
-        </div>
-
-        {hasChanges && (
-          <Button
-            onClick={saveSettings}
-            size="sm"
-            className="bg-red-600 hover:bg-red-700 text-gray-100 dark:text-gray-100 transition-all duration-200 backdrop-blur-sm dark:bg-red-700 dark:hover:bg-red-600/50 text-xs"
-          >
-            <Save className="w-3 h-3 mr-1" />
-            Save Changes
-          </Button>
-        )}
+      <div className="flex items-center justify-center">
+        <Button
+          onClick={resetSettings}
+          variant="outline"
+          size="sm"
+          className="text-xs bg-white/10 hover:bg-white/20 text-gray-700 dark:text-gray-300 transition-all duration-200 backdrop-blur-sm dark:bg-gray-800/30 dark:hover:bg-gray-700/40"
+        >
+          <RotateCcw className="w-3 h-3 mr-1" />
+          Reset to Defaults
+        </Button>
       </div>
-
-      {hasChanges && (
-        <Card className="p-4 bg-orange-50/80 dark:bg-orange-900/20 backdrop-blur-sm">
-          <p className="text-sm text-orange-800 dark:text-orange-200 text-center">
-            💡 Don't forget to save your changes!
-          </p>
-        </Card>
-      )}
     </div>
   );
 }

@@ -184,7 +184,7 @@ export function TaskManager({
   >({});
 
   const { toast } = useToast();
-  const settings = LocalStorage.getSettings();
+  const [settings, setSettings] = useState(LocalStorage.getSettings());
 
   useEffect(() => {
     if (user) {
@@ -203,6 +203,13 @@ export function TaskManager({
     const handleFirebaseDataSynced = () => {
       loadTasks();
       loadCategories();
+    };
+
+    // Listen for settings updates to refresh UI
+    const handleSettingsUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const updatedSettings = customEvent.detail;
+      setSettings(updatedSettings);
     };
 
     // Listen for session completion to refresh task sessions
@@ -232,6 +239,7 @@ export function TaskManager({
 
     window.addEventListener("firebaseDataSynced", handleFirebaseDataSynced);
     window.addEventListener("sessionCompleted", handleSessionCompleted);
+    window.addEventListener("settingsUpdated", handleSettingsUpdated);
 
     return () => {
       window.removeEventListener(
@@ -239,6 +247,7 @@ export function TaskManager({
         handleFirebaseDataSynced
       );
       window.removeEventListener("sessionCompleted", handleSessionCompleted);
+      window.removeEventListener("settingsUpdated", handleSettingsUpdated);
     };
   }, [storageService]);
 
@@ -2215,7 +2224,7 @@ export function TaskManager({
         </Card>
 
         {/* Task Completion Estimation - positioned at bottom */}
-        <TaskCompletionEstimation tasks={filteredTasks} />
+        <TaskCompletionEstimation tasks={filteredTasks} settings={settings} />
 
         {/* Completed tasks summary */}
         {!showCompleted && completedCount > 0 && (

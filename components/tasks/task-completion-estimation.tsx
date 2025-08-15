@@ -9,13 +9,15 @@ import { LocalStorage } from "@/lib/storage";
 interface TaskCompletionEstimationProps {
   tasks: Task[];
   className?: string;
+  settings?: any; // Accept settings as prop for reactivity
 }
 
 export function TaskCompletionEstimation({
   tasks,
   className,
+  settings: propSettings,
 }: TaskCompletionEstimationProps) {
-  const settings = LocalStorage.getSettings();
+  const settings = propSettings || LocalStorage.getSettings();
 
   // Only show if the setting is enabled
   if (!settings.showTaskEstimation) {

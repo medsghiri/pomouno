@@ -71,47 +71,75 @@ export function TimerApp({
     if (!user) return;
 
     try {
-      // Get today's date range
-      const now = new Date();
-      const today =
-        now.getFullYear() +
-        "-" +
-        String(now.getMonth() + 1).padStart(2, "0") +
-        "-" +
-        String(now.getDate()).padStart(2, "0");
+      // Use the same method as stats display to ensure consistency
+      const allSessions = await FirebaseService.getRecentSessions(user, 100);
 
-      // Load sessions from Firebase for today
-      const firebaseSessions = await FirebaseService.getSessionsByDateRange(
-        user,
-        today,
-        today
+      // Calculate today's date range (same logic as stats display)
+      const today = new Date();
+      const todayStart = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate()
+      ).getTime();
+      const todayEnd = todayStart + 24 * 60 * 60 * 1000 - 1;
+
+      console.log(
+        `📅 Today's date range: ${new Date(
+          todayStart
+        ).toISOString()} to ${new Date(todayEnd).toISOString()}`
       );
+      console.log(`📊 Total sessions from Firebase: ${allSessions.length}`);
 
-      if (firebaseSessions.length > 0) {
-        // Merge with local sessions (avoid duplicates)
-        const localSessions = LocalStorage.getAllSessions();
-        const existingIds = new Set(localSessions.map((s) => s.id));
+      // Filter sessions for today (same logic as stats display)
+      const todaySessions = allSessions.filter((s) => {
+        const sessionDate = new Date(s.timestamp);
+        const sessionStart = new Date(
+          sessionDate.getFullYear(),
+          sessionDate.getMonth(),
+          sessionDate.getDate()
+        ).getTime();
+        const isToday = sessionStart === todayStart;
 
-        const newSessions = firebaseSessions.filter(
-          (s) => !existingIds.has(s.id)
-        );
-
-        if (newSessions.length > 0) {
-          // Add new sessions to local storage
-          const allSessions = [...localSessions, ...newSessions];
-          LocalStorage.saveAllSessions(allSessions);
-
-          // Update today's sessions count
-          const todayStats = StatisticsEngine.calculateDailyStats(
-            allSessions,
-            [],
-            today
+        if (isToday) {
+          console.log(
+            `✅ Session from today: ${new Date(
+              s.timestamp
+            ).toISOString()}, type: ${s.type}, id: ${s.id}`
           );
-          setSessionsCompleted(todayStats.sessions);
-
-          console.log(`✅ Synced ${newSessions.length} sessions from Firebase`);
         }
+
+        return isToday;
+      });
+
+      // Count work sessions for today
+      const workSessionsToday = todaySessions.filter(
+        (s) => s.type === "work"
+      ).length;
+
+      // Sync with local storage
+      const localSessions = LocalStorage.getAllSessions();
+      const existingIds = new Set(localSessions.map((s) => s.id));
+
+      const newSessions = todaySessions.filter((s) => !existingIds.has(s.id));
+
+      if (newSessions.length > 0) {
+        // Add new sessions to local storage
+        const allLocalSessions = [...localSessions, ...newSessions];
+        LocalStorage.saveAllSessions(allLocalSessions);
+        console.log(
+          `✅ Synced ${newSessions.length} new sessions from Firebase`
+        );
       }
+
+      // Update the sessions completed state with the actual count from Firebase
+      console.log(
+        `🎯 Setting daily goal progress: ${workSessionsToday} sessions`
+      );
+      setSessionsCompleted(workSessionsToday);
+
+      console.log(
+        `📊 Daily progress sync: ${workSessionsToday} work sessions today (${todaySessions.length} total sessions today, ${allSessions.length} total sessions from Firebase)`
+      );
     } catch (error) {
       console.error("❌ Failed to load Firebase sessions:", error);
     }
@@ -121,10 +149,19 @@ export function TimerApp({
     if (user) {
       const service = new AdvancedStorageService(user);
       setStorageService(service);
+
+      // Immediately sync sessions when user becomes available
+      // This ensures the daily goal shows the correct count from Firebase
+      console.log("🔄 User authenticated - syncing sessions for daily goal...");
+
+      // Force immediate sync with a small delay to ensure Firebase is ready
+      setTimeout(() => {
+        loadFirebaseSessions();
+      }, 500);
     } else {
       setStorageService(null);
     }
-  }, [user]);
+  }, [user, loadFirebaseSessions]);
 
   useEffect(() => {
     // Check and reset daily sessions if it's a new day
@@ -142,21 +179,24 @@ export function TimerApp({
       localStorage.setItem("pomouono_last_daily_reset", today);
     }
 
-    // Calculate today's sessions
-    const allSessions = LocalStorage.getAllSessions();
-    const todayStats = StatisticsEngine.calculateDailyStats(
-      allSessions,
-      [],
-      today
-    );
-    setSessionsCompleted(todayStats.sessions);
+    // Only calculate from local storage if user is not authenticated
+    // For authenticated users, Firebase sync will handle the session count
+    if (!user) {
+      const allSessions = LocalStorage.getAllSessions();
+      const todayStats = StatisticsEngine.calculateDailyStats(
+        allSessions,
+        [],
+        today
+      );
+      setSessionsCompleted(todayStats.sessions);
+    }
 
     // Load theme settings
     const settings = LocalStorage.getSettings();
     setIsDarkMode(settings.darkMode);
     setDailyGoal(settings.dailySessionGoal);
     setShowDailyGoal(settings.showDailyGoal);
-  }, []);
+  }, [user]);
 
   // Listen for theme changes and unsaved settings
   useEffect(() => {
@@ -171,23 +211,24 @@ export function TimerApp({
       // Reload sessions from Firebase when data is synced
       if (user) {
         await loadFirebaseSessions();
+      } else {
+        // For non-authenticated users, use local storage
+        const now = new Date();
+        const today =
+          now.getFullYear() +
+          "-" +
+          String(now.getMonth() + 1).padStart(2, "0") +
+          "-" +
+          String(now.getDate()).padStart(2, "0");
+        const allSessions = LocalStorage.getAllSessions();
+        const allTasks = LocalStorage.getTasks();
+        const todayStats = StatisticsEngine.calculateDailyStats(
+          allSessions,
+          allTasks,
+          today
+        );
+        setSessionsCompleted(todayStats.sessions);
       }
-
-      const now = new Date();
-      const today =
-        now.getFullYear() +
-        "-" +
-        String(now.getMonth() + 1).padStart(2, "0") +
-        "-" +
-        String(now.getDate()).padStart(2, "0");
-      const allSessions = LocalStorage.getAllSessions();
-      const allTasks = LocalStorage.getTasks();
-      const todayStats = StatisticsEngine.calculateDailyStats(
-        allSessions,
-        allTasks,
-        today
-      );
-      setSessionsCompleted(todayStats.sessions);
 
       const settings = LocalStorage.getSettings();
       setDailyGoal(settings.dailySessionGoal);
@@ -277,36 +318,54 @@ export function TimerApp({
   useEffect(() => {
     if (user && !loading) {
       handleAuthSuccess();
-      // Load sessions from Firebase when user is authenticated
+
+      // Initial sync - load sessions from Firebase when user is authenticated
+      // This will override any local storage count with Firebase data
       loadFirebaseSessions();
 
-      // Set up periodic sync every 60 seconds to check for new sessions
+      // Set up periodic sync every 30 seconds to check for new sessions
       const syncInterval = setInterval(() => {
         if (user) {
           loadFirebaseSessions();
         }
-      }, 60000); // 60 seconds (reduced frequency to avoid too many requests)
+      }, 30000); // 30 seconds for more responsive cross-device sync
 
       // Sync when user focuses back on the tab (in case they completed sessions elsewhere)
       const handleFocus = () => {
         if (user) {
+          console.log("🔄 Tab focused - syncing sessions...");
+          loadFirebaseSessions();
+        }
+      };
+
+      const handleVisibilityChange = () => {
+        if (!document.hidden && user) {
+          console.log("🔄 Tab visible - syncing sessions...");
           loadFirebaseSessions();
         }
       };
 
       window.addEventListener("focus", handleFocus);
-      document.addEventListener("visibilitychange", () => {
-        if (!document.hidden && user) {
-          loadFirebaseSessions();
-        }
-      });
+      document.addEventListener("visibilitychange", handleVisibilityChange);
 
       return () => {
         clearInterval(syncInterval);
         window.removeEventListener("focus", handleFocus);
+        document.removeEventListener(
+          "visibilitychange",
+          handleVisibilityChange
+        );
       };
     }
   }, [user, loading, handleAuthSuccess, loadFirebaseSessions]);
+
+  // Sync when stats panel is opened to ensure consistency
+  useEffect(() => {
+    if (showStats && user) {
+      console.log("📊 Stats panel opened - syncing for consistency...");
+      loadFirebaseSessions();
+    }
+  }, [showStats, user, loadFirebaseSessions]);
 
   const handleSessionComplete = useCallback(
     async (session: PomodoroSession) => {
@@ -342,7 +401,12 @@ export function TimerApp({
         breakRemindersCompleted: todayStats.breakRemindersCompleted || 0,
       };
       LocalStorage.saveTodaysStats(updatedStats);
-      setSessionsCompleted(todayStats.sessions);
+
+      // For authenticated users, the Firebase sync will update the count
+      // For non-authenticated users, update immediately from local stats
+      if (!user) {
+        setSessionsCompleted(todayStats.sessions);
+      }
 
       // Update today's task sessions count if a task was selected
       if (selectedTaskId && session.type === "work") {
@@ -363,19 +427,26 @@ export function TimerApp({
           // Record session and wait for it to complete before dispatching event
           storageService
             .recordSession(session)
-            .then(() => {
-              // Dispatch event after session is saved
+            .then(async () => {
+              // Immediately sync sessions after recording to get updated count
+              await loadFirebaseSessions();
+              // Dispatch event after session is saved and synced
               window.dispatchEvent(
                 new CustomEvent("sessionCompleted", { detail: session })
               );
             })
             .catch(console.error);
         } else {
-          FirebaseService.saveSessions(user, [session]).catch(console.error);
-          // Dispatch event for non-advanced storage
-          window.dispatchEvent(
-            new CustomEvent("sessionCompleted", { detail: session })
-          );
+          FirebaseService.saveSessions(user, [session])
+            .then(async () => {
+              // Immediately sync sessions after saving
+              await loadFirebaseSessions();
+              // Dispatch event for non-advanced storage
+              window.dispatchEvent(
+                new CustomEvent("sessionCompleted", { detail: session })
+              );
+            })
+            .catch(console.error);
         }
         FirebaseService.saveStats(user, updatedStats).catch(console.error);
       } else {

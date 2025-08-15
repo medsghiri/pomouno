@@ -282,7 +282,7 @@ export function BreakReminderManager() {
   const handleEdit = (reminder: BreakReminder) => {
     setTitle(reminder.title);
     setDescription(reminder.description || "");
-    setCategory(reminder.category);
+    setCategory(getCategoryId(reminder.category));
     setEnabled(reminder.enabled);
     setBreakType((reminder as any).breakType || "all"); // Default to 'all' if not set
     setEditingId(reminder.id);
@@ -389,6 +389,21 @@ export function BreakReminderManager() {
       (cat) => cat.id === categoryId || cat.name.toLowerCase() === categoryId
     );
     return category || { name: "Custom", icon: "📝", color: "#6B7280" };
+  };
+
+  const getCategoryId = (categoryValue: string) => {
+    // First try to find by ID
+    const categoryById = categories.find((cat) => cat.id === categoryValue);
+    if (categoryById) return categoryById.id;
+
+    // Then try to find by name (case insensitive)
+    const categoryByName = categories.find(
+      (cat) => cat.name.toLowerCase() === categoryValue.toLowerCase()
+    );
+    if (categoryByName) return categoryByName.id;
+
+    // Default to first category if available
+    return categories.length > 0 ? categories[0].id : "hydration";
   };
 
   const getTodaysCount = (reminderId: string) => {
@@ -708,7 +723,18 @@ export function BreakReminderManager() {
                 disabled={loading}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select a category">
+                    {categories.find((cat) => cat.id === category) && (
+                      <div className="flex items-center gap-2">
+                        <span>
+                          {categories.find((cat) => cat.id === category)?.icon}
+                        </span>
+                        <span>
+                          {categories.find((cat) => cat.id === category)?.name}
+                        </span>
+                      </div>
+                    )}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {categories.map((cat) => (

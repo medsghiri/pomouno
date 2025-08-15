@@ -509,78 +509,53 @@ export function BreakReminderManager() {
                 })
                 .map((reminder) => {
                   const categoryInfo = getCategoryInfo(reminder.category);
+                  const todaysCount = getTodaysCount(reminder.id);
+
+                  // Check if last completion was today
+                  const wasCompletedToday =
+                    reminder.lastCompleted &&
+                    (() => {
+                      const today = new Date();
+                      const lastCompleted = new Date(reminder.lastCompleted);
+                      return (
+                        today.getFullYear() === lastCompleted.getFullYear() &&
+                        today.getMonth() === lastCompleted.getMonth() &&
+                        today.getDate() === lastCompleted.getDate()
+                      );
+                    })();
+
                   return (
                     <Card
                       key={reminder.id}
                       className={cn(
-                        "p-3 sm:p-4 rounded-lg border transition-all duration-200 space-y-3",
+                        "p-3 rounded-lg transition-all duration-200 space-y-2 relative border-0 gap-1",
                         reminder.enabled
-                          ? "bg-background border-accent hover:bg-accent/10"
-                          : "bg-background border-accent hover:bg-accent/10 opacity-60"
+                          ? "bg-accent/10 hover:bg-accent/20"
+                          : "bg-accent/20 hover:bg-accent/30 opacity-60"
                       )}
                     >
-                      <div className="flex gap-3 items-start">
+                      <div className="flex gap-2 items-center">
                         {/* Icon and title */}
-                        <div className="flex-shrink-0 w-5 mt-0.5">
+                        <div className="flex-shrink-0 mt-0.5">
                           <span className="text-base">{categoryInfo.icon}</span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-medium text-foreground">
+                        <div className="flex-1 flex items-center justify-between">
+                          <span className="text-sm font-medium text-foreground">
                             {reminder.title}
-                          </h3>
-                          {reminder.description && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {reminder.description}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Counter and controls */}
-                      <div className="flex flex-col gap-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge
-                            variant="secondary"
-                            className="text-xs bg-accent text-accent-foreground"
-                          >
-                            {categoryInfo.name}
-                          </Badge>
-                          <Badge
-                            variant="secondary"
-                            className={cn(
-                              "text-xs",
-                              reminder.enabled
-                                ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
-                                : "bg-accent text-accent-foreground"
-                            )}
-                          >
-                            {reminder.enabled ? "Enabled" : "Disabled"}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {(reminder as any).breakType === "short"
-                              ? "Short Breaks"
-                              : (reminder as any).breakType === "long"
-                              ? "Long Breaks"
-                              : "All Breaks"}
-                          </Badge>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          {/* Counter display and controls */}
+                          </span>
+                          {/* Counter display - moved to title row */}
                           <div className="flex items-center gap-1 bg-accent/50 rounded-lg px-2 py-1">
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => decrementCount(reminder.id)}
-                              disabled={
-                                loading || getTodaysCount(reminder.id) <= 0
-                              }
+                              disabled={loading || todaysCount <= 0}
                               className="h-6 w-6 p-0 hover:bg-red-100 hover:text-red-600"
                             >
                               <Minus className="w-3 h-3" />
                             </Button>
                             <span className="text-sm font-medium min-w-[2rem] text-center">
-                              {getTodaysCount(reminder.id)}
+                              {todaysCount}
                             </span>
                             <Button
                               variant="ghost"
@@ -592,50 +567,82 @@ export function BreakReminderManager() {
                               <Plus className="w-3 h-3" />
                             </Button>
                           </div>
-
-                          {/* Action buttons */}
-                          <div className="flex items-center gap-1">
-                            <Switch
-                              checked={reminder.enabled}
-                              onCheckedChange={() =>
-                                toggleReminder(reminder.id)
-                              }
-                              disabled={loading}
-                              className="data-[state=checked]:bg-red-600"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(reminder)}
-                              disabled={loading}
-                              className="h-8 w-8 p-0 hover:bg-accent"
-                            >
-                              <Edit3 className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(reminder.id)}
-                              disabled={loading}
-                              className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
                         </div>
                       </div>
 
-                      {/* Today's count display */}
-                      <div className="text-xs text-muted-foreground">
-                        Today: {getTodaysCount(reminder.id)} times
-                        {reminder.lastCompleted && (
-                          <span className="ml-2">
-                            • Last:{" "}
-                            {new Date(
-                              reminder.lastCompleted
-                            ).toLocaleTimeString()}
-                          </span>
+                      {/* Content area - aligned with icon */}
+                      <div className="flex-1 min-w-0 space-y-1">
+                        {/* Description and status info */}
+                        {reminder.description && (
+                          <div>
+                            <p className="text-sm text-muted-foreground">
+                              {reminder.description}
+                            </p>
+                          </div>
                         )}
+
+                        {/* Today's count and last completion info */}
+                        <div className="text-xs text-muted-foreground">
+                          Today: {todaysCount} times
+                          {reminder.lastCompleted && wasCompletedToday && (
+                            <span className="ml-2">
+                              • Last:{" "}
+                              {/* {new Date(
+                                reminder.lastCompleted
+                              ).toLocaleDateString()}{" "} */}
+                              {new Date(
+                                reminder.lastCompleted
+                              ).toLocaleTimeString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between w-full mt-1">
+                        {/* Left side: Category badge and break type */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge
+                            variant="secondary"
+                            className="text-xs bg-accent text-accent-foreground"
+                          >
+                            {categoryInfo.name}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {(reminder as any).breakType === "short"
+                              ? "Short"
+                              : (reminder as any).breakType === "long"
+                              ? "Long"
+                              : "All"}
+                          </Badge>
+                        </div>
+
+                        {/* Right side: Status and action buttons */}
+                        <div className="flex items-center gap-1">
+                          <Switch
+                            checked={reminder.enabled}
+                            onCheckedChange={() => toggleReminder(reminder.id)}
+                            disabled={loading}
+                            className="data-[state=checked]:bg-red-600"
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEdit(reminder)}
+                            disabled={loading}
+                            className="h-8 w-8 p-0 bg-accent hover:bg-accent-foreground cursor-pointer"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDelete(reminder.id)}
+                            disabled={loading}
+                            className="h-8 w-8 p-0 hover:bg-destructive/10 cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
                       </div>
                     </Card>
                   );

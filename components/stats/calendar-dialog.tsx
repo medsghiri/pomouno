@@ -10,6 +10,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar as CalendarIcon, Target, CheckCircle } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { AdvancedStorageService } from "@/lib/advanced-storage-service";
@@ -199,9 +200,22 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
         return true;
       }
 
+      // Regular tasks with due dates on this date (not completed)
+      if (
+        !task.recurring?.enabled &&
+        !task.spacedRepetition?.enabled &&
+        task.dueDate &&
+        !task.completed
+      ) {
+        const taskDueDate = new Date(task.dueDate);
+        taskDueDate.setHours(0, 0, 0, 0);
+        if (taskDueDate.getTime() === checkDateStart) return true;
+      }
+
       // Due tasks (spaced repetition) - only show if not completed today
       if (
-        task.spacedRepetition?.nextReviewDate &&
+        task.spacedRepetition?.enabled &&
+        task.spacedRepetition.nextReviewDate &&
         !(
           task.spacedRepetition.lastReviewed &&
           task.spacedRepetition.lastReviewed >= checkDateStart &&
@@ -438,113 +452,117 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
                   </h3>
 
                   {selectedDate ? (
-                    <div className="space-y-3 overflow-y-auto">
-                      {getTasksForDate(selectedDate).map((task) => {
-                        const checkDate = new Date(selectedDate);
-                        checkDate.setHours(0, 0, 0, 0);
-                        const checkDateStart = checkDate.getTime();
-                        const checkDateEnd =
-                          checkDateStart + 24 * 60 * 60 * 1000 - 1;
+                    <ScrollArea className="">
+                      <div className="space-y-3">
+                        {getTasksForDate(selectedDate).map((task) => {
+                          const checkDate = new Date(selectedDate);
+                          checkDate.setHours(0, 0, 0, 0);
+                          const checkDateStart = checkDate.getTime();
+                          const checkDateEnd =
+                            checkDateStart + 24 * 60 * 60 * 1000 - 1;
 
-                        // Determine if task was completed on this date
-                        const wasCompletedToday =
-                          (task.completedAt &&
-                            task.completedAt >= checkDateStart &&
-                            task.completedAt <= checkDateEnd) ||
-                          (task.recurring?.lastCompleted &&
-                            task.recurring.lastCompleted >= checkDateStart &&
-                            task.recurring.lastCompleted <= checkDateEnd) ||
-                          (task.spacedRepetition?.lastReviewed &&
-                            task.spacedRepetition.lastReviewed >=
-                              checkDateStart &&
-                            task.spacedRepetition.lastReviewed <= checkDateEnd);
+                          // Determine if task was completed on this date
+                          const wasCompletedToday =
+                            (task.completedAt &&
+                              task.completedAt >= checkDateStart &&
+                              task.completedAt <= checkDateEnd) ||
+                            (task.recurring?.lastCompleted &&
+                              task.recurring.lastCompleted >= checkDateStart &&
+                              task.recurring.lastCompleted <= checkDateEnd) ||
+                            (task.spacedRepetition?.lastReviewed &&
+                              task.spacedRepetition.lastReviewed >=
+                                checkDateStart &&
+                              task.spacedRepetition.lastReviewed <=
+                                checkDateEnd);
 
-                        // Determine task status
-                        let status = "Due";
-                        let variant:
-                          | "default"
-                          | "secondary"
-                          | "destructive"
-                          | "outline" = "secondary";
+                          // Determine task status
+                          let status = "Due";
+                          let variant:
+                            | "default"
+                            | "secondary"
+                            | "destructive"
+                            | "outline" = "secondary";
 
-                        if (wasCompletedToday) {
-                          status = "Completed";
-                          variant = "default";
-                        } else if (task.spacedRepetition?.enabled) {
-                          status = "Review Due";
-                          variant = "destructive";
-                        } else if (task.recurring?.enabled) {
-                          status = "Recurring";
-                          variant = "outline";
-                        }
+                          if (wasCompletedToday) {
+                            status = "Completed";
+                            variant = "default";
+                          } else if (task.spacedRepetition?.enabled) {
+                            status = "Review Due";
+                            variant = "destructive";
+                          } else if (task.recurring?.enabled) {
+                            status = "Recurring";
+                            variant = "outline";
+                          }
 
-                        return (
-                          <div
-                            key={`${task.id}-${selectedDate.toISOString()}`}
-                            className="p-4 rounded-xl border bg-background hover:bg-accent/50 transition-all duration-200"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span
-                                    className={`font-medium text-sm ${
-                                      wasCompletedToday
-                                        ? "text-primary line-through"
-                                        : "text-foreground"
-                                    }`}
-                                  >
-                                    {task.title}
-                                  </span>
-                                  {task.priority && (
-                                    <Badge
-                                      variant="outline"
-                                      className={`text-xs ${
-                                        task.priority === "high"
-                                          ? "border-red-300 text-red-700"
-                                          : task.priority === "medium"
-                                          ? "border-yellow-300 text-yellow-700"
-                                          : "border-green-300 text-green-700"
+                          return (
+                            <div
+                              key={`${task.id}-${selectedDate.toISOString()}`}
+                              className="p-4 rounded-xl border bg-background hover:bg-accent/50 transition-all duration-200"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span
+                                      className={`font-medium text-sm ${
+                                        wasCompletedToday
+                                          ? "text-primary line-through"
+                                          : "text-foreground"
                                       }`}
                                     >
-                                      {task.priority}
-                                    </Badge>
+                                      {task.title}
+                                    </span>
+                                    {task.priority && (
+                                      <Badge
+                                        variant="outline"
+                                        className={`text-xs ${
+                                          task.priority === "high"
+                                            ? "border-red-300 text-red-700"
+                                            : task.priority === "medium"
+                                            ? "border-yellow-300 text-yellow-700"
+                                            : "border-green-300 text-green-700"
+                                        }`}
+                                      >
+                                        {task.priority}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {task.description && (
+                                    <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                                      {task.description}
+                                    </p>
+                                  )}
+                                  {task.estimatedSessions && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Estimated: {task.estimatedSessions}{" "}
+                                      session
+                                      {task.estimatedSessions !== 1 ? "s" : ""}
+                                    </p>
+                                  )}
+                                  {wasCompletedToday && (
+                                    <p className="text-xs text-primary mt-2 flex items-center gap-1">
+                                      <CheckCircle className="w-3 h-3" />
+                                      Completed on{" "}
+                                      {selectedDate.toLocaleDateString()}
+                                    </p>
                                   )}
                                 </div>
-                                {task.description && (
-                                  <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
-                                    {task.description}
-                                  </p>
-                                )}
-                                {task.estimatedSessions && (
-                                  <p className="text-xs text-muted-foreground">
-                                    Estimated: {task.estimatedSessions} session
-                                    {task.estimatedSessions !== 1 ? "s" : ""}
-                                  </p>
-                                )}
-                                {wasCompletedToday && (
-                                  <p className="text-xs text-primary mt-2 flex items-center gap-1">
-                                    <CheckCircle className="w-3 h-3" />
-                                    Completed on{" "}
-                                    {selectedDate.toLocaleDateString()}
-                                  </p>
-                                )}
+                                <Badge variant={variant} className="shrink-0">
+                                  {status}
+                                </Badge>
                               </div>
-                              <Badge variant={variant} className="shrink-0">
-                                {status}
-                              </Badge>
                             </div>
+                          );
+                        })}
+                        {getTasksForDate(selectedDate).length === 0 && (
+                          <div className="text-center py-8">
+                            <div className="text-muted-foreground mb-2">📅</div>
+                            <p className="text-muted-foreground">
+                              No tasks scheduled for this date
+                            </p>
                           </div>
-                        );
-                      })}
-                      {getTasksForDate(selectedDate).length === 0 && (
-                        <div className="text-center py-8">
-                          <div className="text-muted-foreground mb-2">📅</div>
-                          <p className="text-muted-foreground">
-                            No tasks scheduled for this date
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    </ScrollArea>
                   ) : (
                     <div className="text-center py-8">
                       <div className="text-muted-foreground mb-2">👆</div>

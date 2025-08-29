@@ -6,6 +6,7 @@ import { TaskManager } from "@/components/tasks/task-manager";
 import { BreakReminderManager } from "@/components/tasks/break-reminder-manager";
 import { StatsDisplay } from "@/components/stats/stats-display";
 import { SettingsPanel } from "@/components/settings/settings-panel";
+import { CalendarDialog } from "@/components/stats/calendar-dialog";
 import { AuthPrompt } from "@/components/auth/auth-prompt";
 import { TaskCompletionDialog } from "@/components/tasks/task-completion-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -31,6 +32,8 @@ interface TimerAppProps {
   setShowTasks: (show: boolean) => void;
   showBreakReminders: boolean;
   setShowBreakReminders: (show: boolean) => void;
+  showCalendar: boolean;
+  setShowCalendar: (show: boolean) => void;
 }
 
 export function TimerApp({
@@ -42,6 +45,8 @@ export function TimerApp({
   setShowTasks,
   showBreakReminders,
   setShowBreakReminders,
+  showCalendar,
+  setShowCalendar,
 }: TimerAppProps) {
   const { user, loading } = useAuth();
   const tasksAccess = useFeatureAccess("tasks");
@@ -657,6 +662,9 @@ export function TimerApp({
             </ScrollArea>
           </SheetContent>
         </Sheet>
+
+        {/* Calendar Dialog */}
+        <CalendarDialog open={showCalendar} onOpenChange={setShowCalendar} />
 
         {/* Timer Section */}
         <div className="w-full flex flex-col items-center justify-center">

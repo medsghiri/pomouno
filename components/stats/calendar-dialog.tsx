@@ -1,0 +1,564 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import { Calendar as CalendarIcon, Target, CheckCircle } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
+import { AdvancedStorageService } from "@/lib/advanced-storage-service";
+import { FirebaseService } from "@/lib/firebase-service";
+import { Task, TodaysStats } from "@/lib/storage";
+
+interface CalendarDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
+  const { user } = useAuth();
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
+    new Date()
+  );
+  const [storageService, setStorageService] =
+    useState<AdvancedStorageService | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [weeklyStats, setWeeklyStats] = useState<TodaysStats[]>([]);
+  const [monthlyStats, setMonthlyStats] = useState<TodaysStats[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      const service = new AdvancedStorageService(user);
+      setStorageService(service);
+    } else {
+      setStorageService(null);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (open && user && storageService) {
+      loadCalendarData();
+    }
+  }, [open, user, storageService]);
+
+  const loadCalendarData = async () => {
+    if (!user || !storageService) return;
+
+    setLoading(true);
+    try {
+      const today = new Date();
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() - 6);
+      weekStart.setHours(0, 0, 0, 0);
+
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+      const monthEnd = new Date(
+        today.getFullYear(),
+        today.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999
+      );
+
+      const [tasksData] = await Promise.all([storageService.getTasks()]);
+
+      // Get sessions for calendar data
+      const sessions = await FirebaseService.getRecentSessions(user, 100);
+
+      // Generate weekly stats array
+      const weeklyStatsArray: TodaysStats[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - i);
+        const dayStart = new Date(
+          date.getFullYear(),
+          date.getMonth(),
+          date.getDate()
+        ).getTime();
+
+        const daySessions = sessions.filter((s) => {
+          const sessionDate = new Date(s.timestamp);
+          const sessionStart = new Date(
+            sessionDate.getFullYear(),
+            sessionDate.getMonth(),
+            sessionDate.getDate()
+          ).getTime();
+          return sessionStart === dayStart;
+        });
+
+        const dayWorkSessions = daySessions.filter(
+          (s) => s.type === "work"
+        ).length;
+
+        weeklyStatsArray.push({
+          sessions: dayWorkSessions,
+          focusTime: 0,
+          date: date.toISOString().split("T")[0],
+          workSessions: dayWorkSessions,
+          shortBreakSessions: 0,
+          longBreakSessions: 0,
+          tasksCompleted: 0,
+          streak: 0,
+          breakRemindersShown: 0,
+          breakRemindersCompleted: 0,
+        });
+      }
+
+      // Generate monthly stats
+      const monthlyStatsArray: TodaysStats[] = [];
+      const daysInMonth = new Date(
+        today.getFullYear(),
+        today.getMonth() + 1,
+        0
+      ).getDate();
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(today.getFullYear(), today.getMonth(), day);
+        const dayStart = date.getTime();
+
+        const daySessions = sessions.filter((s) => {
+          const sessionDate = new Date(s.timestamp);
+          const sessionStart = new Date(
+            sessionDate.getFullYear(),
+            sessionDate.getMonth(),
+            sessionDate.getDate()
+          ).getTime();
+          return sessionStart === dayStart;
+        });
+
+        const dayWorkSessions = daySessions.filter(
+          (s) => s.type === "work"
+        ).length;
+
+        monthlyStatsArray.push({
+          sessions: dayWorkSessions,
+          focusTime: 0,
+          date: date.toISOString().split("T")[0],
+          workSessions: dayWorkSessions,
+          shortBreakSessions: 0,
+          longBreakSessions: 0,
+          tasksCompleted: 0,
+          streak: 0,
+          breakRemindersShown: 0,
+          breakRemindersCompleted: 0,
+        });
+      }
+
+      setTasks(tasksData);
+      setWeeklyStats(weeklyStatsArray);
+      setMonthlyStats(monthlyStatsArray);
+    } catch (error) {
+      console.error("Error loading calendar data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getTasksForDate = (date: Date) => {
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    const checkDateStart = checkDate.getTime();
+    const checkDateEnd = checkDateStart + 24 * 60 * 60 * 1000 - 1;
+
+    return tasks.filter((task) => {
+      // Regular completed tasks on this date
+      if (
+        task.completedAt &&
+        task.completedAt >= checkDateStart &&
+        task.completedAt <= checkDateEnd
+      ) {
+        return true;
+      }
+
+      // Recurring tasks completed on this date
+      if (
+        task.recurring?.enabled &&
+        task.recurring.lastCompleted &&
+        task.recurring.lastCompleted >= checkDateStart &&
+        task.recurring.lastCompleted <= checkDateEnd
+      ) {
+        return true;
+      }
+
+      // Spaced repetition tasks reviewed on this date
+      if (
+        task.spacedRepetition?.enabled &&
+        task.spacedRepetition.lastReviewed &&
+        task.spacedRepetition.lastReviewed >= checkDateStart &&
+        task.spacedRepetition.lastReviewed <= checkDateEnd
+      ) {
+        return true;
+      }
+
+      // Due tasks (spaced repetition) - only show if not completed today
+      if (
+        task.spacedRepetition?.nextReviewDate &&
+        !(
+          task.spacedRepetition.lastReviewed &&
+          task.spacedRepetition.lastReviewed >= checkDateStart &&
+          task.spacedRepetition.lastReviewed <= checkDateEnd
+        )
+      ) {
+        const dueDate = new Date(task.spacedRepetition.nextReviewDate);
+        dueDate.setHours(0, 0, 0, 0);
+        if (dueDate.getTime() === checkDateStart) return true;
+      }
+
+      // Recurring tasks - check if they should appear on this date (only if not completed today)
+      if (
+        task.recurring?.enabled &&
+        !(
+          task.recurring.lastCompleted &&
+          task.recurring.lastCompleted >= checkDateStart &&
+          task.recurring.lastCompleted <= checkDateEnd
+        )
+      ) {
+        const pattern = task.recurring.pattern;
+        const dayOfWeek = checkDate.getDay();
+
+        switch (pattern) {
+          case "daily":
+            return true; // Daily tasks appear every day
+          case "weekdays":
+            return dayOfWeek !== 0 && dayOfWeek !== 6; // Monday-Friday
+          case "weekly":
+            // Check if it's the same day of week as the original
+            const originalDate = new Date(task.createdAt);
+            return dayOfWeek === originalDate.getDay();
+          case "specific-days":
+            return task.recurring.daysOfWeek?.includes(dayOfWeek) || false;
+          default:
+            return false;
+        }
+      }
+
+      return false;
+    });
+  };
+
+  if (!user) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarIcon className="w-5 h-5" />
+              Task Calendar
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-center py-8">
+            <CalendarIcon className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">
+              Sign In Required
+            </h3>
+            <p className="text-muted-foreground">
+              Please sign in to view your task calendar.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-6xl max-h-[90vh]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CalendarIcon className="w-5 h-5" />
+            Task Calendar
+            {selectedDate && (
+              <Badge variant="secondary">
+                {selectedDate.toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </Badge>
+            )}
+          </DialogTitle>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="flex flex-col items-center gap-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <Badge variant="secondary" className="animate-pulse">
+                Loading calendar...
+              </Badge>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Calendar and Task Details Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Calendar Card */}
+              <Card className="p-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                    <CalendarIcon className="w-5 h-5" />
+                    Calendar View
+                  </h3>
+                  <div className="w-full flex justify-center">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={setSelectedDate}
+                      className="rounded-md border-0 w-full"
+                      modifiers={{
+                        hasTask: (date) => {
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          const checkDate = new Date(date);
+                          checkDate.setHours(0, 0, 0, 0);
+                          const checkDateStart = checkDate.getTime();
+                          const checkDateEnd =
+                            checkDateStart + 24 * 60 * 60 * 1000 - 1;
+
+                          // Only show future dates or today for tasks due
+                          if (checkDate.getTime() < today.getTime()) {
+                            return false;
+                          }
+
+                          const tasksForDate = getTasksForDate(date);
+                          // Only show as "has task" if there are uncompleted tasks due
+                          return tasksForDate.some((task) => {
+                            const wasCompletedToday =
+                              (task.completedAt &&
+                                task.completedAt >= checkDateStart &&
+                                task.completedAt <= checkDateEnd) ||
+                              (task.recurring?.lastCompleted &&
+                                task.recurring.lastCompleted >=
+                                  checkDateStart &&
+                                task.recurring.lastCompleted <= checkDateEnd) ||
+                              (task.spacedRepetition?.lastReviewed &&
+                                task.spacedRepetition.lastReviewed >=
+                                  checkDateStart &&
+                                task.spacedRepetition.lastReviewed <=
+                                  checkDateEnd);
+
+                            return !wasCompletedToday;
+                          });
+                        },
+                        hasCompletion: (date) => {
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          const checkDate = new Date(date);
+                          checkDate.setHours(0, 0, 0, 0);
+                          const checkDateStart = checkDate.getTime();
+                          const checkDateEnd =
+                            checkDateStart + 24 * 60 * 60 * 1000 - 1;
+
+                          // Only show past dates or today as having completions
+                          if (checkDate.getTime() > today.getTime()) {
+                            return false;
+                          }
+
+                          // Show any date that has completions (sessions or tasks)
+                          const dateStr = date.toISOString().split("T")[0];
+                          const dayStats = [
+                            ...weeklyStats,
+                            ...monthlyStats,
+                          ].find((s) => s.date === dateStr);
+                          const hasSessionCompletions = dayStats
+                            ? dayStats.sessions > 0
+                            : false;
+
+                          // Check if any tasks were completed on this date
+                          const hasTaskCompletions = tasks.some(
+                            (task) =>
+                              (task.completedAt &&
+                                task.completedAt >= checkDateStart &&
+                                task.completedAt <= checkDateEnd) ||
+                              (task.recurring?.lastCompleted &&
+                                task.recurring.lastCompleted >=
+                                  checkDateStart &&
+                                task.recurring.lastCompleted <= checkDateEnd) ||
+                              (task.spacedRepetition?.lastReviewed &&
+                                task.spacedRepetition.lastReviewed >=
+                                  checkDateStart &&
+                                task.spacedRepetition.lastReviewed <=
+                                  checkDateEnd)
+                          );
+
+                          return hasSessionCompletions || hasTaskCompletions;
+                        },
+                      }}
+                      modifiersStyles={{
+                        hasTask: {
+                          backgroundColor: "hsl(var(--destructive) / 0.2)",
+                          color: "hsl(var(--destructive))",
+                          fontWeight: "bold",
+                        },
+                        hasCompletion: {
+                          backgroundColor: "hsl(var(--primary) / 0.2)",
+                          color: "hsl(var(--primary))",
+                          fontWeight: "bold",
+                        },
+                      }}
+                    />
+                  </div>
+
+                  {/* Legend */}
+                  <div className="flex flex-wrap gap-4 text-xs text-muted-foreground justify-center">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded bg-destructive/20 border border-destructive/40"></div>
+                      <span>Tasks Due</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded bg-primary/20 border border-primary/40"></div>
+                      <span>Completed</span>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Task Details Card */}
+              <Card className="p-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                    <Target className="w-5 h-5" />
+                    {selectedDate
+                      ? `Tasks for ${selectedDate.toLocaleDateString("en-US", {
+                          weekday: "long",
+                          month: "long",
+                          day: "numeric",
+                        })}`
+                      : "Select a date to view tasks"}
+                  </h3>
+
+                  {selectedDate ? (
+                    <div className="space-y-3 overflow-y-auto">
+                      {getTasksForDate(selectedDate).map((task) => {
+                        const checkDate = new Date(selectedDate);
+                        checkDate.setHours(0, 0, 0, 0);
+                        const checkDateStart = checkDate.getTime();
+                        const checkDateEnd =
+                          checkDateStart + 24 * 60 * 60 * 1000 - 1;
+
+                        // Determine if task was completed on this date
+                        const wasCompletedToday =
+                          (task.completedAt &&
+                            task.completedAt >= checkDateStart &&
+                            task.completedAt <= checkDateEnd) ||
+                          (task.recurring?.lastCompleted &&
+                            task.recurring.lastCompleted >= checkDateStart &&
+                            task.recurring.lastCompleted <= checkDateEnd) ||
+                          (task.spacedRepetition?.lastReviewed &&
+                            task.spacedRepetition.lastReviewed >=
+                              checkDateStart &&
+                            task.spacedRepetition.lastReviewed <= checkDateEnd);
+
+                        // Determine task status
+                        let status = "Due";
+                        let variant:
+                          | "default"
+                          | "secondary"
+                          | "destructive"
+                          | "outline" = "secondary";
+
+                        if (wasCompletedToday) {
+                          status = "Completed";
+                          variant = "default";
+                        } else if (task.spacedRepetition?.enabled) {
+                          status = "Review Due";
+                          variant = "destructive";
+                        } else if (task.recurring?.enabled) {
+                          status = "Recurring";
+                          variant = "outline";
+                        }
+
+                        return (
+                          <div
+                            key={`${task.id}-${selectedDate.toISOString()}`}
+                            className="p-4 rounded-xl border bg-background hover:bg-accent/50 transition-all duration-200"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span
+                                    className={`font-medium text-sm ${
+                                      wasCompletedToday
+                                        ? "text-primary line-through"
+                                        : "text-foreground"
+                                    }`}
+                                  >
+                                    {task.title}
+                                  </span>
+                                  {task.priority && (
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-xs ${
+                                        task.priority === "high"
+                                          ? "border-red-300 text-red-700"
+                                          : task.priority === "medium"
+                                          ? "border-yellow-300 text-yellow-700"
+                                          : "border-green-300 text-green-700"
+                                      }`}
+                                    >
+                                      {task.priority}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {task.description && (
+                                  <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                                    {task.description}
+                                  </p>
+                                )}
+                                {task.estimatedSessions && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Estimated: {task.estimatedSessions} session
+                                    {task.estimatedSessions !== 1 ? "s" : ""}
+                                  </p>
+                                )}
+                                {wasCompletedToday && (
+                                  <p className="text-xs text-primary mt-2 flex items-center gap-1">
+                                    <CheckCircle className="w-3 h-3" />
+                                    Completed on{" "}
+                                    {selectedDate.toLocaleDateString()}
+                                  </p>
+                                )}
+                              </div>
+                              <Badge variant={variant} className="shrink-0">
+                                {status}
+                              </Badge>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {getTasksForDate(selectedDate).length === 0 && (
+                        <div className="text-center py-8">
+                          <div className="text-muted-foreground mb-2">📅</div>
+                          <p className="text-muted-foreground">
+                            No tasks scheduled for this date
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="text-muted-foreground mb-2">👆</div>
+                      <p className="text-muted-foreground">
+                        Click on a date in the calendar to view tasks
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}

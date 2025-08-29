@@ -1,50 +1,57 @@
 "use client";
 
-import { useRouter } from 'next/navigation';
-import { Header } from '@/components/layout/header';
-import { useFeatureAccess } from '@/lib/auth-context';
+import { useRouter } from "next/navigation";
+import { Header } from "@/components/layout/header";
+import { useFeatureAccess } from "@/lib/auth-context";
 
 interface ClientHeaderProps {
-    onSettingsClick?: () => void;
-    onStatsClick?: () => void;
-    onTasksClick?: () => void;
-    onBreakRemindersClick?: () => void;
+  onSettingsClick?: () => void;
+  onStatsClick?: () => void;
+  onTasksClick?: () => void;
+  onBreakRemindersClick?: () => void;
+  onCalendarClick?: () => void;
 }
 
 export function ClientHeader({
-    onSettingsClick,
-    onStatsClick,
-    onTasksClick,
-    onBreakRemindersClick
+  onSettingsClick,
+  onStatsClick,
+  onTasksClick,
+  onBreakRemindersClick,
+  onCalendarClick,
 }: ClientHeaderProps) {
-    const router = useRouter();
-    const statisticsAccess = useFeatureAccess('statistics');
-    const tasksAccess = useFeatureAccess('tasks');
-    const breakRemindersAccess = useFeatureAccess('break-reminders');
+  const router = useRouter();
+  const statisticsAccess = useFeatureAccess("statistics");
+  const tasksAccess = useFeatureAccess("tasks");
+  const breakRemindersAccess = useFeatureAccess("break-reminders");
 
-    const handleAuthClick = () => {
-        router.push('/auth');
-    };
+  const handleAuthClick = () => {
+    router.push("/auth");
+  };
 
-    const handleStatsClick = () => {
-        onStatsClick?.();
-    };
+  const handleStatsClick = () => {
+    onStatsClick?.();
+  };
 
-    const handleTasksClick = () => {
-        onTasksClick?.();
-    };
+  const handleTasksClick = () => {
+    onTasksClick?.();
+  };
 
-    const handleBreakRemindersClick = () => {
-        onBreakRemindersClick?.();
-    };
+  const handleBreakRemindersClick = () => {
+    onBreakRemindersClick?.();
+  };
 
-    return (
-        <Header
-            onAuthClick={handleAuthClick}
-            onSettingsClick={onSettingsClick || (() => { })}
-            onStatsClick={handleStatsClick}
-            onTasksClick={handleTasksClick}
-            onBreakRemindersClick={handleBreakRemindersClick}
-        />
-    );
+  const handleCalendarClick = () => {
+    onCalendarClick?.();
+  };
+
+  return (
+    <Header
+      onAuthClick={handleAuthClick}
+      onSettingsClick={onSettingsClick || (() => {})}
+      onStatsClick={handleStatsClick}
+      onTasksClick={handleTasksClick}
+      onBreakRemindersClick={handleBreakRemindersClick}
+      onCalendarClick={handleCalendarClick}
+    />
+  );
 }

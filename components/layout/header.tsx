@@ -1,16 +1,30 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { Logo } from '@/components/logo';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { MobileMenu } from './mobile-menu';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { User, LogOut, Settings, BarChart3, Target, Coffee } from 'lucide-react';
-import { useAuth, useFeatureAccess } from '@/lib/auth-context';
-import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { Logo } from "@/components/logo";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { MobileMenu } from "./mobile-menu";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
+import {
+  User,
+  LogOut,
+  Settings,
+  BarChart3,
+  Target,
+  Coffee,
+  Calendar,
+} from "lucide-react";
+import { useAuth, useFeatureAccess } from "@/lib/auth-context";
+import { useToast } from "@/hooks/use-toast";
 
 interface HeaderProps {
   onAuthClick: () => void;
@@ -18,13 +32,21 @@ interface HeaderProps {
   onStatsClick: () => void;
   onTasksClick: () => void;
   onBreakRemindersClick: () => void;
+  onCalendarClick: () => void;
 }
 
-export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClick, onBreakRemindersClick }: HeaderProps) {
+export function Header({
+  onAuthClick,
+  onSettingsClick,
+  onStatsClick,
+  onTasksClick,
+  onBreakRemindersClick,
+  onCalendarClick,
+}: HeaderProps) {
   const { user, loading, logout } = useAuth();
-  const statisticsAccess = useFeatureAccess('statistics');
-  const tasksAccess = useFeatureAccess('tasks');
-  const breakRemindersAccess = useFeatureAccess('break-reminders');
+  const statisticsAccess = useFeatureAccess("statistics");
+  const tasksAccess = useFeatureAccess("tasks");
+  const breakRemindersAccess = useFeatureAccess("break-reminders");
   const [mounted, setMounted] = useState(false);
   const { toast } = useToast();
 
@@ -36,11 +58,9 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
     try {
       await logout();
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
     }
   };
-
-
 
   if (!mounted) {
     return (
@@ -49,9 +69,7 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
               <Logo />
-              <h1 className="text-2xl font-bold text-white">
-                PomoUno
-              </h1>
+              <h1 className="text-2xl font-bold text-white">PomoUno</h1>
             </div>
           </div>
         </div>
@@ -68,9 +86,7 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
             <Logo clickable />
             <div>
               <Link href="/" className="hover:opacity-80 transition-opacity">
-                <h1 className="text-2xl font-bold text-foreground">
-                  PomoUno
-                </h1>
+                <h1 className="text-2xl font-bold text-foreground">PomoUno</h1>
               </Link>
             </div>
           </div>
@@ -87,7 +103,11 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
                     variant="ghost"
                     size="sm"
                     className="text-foreground hover:text-foreground hover:bg-accent transition-colors px-2 sm:px-3"
-                    title={tasksAccess.canAccess ? "Tasks" : "Tasks (Sign up required)"}
+                    title={
+                      tasksAccess.canAccess
+                        ? "Tasks"
+                        : "Tasks (Sign up required)"
+                    }
                   >
                     <Target className="w-4 h-4 sm:mr-2" />
                     <span className="hidden sm:inline">Tasks</span>
@@ -102,7 +122,11 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
                     variant="ghost"
                     size="sm"
                     className="text-foreground hover:text-foreground hover:bg-accent transition-colors px-2 sm:px-3"
-                    title={breakRemindersAccess.canAccess ? "Break Reminders" : "Break Reminders (Sign up required)"}
+                    title={
+                      breakRemindersAccess.canAccess
+                        ? "Break Reminders"
+                        : "Break Reminders (Sign up required)"
+                    }
                   >
                     <Coffee className="w-4 h-4 sm:mr-2" />
                     <span className="hidden sm:inline">Breaks</span>
@@ -117,11 +141,34 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
                     variant="ghost"
                     size="sm"
                     className="text-foreground hover:text-foreground hover:bg-accent transition-colors px-2 sm:px-3"
-                    title={statisticsAccess.canAccess ? "Statistics" : "Statistics (Sign up required)"}
+                    title={
+                      statisticsAccess.canAccess
+                        ? "Statistics"
+                        : "Statistics (Sign up required)"
+                    }
                   >
                     <BarChart3 className="w-4 h-4 sm:mr-2" />
                     <span className="hidden sm:inline">Stats</span>
                     {!statisticsAccess.canAccess && (
+                      <span className="ml-1 text-xs opacity-60">*</span>
+                    )}
+                  </Button>
+
+                  {/* Calendar Button */}
+                  <Button
+                    onClick={onCalendarClick}
+                    variant="ghost"
+                    size="sm"
+                    className="text-foreground hover:text-foreground hover:bg-accent transition-colors px-2 sm:px-3"
+                    title={
+                      user
+                        ? "Task Calendar"
+                        : "Task Calendar (Sign up required)"
+                    }
+                  >
+                    <Calendar className="w-4 h-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Calendar</span>
+                    {!user && (
                       <span className="ml-1 text-xs opacity-60">*</span>
                     )}
                   </Button>
@@ -147,29 +194,42 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
                   {user ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="gap-1 sm:gap-2 hover:bg-accent transition-colors px-2 sm:px-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1 sm:gap-2 hover:bg-accent transition-colors px-2 sm:px-3"
+                        >
                           <Avatar className="w-6 h-6">
                             <AvatarFallback className="bg-red-900 text-xs font-semibold text-white">
                               {user.email?.charAt(0).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <span className="hidden sm:inline text-sm font-medium">
-                            {user.displayName || user.email?.split('@')[0]}
+                            {user.displayName || user.email?.split("@")[0]}
                           </span>
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-56">
                         <div className="p-2">
-                          <p className="text-sm font-medium">{user.displayName || user.email}</p>
-                          <p className="text-xs text-muted-foreground">Signed in</p>
+                          <p className="text-sm font-medium">
+                            {user.displayName || user.email}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Signed in
+                          </p>
                         </div>
 
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => window.location.href = '/account'}>
+                        <DropdownMenuItem
+                          onClick={() => (window.location.href = "/account")}
+                        >
                           <User className="w-4 h-4 mr-2" />
                           Account Settings
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleSignOut} className="text-red-600">
+                        <DropdownMenuItem
+                          onClick={handleSignOut}
+                          className="text-red-600"
+                        >
                           <LogOut className="w-4 h-4 mr-2" />
                           Sign Out
                         </DropdownMenuItem>
@@ -177,7 +237,7 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
                     </DropdownMenu>
                   ) : (
                     <Button
-                      onClick={() => window.location.href = '/auth/signin'}
+                      onClick={() => (window.location.href = "/auth/signin")}
                       size="sm"
                       className="bg-red-700 hover:bg-red-600 dark:text-white px-2 sm:px-3"
                     >
@@ -194,6 +254,7 @@ export function Header({ onAuthClick, onSettingsClick, onStatsClick, onTasksClic
                   onStatsClick={onStatsClick}
                   onTasksClick={onTasksClick}
                   onBreakRemindersClick={onBreakRemindersClick}
+                  onCalendarClick={onCalendarClick}
                 />
               </>
             )}

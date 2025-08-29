@@ -1,17 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Calendar as CalendarIcon, Target, CheckCircle } from "lucide-react";
+import { Calendar as CalendarIcon, Target, CheckCircle, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { AdvancedStorageService } from "@/lib/advanced-storage-service";
 import { FirebaseService } from "@/lib/firebase-service";
@@ -261,322 +256,370 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
 
   if (!user) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CalendarIcon className="w-5 h-5" />
-              Task Calendar
-            </DialogTitle>
-          </DialogHeader>
-          <div className="text-center py-8">
-            <CalendarIcon className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-              Sign In Required
-            </h3>
-            <p className="text-muted-foreground">
-              Please sign in to view your task calendar.
-            </p>
+      <>
+        {open && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-background rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+              <div className="p-6 border-b border-accent flex items-center justify-between">
+                <h2 className="text-xl font-semibold flex items-center gap-2 text-foreground">
+                  <CalendarIcon className="w-5 h-5 text-red-600 dark:text-red-400" />
+                  Task Calendar
+                </h2>
+                <button
+                  onClick={() => onOpenChange(false)}
+                  className="text-muted-foreground hover:text-foreground transition-colors p-2 hover:bg-accent rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-6">
+                <div className="text-center py-8">
+                  <CalendarIcon className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <h3 className="text-lg font-semibold text-foreground mb-2">
+                    Sign In Required
+                  </h3>
+                  <p className="text-muted-foreground">
+                    Please sign in to view your task calendar.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        )}
+      </>
     );
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CalendarIcon className="w-5 h-5" />
-            Task Calendar
-            {selectedDate && (
-              <Badge variant="secondary">
-                {selectedDate.toLocaleDateString("en-US", {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </Badge>
-            )}
-          </DialogTitle>
-        </DialogHeader>
-
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="flex flex-col items-center gap-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              <Badge variant="secondary" className="animate-pulse">
-                Loading calendar...
-              </Badge>
+    <>
+      {open && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-background rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-accent flex items-center justify-between">
+              <h2 className="text-xl font-semibold flex items-center gap-2 text-foreground">
+                <CalendarIcon className="w-5 h-5 text-red-600 dark:text-red-400" />
+                Task Calendar
+                {selectedDate && (
+                  <Badge variant="secondary" className="ml-2">
+                    {selectedDate.toLocaleDateString("en-US", {
+                      weekday: "long",
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </Badge>
+                )}
+              </h2>
+              <button
+                onClick={() => onOpenChange(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors p-2 hover:bg-accent rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Calendar and Task Details Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Calendar Card */}
-              <Card className="p-6">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                    <CalendarIcon className="w-5 h-5" />
-                    Calendar View
-                  </h3>
-                  <div className="w-full flex justify-center">
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={setSelectedDate}
-                      className="rounded-md border-0 w-full"
-                      modifiers={{
-                        hasTask: (date) => {
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-                          const checkDate = new Date(date);
-                          checkDate.setHours(0, 0, 0, 0);
-                          const checkDateStart = checkDate.getTime();
-                          const checkDateEnd =
-                            checkDateStart + 24 * 60 * 60 * 1000 - 1;
-
-                          // Only show future dates or today for tasks due
-                          if (checkDate.getTime() < today.getTime()) {
-                            return false;
-                          }
-
-                          const tasksForDate = getTasksForDate(date);
-                          // Only show as "has task" if there are uncompleted tasks due
-                          return tasksForDate.some((task) => {
-                            const wasCompletedToday =
-                              (task.completedAt &&
-                                task.completedAt >= checkDateStart &&
-                                task.completedAt <= checkDateEnd) ||
-                              (task.recurring?.lastCompleted &&
-                                task.recurring.lastCompleted >=
-                                  checkDateStart &&
-                                task.recurring.lastCompleted <= checkDateEnd) ||
-                              (task.spacedRepetition?.lastReviewed &&
-                                task.spacedRepetition.lastReviewed >=
-                                  checkDateStart &&
-                                task.spacedRepetition.lastReviewed <=
-                                  checkDateEnd);
-
-                            return !wasCompletedToday;
-                          });
-                        },
-                        hasCompletion: (date) => {
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-                          const checkDate = new Date(date);
-                          checkDate.setHours(0, 0, 0, 0);
-                          const checkDateStart = checkDate.getTime();
-                          const checkDateEnd =
-                            checkDateStart + 24 * 60 * 60 * 1000 - 1;
-
-                          // Only show past dates or today as having completions
-                          if (checkDate.getTime() > today.getTime()) {
-                            return false;
-                          }
-
-                          // Show any date that has completions (sessions or tasks)
-                          const dateStr = date.toISOString().split("T")[0];
-                          const dayStats = [
-                            ...weeklyStats,
-                            ...monthlyStats,
-                          ].find((s) => s.date === dateStr);
-                          const hasSessionCompletions = dayStats
-                            ? dayStats.sessions > 0
-                            : false;
-
-                          // Check if any tasks were completed on this date
-                          const hasTaskCompletions = tasks.some(
-                            (task) =>
-                              (task.completedAt &&
-                                task.completedAt >= checkDateStart &&
-                                task.completedAt <= checkDateEnd) ||
-                              (task.recurring?.lastCompleted &&
-                                task.recurring.lastCompleted >=
-                                  checkDateStart &&
-                                task.recurring.lastCompleted <= checkDateEnd) ||
-                              (task.spacedRepetition?.lastReviewed &&
-                                task.spacedRepetition.lastReviewed >=
-                                  checkDateStart &&
-                                task.spacedRepetition.lastReviewed <=
-                                  checkDateEnd)
-                          );
-
-                          return hasSessionCompletions || hasTaskCompletions;
-                        },
-                      }}
-                      modifiersStyles={{
-                        hasTask: {
-                          backgroundColor: "hsl(var(--destructive) / 0.2)",
-                          color: "hsl(var(--destructive))",
-                          fontWeight: "bold",
-                        },
-                        hasCompletion: {
-                          backgroundColor: "hsl(var(--primary) / 0.2)",
-                          color: "hsl(var(--primary))",
-                          fontWeight: "bold",
-                        },
-                      }}
-                    />
-                  </div>
-
-                  {/* Legend */}
-                  <div className="flex flex-wrap gap-4 text-xs text-muted-foreground justify-center">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded bg-destructive/20 border border-destructive/40"></div>
-                      <span>Tasks Due</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded bg-primary/20 border border-primary/40"></div>
-                      <span>Completed</span>
+            <ScrollArea className="h-[calc(90vh-120px)]">
+              <div className="p-6">
+                {loading ? (
+                  <div className="text-center py-12">
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                      <Badge variant="secondary" className="animate-pulse">
+                        Loading calendar...
+                      </Badge>
                     </div>
                   </div>
-                </div>
-              </Card>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Calendar and Task Details Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Calendar Card */}
+                      <Card className="p-6">
+                        <div className="space-y-4">
+                          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                            <CalendarIcon className="w-5 h-5" />
+                            Calendar View
+                          </h3>
+                          <div className="w-full flex justify-center">
+                            <Calendar
+                              mode="single"
+                              selected={selectedDate}
+                              onSelect={setSelectedDate}
+                              className="rounded-md border-0 w-full"
+                              modifiers={{
+                                hasTask: (date) => {
+                                  const today = new Date();
+                                  today.setHours(0, 0, 0, 0);
+                                  const checkDate = new Date(date);
+                                  checkDate.setHours(0, 0, 0, 0);
+                                  const checkDateStart = checkDate.getTime();
+                                  const checkDateEnd =
+                                    checkDateStart + 24 * 60 * 60 * 1000 - 1;
 
-              {/* Task Details Card */}
-              <Card className="p-6">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                    <Target className="w-5 h-5" />
-                    {selectedDate
-                      ? `Tasks for ${selectedDate.toLocaleDateString("en-US", {
-                          weekday: "long",
-                          month: "long",
-                          day: "numeric",
-                        })}`
-                      : "Select a date to view tasks"}
-                  </h3>
+                                  // Only show future dates or today for tasks due
+                                  if (checkDate.getTime() < today.getTime()) {
+                                    return false;
+                                  }
 
-                  {selectedDate ? (
-                    <ScrollArea className="">
-                      <div className="space-y-3">
-                        {getTasksForDate(selectedDate).map((task) => {
-                          const checkDate = new Date(selectedDate);
-                          checkDate.setHours(0, 0, 0, 0);
-                          const checkDateStart = checkDate.getTime();
-                          const checkDateEnd =
-                            checkDateStart + 24 * 60 * 60 * 1000 - 1;
+                                  const tasksForDate = getTasksForDate(date);
+                                  // Only show as "has task" if there are uncompleted tasks due
+                                  return tasksForDate.some((task) => {
+                                    const wasCompletedToday =
+                                      (task.completedAt &&
+                                        task.completedAt >= checkDateStart &&
+                                        task.completedAt <= checkDateEnd) ||
+                                      (task.recurring?.lastCompleted &&
+                                        task.recurring.lastCompleted >=
+                                          checkDateStart &&
+                                        task.recurring.lastCompleted <=
+                                          checkDateEnd) ||
+                                      (task.spacedRepetition?.lastReviewed &&
+                                        task.spacedRepetition.lastReviewed >=
+                                          checkDateStart &&
+                                        task.spacedRepetition.lastReviewed <=
+                                          checkDateEnd);
 
-                          // Determine if task was completed on this date
-                          const wasCompletedToday =
-                            (task.completedAt &&
-                              task.completedAt >= checkDateStart &&
-                              task.completedAt <= checkDateEnd) ||
-                            (task.recurring?.lastCompleted &&
-                              task.recurring.lastCompleted >= checkDateStart &&
-                              task.recurring.lastCompleted <= checkDateEnd) ||
-                            (task.spacedRepetition?.lastReviewed &&
-                              task.spacedRepetition.lastReviewed >=
-                                checkDateStart &&
-                              task.spacedRepetition.lastReviewed <=
-                                checkDateEnd);
+                                    return !wasCompletedToday;
+                                  });
+                                },
+                                hasCompletion: (date) => {
+                                  const today = new Date();
+                                  today.setHours(0, 0, 0, 0);
+                                  const checkDate = new Date(date);
+                                  checkDate.setHours(0, 0, 0, 0);
+                                  const checkDateStart = checkDate.getTime();
+                                  const checkDateEnd =
+                                    checkDateStart + 24 * 60 * 60 * 1000 - 1;
 
-                          // Determine task status
-                          let status = "Due";
-                          let variant:
-                            | "default"
-                            | "secondary"
-                            | "destructive"
-                            | "outline" = "secondary";
+                                  // Only show past dates or today as having completions
+                                  if (checkDate.getTime() > today.getTime()) {
+                                    return false;
+                                  }
 
-                          if (wasCompletedToday) {
-                            status = "Completed";
-                            variant = "default";
-                          } else if (task.spacedRepetition?.enabled) {
-                            status = "Review Due";
-                            variant = "destructive";
-                          } else if (task.recurring?.enabled) {
-                            status = "Recurring";
-                            variant = "outline";
-                          }
+                                  // Show any date that has completions (sessions or tasks)
+                                  const dateStr = date
+                                    .toISOString()
+                                    .split("T")[0];
+                                  const dayStats = [
+                                    ...weeklyStats,
+                                    ...monthlyStats,
+                                  ].find((s) => s.date === dateStr);
+                                  const hasSessionCompletions = dayStats
+                                    ? dayStats.sessions > 0
+                                    : false;
 
-                          return (
-                            <div
-                              key={`${task.id}-${selectedDate.toISOString()}`}
-                              className="p-4 rounded-xl border bg-background hover:bg-accent/50 transition-all duration-200"
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span
-                                      className={`font-medium text-sm ${
-                                        wasCompletedToday
-                                          ? "text-primary line-through"
-                                          : "text-foreground"
-                                      }`}
-                                    >
-                                      {task.title}
-                                    </span>
-                                    {task.priority && (
-                                      <Badge
-                                        variant="outline"
-                                        className={`text-xs ${
-                                          task.priority === "high"
-                                            ? "border-red-300 text-red-700"
-                                            : task.priority === "medium"
-                                            ? "border-yellow-300 text-yellow-700"
-                                            : "border-green-300 text-green-700"
-                                        }`}
-                                      >
-                                        {task.priority}
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  {task.description && (
-                                    <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
-                                      {task.description}
-                                    </p>
-                                  )}
-                                  {task.estimatedSessions && (
-                                    <p className="text-xs text-muted-foreground">
-                                      Estimated: {task.estimatedSessions}{" "}
-                                      session
-                                      {task.estimatedSessions !== 1 ? "s" : ""}
-                                    </p>
-                                  )}
-                                  {wasCompletedToday && (
-                                    <p className="text-xs text-primary mt-2 flex items-center gap-1">
-                                      <CheckCircle className="w-3 h-3" />
-                                      Completed on{" "}
-                                      {selectedDate.toLocaleDateString()}
-                                    </p>
-                                  )}
-                                </div>
-                                <Badge variant={variant} className="shrink-0">
-                                  {status}
-                                </Badge>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {getTasksForDate(selectedDate).length === 0 && (
-                          <div className="text-center py-8">
-                            <div className="text-muted-foreground mb-2">📅</div>
-                            <p className="text-muted-foreground">
-                              No tasks scheduled for this date
-                            </p>
+                                  // Check if any tasks were completed on this date
+                                  const hasTaskCompletions = tasks.some(
+                                    (task) =>
+                                      (task.completedAt &&
+                                        task.completedAt >= checkDateStart &&
+                                        task.completedAt <= checkDateEnd) ||
+                                      (task.recurring?.lastCompleted &&
+                                        task.recurring.lastCompleted >=
+                                          checkDateStart &&
+                                        task.recurring.lastCompleted <=
+                                          checkDateEnd) ||
+                                      (task.spacedRepetition?.lastReviewed &&
+                                        task.spacedRepetition.lastReviewed >=
+                                          checkDateStart &&
+                                        task.spacedRepetition.lastReviewed <=
+                                          checkDateEnd)
+                                  );
+
+                                  return (
+                                    hasSessionCompletions || hasTaskCompletions
+                                  );
+                                },
+                              }}
+                              modifiersStyles={{
+                                hasTask: {
+                                  backgroundColor:
+                                    "hsl(var(--destructive) / 0.2)",
+                                  color: "hsl(var(--destructive))",
+                                  fontWeight: "bold",
+                                },
+                                hasCompletion: {
+                                  backgroundColor: "hsl(var(--primary) / 0.2)",
+                                  color: "hsl(var(--primary))",
+                                  fontWeight: "bold",
+                                },
+                              }}
+                            />
                           </div>
-                        )}
-                      </div>
-                    </ScrollArea>
-                  ) : (
-                    <div className="text-center py-8">
-                      <div className="text-muted-foreground mb-2">👆</div>
-                      <p className="text-muted-foreground">
-                        Click on a date in the calendar to view tasks
-                      </p>
+
+                          {/* Legend */}
+                          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground justify-center">
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded bg-destructive/20 border border-destructive/40"></div>
+                              <span>Tasks Due</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded bg-primary/20 border border-primary/40"></div>
+                              <span>Completed</span>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+
+                      {/* Task Details Card */}
+                      <Card className="p-6">
+                        <div className="space-y-4">
+                          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                            <Target className="w-5 h-5" />
+                            {selectedDate
+                              ? `Tasks for ${selectedDate.toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    weekday: "long",
+                                    month: "long",
+                                    day: "numeric",
+                                  }
+                                )}`
+                              : "Select a date to view tasks"}
+                          </h3>
+
+                          {selectedDate ? (
+                            <ScrollArea className="">
+                              <div className="space-y-3">
+                                {getTasksForDate(selectedDate).map((task) => {
+                                  const checkDate = new Date(selectedDate);
+                                  checkDate.setHours(0, 0, 0, 0);
+                                  const checkDateStart = checkDate.getTime();
+                                  const checkDateEnd =
+                                    checkDateStart + 24 * 60 * 60 * 1000 - 1;
+
+                                  // Determine if task was completed on this date
+                                  const wasCompletedToday =
+                                    (task.completedAt &&
+                                      task.completedAt >= checkDateStart &&
+                                      task.completedAt <= checkDateEnd) ||
+                                    (task.recurring?.lastCompleted &&
+                                      task.recurring.lastCompleted >=
+                                        checkDateStart &&
+                                      task.recurring.lastCompleted <=
+                                        checkDateEnd) ||
+                                    (task.spacedRepetition?.lastReviewed &&
+                                      task.spacedRepetition.lastReviewed >=
+                                        checkDateStart &&
+                                      task.spacedRepetition.lastReviewed <=
+                                        checkDateEnd);
+
+                                  // Determine task status
+                                  let status = "Due";
+                                  let variant:
+                                    | "default"
+                                    | "secondary"
+                                    | "destructive"
+                                    | "outline" = "secondary";
+
+                                  if (wasCompletedToday) {
+                                    status = "Completed";
+                                    variant = "default";
+                                  } else if (task.spacedRepetition?.enabled) {
+                                    status = "Review Due";
+                                    variant = "destructive";
+                                  } else if (task.recurring?.enabled) {
+                                    status = "Recurring";
+                                    variant = "outline";
+                                  }
+
+                                  return (
+                                    <div
+                                      key={`${
+                                        task.id
+                                      }-${selectedDate.toISOString()}`}
+                                      className="p-4 rounded-xl border bg-background hover:bg-accent/50 transition-all duration-200"
+                                    >
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 mb-1">
+                                            <span
+                                              className={`font-medium text-sm ${
+                                                wasCompletedToday
+                                                  ? "text-primary line-through"
+                                                  : "text-foreground"
+                                              }`}
+                                            >
+                                              {task.title}
+                                            </span>
+                                            {task.priority && (
+                                              <Badge
+                                                variant="outline"
+                                                className={`text-xs ${
+                                                  task.priority === "high"
+                                                    ? "border-red-300 text-red-700"
+                                                    : task.priority === "medium"
+                                                    ? "border-yellow-300 text-yellow-700"
+                                                    : "border-green-300 text-green-700"
+                                                }`}
+                                              >
+                                                {task.priority}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                          {task.description && (
+                                            <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                                              {task.description}
+                                            </p>
+                                          )}
+                                          {task.estimatedSessions && (
+                                            <p className="text-xs text-muted-foreground">
+                                              Estimated:{" "}
+                                              {task.estimatedSessions} session
+                                              {task.estimatedSessions !== 1
+                                                ? "s"
+                                                : ""}
+                                            </p>
+                                          )}
+                                          {wasCompletedToday && (
+                                            <p className="text-xs text-primary mt-2 flex items-center gap-1">
+                                              <CheckCircle className="w-3 h-3" />
+                                              Completed on{" "}
+                                              {selectedDate.toLocaleDateString()}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <Badge
+                                          variant={variant}
+                                          className="shrink-0"
+                                        >
+                                          {status}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                                {getTasksForDate(selectedDate).length === 0 && (
+                                  <div className="text-center py-8">
+                                    <div className="text-muted-foreground mb-2">
+                                      📅
+                                    </div>
+                                    <p className="text-muted-foreground">
+                                      No tasks scheduled for this date
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </ScrollArea>
+                          ) : (
+                            <div className="text-center py-8">
+                              <div className="text-muted-foreground mb-2">
+                                👆
+                              </div>
+                              <p className="text-muted-foreground">
+                                Click on a date in the calendar to view tasks
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </Card>
                     </div>
-                  )}
-                </div>
-              </Card>
-            </div>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
           </div>
-        )}
-      </DialogContent>
-    </Dialog>
+        </div>
+      )}
+    </>
   );
 }

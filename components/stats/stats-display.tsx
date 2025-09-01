@@ -141,8 +141,8 @@ export function StatsDisplay() {
             storageService.getBreakReminderCompletions(),
           ]);
 
-        // Get sessions for detailed stats
-        const sessions = await FirebaseService.getRecentSessions(user, 100);
+        // Get sessions for detailed stats - increase limit to ensure we get all sessions
+        const sessions = await FirebaseService.getRecentSessions(user, 500);
 
         // Calculate today's detailed stats
         const todaySessions = sessions.filter((s) => {
@@ -151,8 +151,9 @@ export function StatsDisplay() {
             sessionDate.getFullYear(),
             sessionDate.getMonth(),
             sessionDate.getDate()
-          ).getTime();
-          return sessionStart === todayStart;
+          );
+          sessionStart.setHours(0, 0, 0, 0);
+          return sessionStart.getTime() === todayStart;
         });
 
         const todayWorkSessions = todaySessions.filter(
@@ -267,8 +268,9 @@ export function StatsDisplay() {
               sessionDate.getFullYear(),
               sessionDate.getMonth(),
               sessionDate.getDate()
-            ).getTime();
-            return sessionStart === dayStart;
+            );
+            sessionStart.setHours(0, 0, 0, 0);
+            return sessionStart.getTime() === dayStart;
           });
 
           const dayWorkSessions = daySessions.filter(
@@ -343,6 +345,8 @@ export function StatsDisplay() {
             currentDate.getMonth(),
             day
           );
+          // Ensure we're working with start of day in local time
+          date.setHours(0, 0, 0, 0);
           const dayStart = date.getTime();
           const dayEnd = dayStart + 24 * 60 * 60 * 1000 - 1;
 
@@ -352,8 +356,9 @@ export function StatsDisplay() {
               sessionDate.getFullYear(),
               sessionDate.getMonth(),
               sessionDate.getDate()
-            ).getTime();
-            return sessionStart === dayStart;
+            );
+            sessionStart.setHours(0, 0, 0, 0);
+            return sessionStart.getTime() === dayStart;
           });
 
           const dayWorkSessions = daySessions.filter(

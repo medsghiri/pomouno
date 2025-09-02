@@ -56,9 +56,12 @@ export function useTasks() {
             return await storageService.getTasks();
         },
         enabled: !!user && !!storageService,
-        staleTime: 30 * 1000, // 30 seconds - tasks change frequently
-        gcTime: 2 * 60 * 1000, // 2 minutes
-        refetchOnWindowFocus: true, // Refetch when user comes back to tab
+        staleTime: Infinity, // Never consider data stale - rely on manual invalidation
+        gcTime: 10 * 60 * 1000, // 10 minutes
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        refetchOnMount: false, // Don't refetch on component mount
+        refetchInterval: false, // Disable automatic refetching
     });
 }
 
@@ -496,10 +499,16 @@ export function useTaskMutations() {
             // If the mutation fails, use the context returned from onMutate to roll back
             queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), context?.previousTasks);
         },
-        onSettled: () => {
-            // Always refetch after error or success
-            queryClient.invalidateQueries({ queryKey: queryKeys.tasks(user?.uid || '') });
+        onSuccess: (createdTask) => {
+            // Replace the temporary task with the real one from server
+            queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), (old: any[]) => {
+                if (!old) return [createdTask];
+                // Remove temp task and add real one
+                const withoutTemp = old.filter(t => !t.id.startsWith('temp_'));
+                return [createdTask, ...withoutTemp];
+            });
         },
+        // No automatic invalidation - rely on optimistic updates and onSuccess
     });
 
     const updateTask = useMutation({
@@ -507,10 +516,39 @@ export function useTaskMutations() {
             if (!storageService) throw new Error('Not authenticated');
             return await storageService.updateTask(id, updates);
         },
-        onSuccess: (_, { id }) => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.tasks(user?.uid || '') });
-            queryClient.invalidateQueries({ queryKey: queryKeys.task(user?.uid || '', id) });
+        onMutate: async ({ id, updates }) => {
+            // Cancel any outgoing refetches
+            await queryClient.cancelQueries({ queryKey: queryKeys.tasks(user?.uid || '') });
+
+            // Snapshot the previous value
+            const previousTasks = queryClient.getQueryData(queryKeys.tasks(user?.uid || ''));
+
+            // Optimistically update the task
+            queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), (old: any[]) => {
+                if (!old) return old;
+                return old.map(task =>
+                    task.id === id
+                        ? { ...task, ...updates }
+                        : task
+                );
+            });
+
+            return { previousTasks };
         },
+        onError: (err, { id, updates }, context) => {
+            // Roll back on error
+            queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), context?.previousTasks);
+        },
+        onSuccess: (updatedTask, { id }) => {
+            // Update cache with server response
+            queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), (old: any[]) => {
+                if (!old) return old;
+                return old.map(task =>
+                    task.id === id ? updatedTask : task
+                );
+            });
+        },
+        // No automatic invalidation - rely on optimistic updates
     });
 
     const deleteTask = useMutation({
@@ -518,9 +556,26 @@ export function useTaskMutations() {
             if (!storageService) throw new Error('Not authenticated');
             return await storageService.deleteTask(id);
         },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.tasks(user?.uid || '') });
+        onMutate: async (id) => {
+            // Cancel any outgoing refetches
+            await queryClient.cancelQueries({ queryKey: queryKeys.tasks(user?.uid || '') });
+
+            // Snapshot the previous value
+            const previousTasks = queryClient.getQueryData(queryKeys.tasks(user?.uid || ''));
+
+            // Optimistically remove the task
+            queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), (old: any[]) => {
+                if (!old) return old;
+                return old.filter(task => task.id !== id);
+            });
+
+            return { previousTasks };
         },
+        onError: (err, id, context) => {
+            // Roll back on error
+            queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), context?.previousTasks);
+        },
+        // No automatic invalidation - the optimistic update is the final state
     });
 
     const completeTask = useMutation({
@@ -551,11 +606,16 @@ export function useTaskMutations() {
             // Roll back on error
             queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), context?.previousTasks);
         },
-        onSuccess: (_, { taskId }) => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.tasks(user?.uid || '') });
-            queryClient.invalidateQueries({ queryKey: queryKeys.task(user?.uid || '', taskId) });
-            queryClient.invalidateQueries({ queryKey: queryKeys.taskSessions(user?.uid || '', taskId, getTodayString()) });
+        onSuccess: (completedTask, { taskId }) => {
+            // Update cache with server response
+            queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), (old: any[]) => {
+                if (!old) return old;
+                return old.map(task =>
+                    task.id === taskId ? completedTask : task
+                );
+            });
         },
+        // No automatic invalidation - rely on optimistic updates and onSuccess
     });
 
     return {

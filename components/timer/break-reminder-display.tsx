@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Coffee, Check, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -73,17 +74,26 @@ export function BreakReminderDisplay({
   useEffect(() => {
     if (isVisible) {
       setCompletedReminders(new Set());
-      setIsManuallyDismissed(false); // Reset when new break session starts
-
-      // Report shown reminders
-      if (onRemindersCompleted && reminders.length > 0) {
-        onRemindersCompleted(
-          [],
-          reminders.map((r) => r.id)
-        );
-      }
+      setIsManuallyDismissed(false);
     }
-  }, [isVisible, reminders, onRemindersCompleted]);
+  }, [isVisible]);
+
+  // Report shown reminders when dialog becomes visible (separate effect)
+  useEffect(() => {
+    if (isVisible && reminders.length > 0 && onRemindersCompleted) {
+      const reminderIds = reminders.map((r) => r.id);
+      onRemindersCompleted([], reminderIds);
+    }
+  }, [isVisible]); // Only depend on isVisible to avoid loops
+
+  // Report completions when they change
+  useEffect(() => {
+    if (isVisible && onRemindersCompleted && completedReminders.size > 0) {
+      const completedArray = Array.from(completedReminders);
+      const reminderIds = reminders.map((r) => r.id);
+      onRemindersCompleted(completedArray, reminderIds);
+    }
+  }, [completedReminders.size]); // Only depend on the size to avoid loops
 
   const getCategoryInfo = (categoryId: string) => {
     const category = DEFAULT_CATEGORIES.find(
@@ -109,16 +119,6 @@ export function BreakReminderDisplay({
         newSet.add(reminderId);
         return newSet;
       });
-
-      // Report completion
-      if (onRemindersCompleted) {
-        const completedArray = Array.from(completedReminders);
-        completedArray.push(reminderId);
-        onRemindersCompleted(
-          completedArray,
-          reminders.map((r) => r.id)
-        );
-      }
     } catch (error) {
       console.error("Failed to increment reminder count:", error);
     }
@@ -129,12 +129,12 @@ export function BreakReminderDisplay({
     return null;
   }
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setIsManuallyDismissed(true);
     if (onClose) {
       onClose();
     }
-  };
+  }, [onClose]);
 
   const shouldShowDialog =
     isVisible &&
@@ -151,7 +151,7 @@ export function BreakReminderDisplay({
         }
       }}
     >
-      <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[80vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Coffee className="w-5 h-5 text-orange-500" />
@@ -165,83 +165,85 @@ export function BreakReminderDisplay({
             activity.
           </div>
 
-          <div className="space-y-3">
-            {reminders.map((reminder) => {
-              const categoryInfo = getCategoryInfo(reminder.category);
-              const isCompleted = completedReminders.has(reminder.id);
+          <ScrollArea className="max-h-[50vh]">
+            <div className="space-y-3 pr-2">
+              {reminders.map((reminder) => {
+                const categoryInfo = getCategoryInfo(reminder.category);
+                const isCompleted = completedReminders.has(reminder.id);
 
-              return (
-                <div
-                  key={reminder.id}
-                  className={cn(
-                    "flex items-start gap-3 p-3 rounded-lg border transition-all duration-200",
-                    isCompleted
-                      ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700/50"
-                      : "bg-background/50 border-accent/50 hover:bg-accent/10"
-                  )}
-                >
-                  <div className="flex-shrink-0 mt-0.5">
-                    <span className="text-base">{categoryInfo.icon}</span>
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4
-                        className={cn(
-                          "font-medium text-sm",
-                          isCompleted
-                            ? "line-through text-muted-foreground"
-                            : "text-foreground"
-                        )}
-                      >
-                        {reminder.title}
-                      </h4>
-                      <Badge variant="outline" className="text-xs capitalize">
-                        {categoryInfo.name}
-                      </Badge>
-                    </div>
-
-                    <p
-                      className={cn(
-                        "text-sm",
-                        isCompleted
-                          ? "line-through text-muted-foreground"
-                          : "text-muted-foreground"
-                      )}
-                    >
-                      {reminder.description}
-                    </p>
-
-                    {/* Show current count */}
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Today: {getTodaysCount(reminder.id)} times
-                    </div>
-                  </div>
-
-                  <Button
-                    size="sm"
-                    variant={isCompleted ? "default" : "outline"}
-                    onClick={() => incrementReminderCount(reminder.id)}
-                    disabled={
-                      incrementBreakReminderCount.isPending || isCompleted
-                    }
+                return (
+                  <div
+                    key={reminder.id}
                     className={cn(
-                      "flex-shrink-0",
+                      "flex items-start gap-3 p-3 rounded-lg border transition-all duration-200",
                       isCompleted
-                        ? "bg-green-600 hover:bg-green-700 text-white"
-                        : "hover:bg-accent"
+                        ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700/50"
+                        : "bg-background/50 border-accent/50 hover:bg-accent/10"
                     )}
                   >
-                    {isCompleted ? (
-                      <Check className="w-4 h-4" />
-                    ) : (
-                      <Plus className="w-4 h-4" />
-                    )}
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
+                    <div className="flex-shrink-0 mt-0.5">
+                      <span className="text-base">{categoryInfo.icon}</span>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4
+                          className={cn(
+                            "font-medium text-sm",
+                            isCompleted
+                              ? "line-through text-muted-foreground"
+                              : "text-foreground"
+                          )}
+                        >
+                          {reminder.title}
+                        </h4>
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {categoryInfo.name}
+                        </Badge>
+                      </div>
+
+                      <p
+                        className={cn(
+                          "text-sm",
+                          isCompleted
+                            ? "line-through text-muted-foreground"
+                            : "text-muted-foreground"
+                        )}
+                      >
+                        {reminder.description}
+                      </p>
+
+                      {/* Show current count */}
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Today: {getTodaysCount(reminder.id)} times
+                      </div>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      variant={isCompleted ? "default" : "outline"}
+                      onClick={() => incrementReminderCount(reminder.id)}
+                      disabled={
+                        incrementBreakReminderCount.isPending || isCompleted
+                      }
+                      className={cn(
+                        "flex-shrink-0",
+                        isCompleted
+                          ? "bg-green-600 hover:bg-green-700 text-white"
+                          : "hover:bg-accent"
+                      )}
+                    >
+                      {isCompleted ? (
+                        <Check className="w-4 h-4" />
+                      ) : (
+                        <Plus className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </ScrollArea>
 
           <div className="flex justify-end pt-4">
             <Button onClick={handleClose} variant="outline">

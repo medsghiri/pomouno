@@ -122,8 +122,9 @@ export function useBreakReminders() {
         gcTime: 10 * 60 * 1000, // 10 minutes
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
-        refetchOnMount: false, // Don't refetch on component mount
+        refetchOnMount: 'always', // Always refetch on mount to get latest data
         refetchInterval: false, // Disable automatic refetching
+        retry: 1, // Reduce retries to prevent multiple calls
     });
 }
 
@@ -185,6 +186,10 @@ export function useBreakReminderCategories() {
         },
         enabled: !!user && !!storageService,
         staleTime: 10 * 60 * 1000, // 10 minutes - categories rarely change
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        refetchOnMount: 'always', // Always refetch on mount to get latest data
+        retry: 1, // Reduce retries to prevent multiple calls
     });
 }
 
@@ -795,24 +800,14 @@ export function useBreakReminderMutations() {
             queryClient.setQueryData(queryKeys.breakReminderCompletions(user?.uid || '', getTodayString()), context?.previousCompletions);
             queryClient.setQueryData(queryKeys.breakReminders(user?.uid || ''), context?.previousReminders);
         },
-        onSuccess: (data, reminderId) => {
-            // Replace the temporary completion with the real one from server
-            if (data && data.completions) {
-                queryClient.setQueryData(queryKeys.breakReminderCompletions(user?.uid || '', getTodayString()), (old: any[]) => {
-                    if (!old) return data.completions;
-                    // Remove temp completion and add real ones
-                    const withoutTemp = old.filter(c => !c.id.startsWith('temp_'));
-                    return [...withoutTemp, ...data.completions.filter((c: any) => c.reminderId === reminderId)];
-                });
-            }
-
+        onSuccess: (updatedReminder, reminderId) => {
             // Update reminder with server response
-            if (data && data.lastCompleted !== undefined) {
+            if (updatedReminder && updatedReminder.lastCompleted !== undefined) {
                 queryClient.setQueryData(queryKeys.breakReminders(user?.uid || ''), (old: any[]) => {
                     if (!old) return old;
                     return old.map(reminder =>
                         reminder.id === reminderId
-                            ? { ...reminder, lastCompleted: data.lastCompleted }
+                            ? { ...reminder, lastCompleted: updatedReminder.lastCompleted }
                             : reminder
                     );
                 });
@@ -858,14 +853,14 @@ export function useBreakReminderMutations() {
             queryClient.setQueryData(queryKeys.breakReminderCompletions(user?.uid || '', getTodayString()), context?.previousCompletions);
             queryClient.setQueryData(queryKeys.breakReminders(user?.uid || ''), context?.previousReminders);
         },
-        onSuccess: (data, reminderId) => {
+        onSuccess: (updatedReminder, reminderId) => {
             // Update reminder cache with actual server response if needed
-            if (data && data.lastCompleted !== undefined) {
+            if (updatedReminder && updatedReminder.lastCompleted !== undefined) {
                 queryClient.setQueryData(queryKeys.breakReminders(user?.uid || ''), (old: any[]) => {
                     if (!old) return old;
                     return old.map(reminder =>
                         reminder.id === reminderId
-                            ? { ...reminder, lastCompleted: data.lastCompleted }
+                            ? { ...reminder, lastCompleted: updatedReminder.lastCompleted }
                             : reminder
                     );
                 });

@@ -94,40 +94,56 @@ export function BreakReminderManager() {
   // Initialize default categories and reminders if needed
   useEffect(() => {
     const initializeDefaults = async () => {
-      if (!user || categories.length > 0) return;
+      // Only initialize if user is authenticated and data has loaded
+      if (!user || remindersLoading || categoriesLoading) return;
 
       try {
         const storageService = new AdvancedStorageService(user);
 
+        // First, clean up any existing duplicates
+        if (reminders.length > 0) {
+          await storageService.cleanupDuplicateBreakReminders();
+        }
+
+        // Check if we need to initialize (no existing data)
+        const needsCategories = categories.length === 0;
+        const needsReminders = reminders.length === 0;
+
+        if (!needsCategories && !needsReminders) return;
+
         // Create default categories if none exist
-        for (const defaultCat of DEFAULT_CATEGORIES) {
-          try {
-            await storageService.createCategory({
-              name: defaultCat.name,
-              color: defaultCat.color,
-              icon: defaultCat.icon,
-              type: "break-reminder",
-            });
-          } catch (error) {
-            console.error("Failed to create default category:", error);
+        if (needsCategories) {
+          console.log("Creating default break reminder categories...");
+          for (const defaultCat of DEFAULT_CATEGORIES) {
+            try {
+              await storageService.createCategory({
+                name: defaultCat.name,
+                color: defaultCat.color,
+                icon: defaultCat.icon,
+                type: "break-reminder",
+              });
+            } catch (error) {
+              console.error("Failed to create default category:", error);
+            }
           }
         }
 
         // Create default reminders if none exist
-        if (reminders.length === 0) {
+        if (needsReminders) {
+          console.log("Creating default break reminders...");
           const defaultReminderData = [
             {
               title: "Drink Water",
               description: "Stay hydrated! Take a sip of water.",
               category: "hydration",
-              enabled: false,
+              enabled: true,
               breakType: "all" as const,
             },
             {
               title: "Stretch",
               description: "Stand up and do some light stretching.",
               category: "movement",
-              enabled: false,
+              enabled: true,
               breakType: "all" as const,
             },
             {
@@ -159,8 +175,11 @@ export function BreakReminderManager() {
       }
     };
 
-    initializeDefaults();
-  }, [user, categories.length, reminders.length, createBreakReminder]);
+    // Only run once when data is loaded and user is available
+    if (user && !remindersLoading && !categoriesLoading) {
+      initializeDefaults();
+    }
+  }, [user?.uid, remindersLoading, categoriesLoading]); // Only depend on user ID and loading states
 
   const resetForm = () => {
     setTitle("");

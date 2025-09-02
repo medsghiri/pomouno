@@ -1017,6 +1017,17 @@ export class AdvancedStorageService {
 
     async createBreakReminder(reminderData: CreateBreakReminderRequest): Promise<BreakReminder> {
         try {
+            // Check if a reminder with the same title already exists to prevent duplicates
+            const existingReminders = await this.getBreakReminders();
+            const duplicateReminder = existingReminders.find(
+                reminder => reminder.title.toLowerCase() === reminderData.title.toLowerCase()
+            );
+
+            if (duplicateReminder) {
+                console.log(`Break reminder "${reminderData.title}" already exists, skipping creation`);
+                return duplicateReminder;
+            }
+
             const reminder: Omit<BreakReminder, 'id'> = {
                 ...reminderData,
                 enabled: reminderData.enabled ?? true,
@@ -1409,6 +1420,20 @@ export class AdvancedStorageService {
 
     async createCategory(categoryData: CreateCategoryRequest): Promise<TaskCategory | BreakReminderCategory> {
         try {
+            // Check if a category with the same name already exists to prevent duplicates
+            const existingCategories = categoryData.type === 'task'
+                ? await this.getTaskCategories()
+                : await this.getBreakReminderCategories();
+
+            const duplicateCategory = existingCategories.find(
+                category => category.name.toLowerCase() === categoryData.name.toLowerCase()
+            );
+
+            if (duplicateCategory) {
+                console.log(`Category "${categoryData.name}" already exists, skipping creation`);
+                return duplicateCategory;
+            }
+
             const now = Date.now();
             const category: any = {
                 ...categoryData,
@@ -1460,6 +1485,42 @@ export class AdvancedStorageService {
         } catch (error) {
             console.error('Failed to delete category:', error);
             throw error;
+        }
+    }
+
+    // Utility method to clean up duplicate break reminders
+    async cleanupDuplicateBreakReminders(): Promise<void> {
+        try {
+            const reminders = await this.getBreakReminders();
+            const seenTitles = new Set<string>();
+            const duplicates: string[] = [];
+
+            // Find duplicates
+            for (const reminder of reminders) {
+                const titleKey = reminder.title.toLowerCase();
+                if (seenTitles.has(titleKey)) {
+                    duplicates.push(reminder.id);
+                } else {
+                    seenTitles.add(titleKey);
+                }
+            }
+
+            // Delete duplicates (keep the first occurrence)
+            if (duplicates.length > 0) {
+                console.log(`Found ${duplicates.length} duplicate break reminders, cleaning up...`);
+                const batch = writeBatch(db);
+
+                for (const duplicateId of duplicates) {
+                    const reminderRef = doc(db, 'users', this.user.uid, 'breakReminders', duplicateId);
+                    batch.delete(reminderRef);
+                }
+
+                await batch.commit();
+                this.invalidateCache('break_reminders');
+                console.log('Duplicate break reminders cleaned up successfully');
+            }
+        } catch (error) {
+            console.error('Failed to cleanup duplicate break reminders:', error);
         }
     }
 

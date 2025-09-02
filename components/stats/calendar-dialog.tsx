@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/auth-context";
 import { AdvancedStorageService } from "@/lib/advanced-storage-service";
 import { FirebaseService } from "@/lib/firebase-service";
 import { Task, TodaysStats } from "@/lib/storage";
+import { useTasks, useSessions } from "@/hooks/use-app-data";
 
 interface CalendarDialogProps {
   open: boolean;
@@ -22,142 +23,102 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     new Date()
   );
-  const [storageService, setStorageService] =
-    useState<AdvancedStorageService | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [weeklyStats, setWeeklyStats] = useState<TodaysStats[]>([]);
-  const [monthlyStats, setMonthlyStats] = useState<TodaysStats[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      const service = new AdvancedStorageService(user);
-      setStorageService(service);
-    } else {
-      setStorageService(null);
+  // Use optimized hooks for data fetching
+  const { data: tasks = [], isLoading: tasksLoading } = useTasks();
+  const { data: sessions = [], isLoading: sessionsLoading } = useSessions();
+
+  const loading = tasksLoading || sessionsLoading;
+
+  // Generate stats arrays from sessions data
+  const { weeklyStats, monthlyStats } = (() => {
+    if (!sessions.length) {
+      return { weeklyStats: [], monthlyStats: [] };
     }
-  }, [user]);
 
-  useEffect(() => {
-    if (open && user && storageService) {
-      loadCalendarData();
-    }
-  }, [open, user, storageService]);
+    const today = new Date();
 
-  const loadCalendarData = async () => {
-    if (!user || !storageService) return;
+    // Generate weekly stats array
+    const weeklyStatsArray: TodaysStats[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - i);
+      const dayStart = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate()
+      ).getTime();
 
-    setLoading(true);
-    try {
-      const today = new Date();
-      const weekStart = new Date(today);
-      weekStart.setDate(today.getDate() - 6);
-      weekStart.setHours(0, 0, 0, 0);
-
-      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-      const monthEnd = new Date(
-        today.getFullYear(),
-        today.getMonth() + 1,
-        0,
-        23,
-        59,
-        59,
-        999
-      );
-
-      const [tasksData] = await Promise.all([storageService.getTasks()]);
-
-      // Get sessions for calendar data
-      const sessions = await FirebaseService.getRecentSessions(user, 100);
-
-      // Generate weekly stats array
-      const weeklyStatsArray: TodaysStats[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date(today);
-        date.setDate(today.getDate() - i);
-        const dayStart = new Date(
-          date.getFullYear(),
-          date.getMonth(),
-          date.getDate()
+      const daySessions = sessions.filter((s) => {
+        const sessionDate = new Date(s.timestamp);
+        const sessionStart = new Date(
+          sessionDate.getFullYear(),
+          sessionDate.getMonth(),
+          sessionDate.getDate()
         ).getTime();
+        return sessionStart === dayStart;
+      });
 
-        const daySessions = sessions.filter((s) => {
-          const sessionDate = new Date(s.timestamp);
-          const sessionStart = new Date(
-            sessionDate.getFullYear(),
-            sessionDate.getMonth(),
-            sessionDate.getDate()
-          ).getTime();
-          return sessionStart === dayStart;
-        });
+      const dayWorkSessions = daySessions.filter(
+        (s) => s.type === "work"
+      ).length;
 
-        const dayWorkSessions = daySessions.filter(
-          (s) => s.type === "work"
-        ).length;
-
-        weeklyStatsArray.push({
-          sessions: dayWorkSessions,
-          focusTime: 0,
-          date: date.toISOString().split("T")[0],
-          workSessions: dayWorkSessions,
-          shortBreakSessions: 0,
-          longBreakSessions: 0,
-          tasksCompleted: 0,
-          streak: 0,
-          breakRemindersShown: 0,
-          breakRemindersCompleted: 0,
-        });
-      }
-
-      // Generate monthly stats
-      const monthlyStatsArray: TodaysStats[] = [];
-      const daysInMonth = new Date(
-        today.getFullYear(),
-        today.getMonth() + 1,
-        0
-      ).getDate();
-
-      for (let day = 1; day <= daysInMonth; day++) {
-        const date = new Date(today.getFullYear(), today.getMonth(), day);
-        const dayStart = date.getTime();
-
-        const daySessions = sessions.filter((s) => {
-          const sessionDate = new Date(s.timestamp);
-          const sessionStart = new Date(
-            sessionDate.getFullYear(),
-            sessionDate.getMonth(),
-            sessionDate.getDate()
-          ).getTime();
-          return sessionStart === dayStart;
-        });
-
-        const dayWorkSessions = daySessions.filter(
-          (s) => s.type === "work"
-        ).length;
-
-        monthlyStatsArray.push({
-          sessions: dayWorkSessions,
-          focusTime: 0,
-          date: date.toISOString().split("T")[0],
-          workSessions: dayWorkSessions,
-          shortBreakSessions: 0,
-          longBreakSessions: 0,
-          tasksCompleted: 0,
-          streak: 0,
-          breakRemindersShown: 0,
-          breakRemindersCompleted: 0,
-        });
-      }
-
-      setTasks(tasksData);
-      setWeeklyStats(weeklyStatsArray);
-      setMonthlyStats(monthlyStatsArray);
-    } catch (error) {
-      console.error("Error loading calendar data:", error);
-    } finally {
-      setLoading(false);
+      weeklyStatsArray.push({
+        sessions: dayWorkSessions,
+        focusTime: 0,
+        date: date.toISOString().split("T")[0],
+        workSessions: dayWorkSessions,
+        shortBreakSessions: 0,
+        longBreakSessions: 0,
+        tasksCompleted: 0,
+        streak: 0,
+        breakRemindersShown: 0,
+        breakRemindersCompleted: 0,
+      });
     }
-  };
+
+    // Generate monthly stats
+    const monthlyStatsArray: TodaysStats[] = [];
+    const daysInMonth = new Date(
+      today.getFullYear(),
+      today.getMonth() + 1,
+      0
+    ).getDate();
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(today.getFullYear(), today.getMonth(), day);
+      const dayStart = date.getTime();
+
+      const daySessions = sessions.filter((s) => {
+        const sessionDate = new Date(s.timestamp);
+        const sessionStart = new Date(
+          sessionDate.getFullYear(),
+          sessionDate.getMonth(),
+          sessionDate.getDate()
+        ).getTime();
+        return sessionStart === dayStart;
+      });
+
+      const dayWorkSessions = daySessions.filter(
+        (s) => s.type === "work"
+      ).length;
+
+      monthlyStatsArray.push({
+        sessions: dayWorkSessions,
+        focusTime: 0,
+        date: date.toISOString().split("T")[0],
+        workSessions: dayWorkSessions,
+        shortBreakSessions: 0,
+        longBreakSessions: 0,
+        tasksCompleted: 0,
+        streak: 0,
+        breakRemindersShown: 0,
+        breakRemindersCompleted: 0,
+      });
+    }
+
+    return { weeklyStats: weeklyStatsArray, monthlyStats: monthlyStatsArray };
+  })();
 
   const getTasksForDate = (date: Date) => {
     const checkDate = new Date(date);
@@ -561,7 +522,7 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
                                               {task.description}
                                             </p>
                                           )}
-                                          {task.estimatedSessions && (
+                                          {/* {task.estimatedSessions && (
                                             <p className="text-xs text-muted-foreground">
                                               Estimated:{" "}
                                               {task.estimatedSessions} session
@@ -569,7 +530,7 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
                                                 ? "s"
                                                 : ""}
                                             </p>
-                                          )}
+                                          )} */}
                                           {wasCompletedToday && (
                                             <p className="text-xs text-primary mt-2 flex items-center gap-1">
                                               <CheckCircle className="w-3 h-3" />

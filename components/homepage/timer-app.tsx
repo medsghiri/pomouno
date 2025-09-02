@@ -18,6 +18,7 @@ import { FirebaseService } from "@/lib/firebase-service";
 import { AdvancedStorageService } from "@/lib/advanced-storage-service";
 import type { Task } from "@/lib/advanced-storage-service";
 import { useToast } from "@/hooks/use-toast";
+import { useSessionMutations } from "@/hooks/use-app-data";
 import { Settings, BarChart3, X, Target, Coffee } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useRouter } from "next/navigation";
@@ -71,6 +72,7 @@ export function TimerApp({
   const [todaysTaskSessions, setTodaysTaskSessions] = useState(0);
   const { toast } = useToast();
   const router = useRouter();
+  const { recordSession } = useSessionMutations();
 
   const loadFirebaseSessions = useCallback(async () => {
     if (!user) return;
@@ -426,39 +428,11 @@ export function TimerApp({
         });
       }
 
+      // Use the optimized session mutation
+      recordSession.mutate(session);
+
       if (user) {
-        // Use AdvancedStorageService if available, otherwise fallback to FirebaseService
-        if (storageService) {
-          // Record session and wait for it to complete before dispatching event
-          storageService
-            .recordSession(session)
-            .then(async () => {
-              // Immediately sync sessions after recording to get updated count
-              await loadFirebaseSessions();
-              // Dispatch event after session is saved and synced
-              window.dispatchEvent(
-                new CustomEvent("sessionCompleted", { detail: session })
-              );
-            })
-            .catch(console.error);
-        } else {
-          FirebaseService.saveSessions(user, [session])
-            .then(async () => {
-              // Immediately sync sessions after saving
-              await loadFirebaseSessions();
-              // Dispatch event for non-advanced storage
-              window.dispatchEvent(
-                new CustomEvent("sessionCompleted", { detail: session })
-              );
-            })
-            .catch(console.error);
-        }
         FirebaseService.saveStats(user, updatedStats).catch(console.error);
-      } else {
-        // For non-authenticated users, dispatch immediately
-        window.dispatchEvent(
-          new CustomEvent("sessionCompleted", { detail: session })
-        );
       }
 
       if (!user) {

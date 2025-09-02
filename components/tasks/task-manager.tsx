@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Plus,
   Trash2,
@@ -74,12 +74,20 @@ import type { Task, TaskCategory } from "@/lib/advanced-storage-service";
 import { TaskCompletionAnimation } from "./task-completion-animation";
 import { DifficultySelectionDialog } from "./difficulty-selection-dialog";
 import { TaskCompletionEstimation } from "./task-completion-estimation";
+import { TaskSessionDisplay } from "./task-session-display";
 import { Logo } from "@/components/logo";
 
 import { FeatureGate } from "@/components/auth/feature-gate";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
+import {
+  useTasks,
+  useTaskCategories,
+  useTodaysTaskSessions,
+  useTaskMutations,
+  useTodaysStats,
+} from "@/hooks/use-app-data";
 
 // Utility function to truncate text
 const truncateText = (text: string, maxLength: number): string => {
@@ -114,10 +122,21 @@ export function TaskManager({
   isTimerActive,
   selectedTaskId,
 }: TaskManagerProps) {
-  const { user, storageProvider } = useAuth();
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [storageService, setStorageService] =
-    useState<AdvancedStorageService | null>(null);
+  const { user } = useAuth();
+
+  // Use optimized hooks for data fetching
+  const {
+    data: tasks = [],
+    isLoading: tasksLoading,
+    error: tasksError,
+  } = useTasks();
+  const { data: availableCategories = [], isLoading: categoriesLoading } =
+    useTaskCategories();
+  const todaysStats = useTodaysStats();
+
+  // Use mutation hooks for optimistic updates
+  const { createTask, updateTask, deleteTask, completeTask } =
+    useTaskMutations();
 
   // Animation states
   const [showCompletionAnimation, setShowCompletionAnimation] = useState(false);
@@ -176,35 +195,20 @@ export function TaskManager({
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryColor, setNewCategoryColor] = useState("#EF4444");
   const [newCategoryIcon, setNewCategoryIcon] = useState<IconItem | null>(null);
-  const [availableCategories, setAvailableCategories] = useState<
-    TaskCategory[]
-  >([]);
-  const [todaysTaskSessions, setTodaysTaskSessions] = useState<
-    Record<string, number>
-  >({});
-
   const { toast } = useToast();
   const [settings, setSettings] = useState(LocalStorage.getSettings());
 
-  useEffect(() => {
-    if (user) {
-      const service = new AdvancedStorageService(user);
-      setStorageService(service);
-    } else {
-      setStorageService(null);
-    }
-  }, [user]);
+  // Memoize today's task sessions for better performance
+  const todaysTaskSessions = useMemo(() => {
+    const sessionsMap: Record<string, number> = {};
+    tasks.forEach((task) => {
+      // This will be populated by individual task session queries when needed
+      sessionsMap[task.id] = 0;
+    });
+    return sessionsMap;
+  }, [tasks]);
 
   useEffect(() => {
-    loadTasks();
-    loadCategories();
-
-    // Listen for Firebase data sync to refresh tasks
-    const handleFirebaseDataSynced = () => {
-      loadTasks();
-      loadCategories();
-    };
-
     // Listen for settings updates to refresh UI
     const handleSettingsUpdated = (event: Event) => {
       const customEvent = event as CustomEvent;
@@ -212,61 +216,12 @@ export function TaskManager({
       setSettings(updatedSettings);
     };
 
-    // Listen for session completion to refresh task sessions
-    const handleSessionCompleted = async (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const session = customEvent.detail;
-      // If it's a work session with a task, update that specific task's session count
-      if (session?.type === "work" && session?.taskId && storageService) {
-        try {
-          const updatedCount = await storageService.getTodaysTaskSessions(
-            session.taskId
-          );
-          setTodaysTaskSessions((prev) => ({
-            ...prev,
-            [session.taskId]: updatedCount,
-          }));
-        } catch (error) {
-          console.error("Failed to update task session count:", error);
-          // Fallback: reload all tasks
-          loadTasks();
-        }
-      } else {
-        // For other cases, reload all tasks
-        loadTasks();
-      }
-    };
-
-    window.addEventListener("firebaseDataSynced", handleFirebaseDataSynced);
-    window.addEventListener("sessionCompleted", handleSessionCompleted);
     window.addEventListener("settingsUpdated", handleSettingsUpdated);
 
     return () => {
-      window.removeEventListener(
-        "firebaseDataSynced",
-        handleFirebaseDataSynced
-      );
-      window.removeEventListener("sessionCompleted", handleSessionCompleted);
       window.removeEventListener("settingsUpdated", handleSettingsUpdated);
     };
-  }, [storageService]);
-
-  const loadCategories = async () => {
-    if (!storageService) {
-      // Fallback to localStorage for unauthenticated users
-      setAvailableCategories(TaskUtils.getAllTaskCategories());
-      return;
-    }
-
-    try {
-      const categories = await storageService.getTaskCategories();
-      setAvailableCategories(categories);
-    } catch (error) {
-      console.error("Failed to load task categories:", error);
-      // Fallback to localStorage
-      setAvailableCategories(TaskUtils.getAllTaskCategories());
-    }
-  };
+  }, []);
 
   const createCategory = async () => {
     if (!newCategoryName.trim()) {
@@ -281,16 +236,16 @@ export function TaskManager({
     let createdCategory: any = null;
     const categoryName = newCategoryName.trim();
 
-    if (storageService) {
-      // Create category in Firebase
+    if (user) {
+      // Create category in Firebase using AdvancedStorageService
       try {
+        const storageService = new AdvancedStorageService(user);
         createdCategory = await storageService.createCategory({
           name: categoryName,
           color: newCategoryColor,
           icon: newCategoryIcon?.emoji,
           type: "task",
         });
-        await loadCategories();
       } catch (error) {
         console.error("Failed to create category:", error);
         toast({
@@ -307,9 +262,6 @@ export function TaskManager({
         newCategoryColor,
         newCategoryIcon?.emoji
       );
-
-      // Category creation handled by Firebase service
-      loadCategories();
     }
 
     // Set the new category as selected
@@ -337,59 +289,6 @@ export function TaskManager({
     setNewCategoryIcon(icon);
   };
 
-  const loadTasks = async () => {
-    if (storageService) {
-      try {
-        const firebaseTasks = await storageService.getTasks();
-
-        // Filter and sort tasks properly
-        const activeTasks = firebaseTasks.filter((task) => !task.archivedAt);
-
-        setTasks(activeTasks);
-
-        // Load today's sessions for each task
-        const sessionsMap: Record<string, number> = {};
-        await Promise.all(
-          activeTasks.map(async (task) => {
-            try {
-              const todaySessions = await storageService.getTodaysTaskSessions(
-                task.id
-              );
-              sessionsMap[task.id] = todaySessions;
-            } catch (error) {
-              console.error(
-                `Failed to load today's sessions for task ${task.id}:`,
-                error
-              );
-              sessionsMap[task.id] = 0;
-            }
-          })
-        );
-        setTodaysTaskSessions(sessionsMap);
-      } catch (error) {
-        console.error("Failed to load tasks from Firebase:", error);
-        toast({
-          title: "Failed to load tasks",
-          description: "Please check your connection and try again.",
-          variant: "destructive",
-        });
-        // No fallback needed - tasks are Firebase-only
-      }
-    } else {
-      // No tasks for unauthenticated users
-      setTasks([]);
-      setTodaysTaskSessions({});
-    }
-  };
-
-  const saveTasks = (updatedTasks: Task[]) => {
-    if (!storageService) {
-      // No tasks for unauthenticated users
-      return;
-    }
-    setTasks(updatedTasks);
-  };
-
   const toggleTask = async (taskId: string) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
@@ -409,48 +308,13 @@ export function TaskManager({
         return;
       }
 
-      // Complete the task using Firebase service
+      // Complete the task using mutation hook
       try {
-        if (storageService) {
-          const updatedTask = await storageService.completeTask(taskId);
+        const updatedTask = await completeTask.mutateAsync({ taskId });
 
-          // Show completion animation
-          setCompletedTask(updatedTask);
-          setShowCompletionAnimation(true);
-
-          // For recurring tasks, refresh immediately so they disappear
-          if (updatedTask.recurring?.enabled) {
-            // Small delay to show the animation, then refresh
-            setTimeout(async () => {
-              await loadTasks();
-            }, 500);
-          } else {
-            // For regular tasks, reload after animation
-            setTimeout(async () => {
-              await loadTasks();
-            }, 1300);
-          }
-        } else {
-          // Fallback to localStorage for unauthenticated users
-          if (task.recurring?.enabled) {
-            if (!canCompleteRecurringTask(task)) {
-              toast({
-                title: "Already completed today",
-                description:
-                  "Recurring tasks can only be completed once per day.",
-                variant: "destructive",
-              });
-              return;
-            }
-          }
-
-          // Task completion handled by Firebase service
-          loadTasks();
-
-          // Show completion animation
-          setCompletedTask(task);
-          setShowCompletionAnimation(true);
-        }
+        // Show completion animation
+        setCompletedTask(updatedTask);
+        setShowCompletionAnimation(true);
       } catch (error: any) {
         toast({
           title: "Failed to complete task",
@@ -489,25 +353,14 @@ export function TaskManager({
     if (!pendingSpacedRepetitionTask) return;
 
     try {
-      if (storageService) {
-        const updatedTask = await storageService.completeTask(
-          pendingSpacedRepetitionTask.id,
-          difficulty
-        );
+      const updatedTask = await completeTask.mutateAsync({
+        taskId: pendingSpacedRepetitionTask.id,
+        difficulty,
+      });
 
-        // Show completion animation
-        setCompletedTask(updatedTask);
-        setShowCompletionAnimation(true);
-
-        // Reload tasks to get updated state
-        await loadTasks();
-      } else {
-        // Task completion handled by Firebase service
-        loadTasks();
-
-        setCompletedTask(pendingSpacedRepetitionTask);
-        setShowCompletionAnimation(true);
-      }
+      // Show completion animation
+      setCompletedTask(updatedTask);
+      setShowCompletionAnimation(true);
     } catch (error: any) {
       toast({
         title: "Failed to complete task",
@@ -841,119 +694,57 @@ export function TaskManager({
     try {
       if (editingTaskId) {
         // Editing existing task
-        if (storageService) {
-          const updates: Partial<Task> = {
-            title: editingTitle.trim(),
-            description: editingDescription.trim() || undefined,
-            estimatedSessions: editingEstimate,
-            priority: editingPriorityEnabled ? editingPriority : undefined,
-            category:
-              editingCategory && editingCategory !== "none"
-                ? editingCategory.trim()
-                : undefined,
-            dueDate: editingDueDate ? editingDueDate.getTime() : undefined,
+        const updates: Partial<Task> = {
+          title: editingTitle.trim(),
+          description: editingDescription.trim() || undefined,
+          estimatedSessions: editingEstimate,
+          priority: editingPriorityEnabled ? editingPriority : undefined,
+          category:
+            editingCategory && editingCategory !== "none"
+              ? editingCategory.trim()
+              : undefined,
+          dueDate: editingDueDate ? editingDueDate.getTime() : undefined,
+        };
+
+        // Handle spaced repetition
+        if (editingSpacedRepetition) {
+          const existingTask = tasks.find((t) => t.id === editingTaskId);
+          updates.spacedRepetition = {
+            enabled: true,
+            difficulty: existingTask?.spacedRepetition?.difficulty || "medium",
+            nextReviewDate:
+              existingTask?.spacedRepetition?.nextReviewDate || Date.now(),
+            reviewCount: existingTask?.spacedRepetition?.reviewCount || 0,
+            lastReviewed: existingTask?.spacedRepetition?.lastReviewed,
+            interval: existingTask?.spacedRepetition?.interval || 1,
+            easeFactor: existingTask?.spacedRepetition?.easeFactor || 2.5,
           };
-
-          // Handle spaced repetition
-          if (editingSpacedRepetition) {
-            const existingTask = tasks.find((t) => t.id === editingTaskId);
-            updates.spacedRepetition = {
-              enabled: true,
-              difficulty:
-                existingTask?.spacedRepetition?.difficulty || "medium", // Default to medium, will be set on first review
-              nextReviewDate:
-                existingTask?.spacedRepetition?.nextReviewDate || Date.now(),
-              reviewCount: existingTask?.spacedRepetition?.reviewCount || 0,
-              lastReviewed: existingTask?.spacedRepetition?.lastReviewed,
-              interval: existingTask?.spacedRepetition?.interval || 1,
-              easeFactor: existingTask?.spacedRepetition?.easeFactor || 2.5,
-            };
-          } else {
-            updates.spacedRepetition = undefined;
-          }
-
-          // Handle recurring
-          if (editingRecurring) {
-            const existingTask = tasks.find((t) => t.id === editingTaskId);
-            const now = new Date();
-            now.setHours(0, 0, 0, 0);
-
-            updates.recurring = {
-              enabled: true,
-              pattern: editingRecurringPattern,
-              interval: editingRecurringInterval,
-              daysOfWeek:
-                editingRecurringPattern === "specific-days"
-                  ? editingRecurringDaysOfWeek
-                  : undefined,
-              nextDue: existingTask?.recurring?.nextDue || now.getTime(),
-              lastCompleted: existingTask?.recurring?.lastCompleted,
-            };
-          } else {
-            updates.recurring = undefined;
-          }
-
-          await storageService.updateTask(editingTaskId, updates);
-          await loadTasks();
         } else {
-          // Fallback to localStorage
-          const updatedTasks = tasks.map((task) => {
-            if (task.id === editingTaskId) {
-              const updatedTask: Task = {
-                ...task,
-                title: editingTitle.trim(),
-                description: editingDescription.trim() || undefined,
-                estimatedSessions: editingEstimate,
-                priority: editingPriorityEnabled ? editingPriority : undefined,
-                category:
-                  editingCategory && editingCategory !== "none"
-                    ? editingCategory.trim()
-                    : undefined,
-              };
-
-              // Handle spaced repetition
-              if (editingSpacedRepetition) {
-                updatedTask.spacedRepetition = {
-                  enabled: true,
-                  difficulty: task.spacedRepetition?.difficulty || "medium", // Default to medium, will be set on first review
-                  nextReviewDate:
-                    task.spacedRepetition?.nextReviewDate || Date.now(),
-                  reviewCount: task.spacedRepetition?.reviewCount || 0,
-                  lastReviewed: task.spacedRepetition?.lastReviewed,
-                  interval: task.spacedRepetition?.interval || 1,
-                  easeFactor: task.spacedRepetition?.easeFactor || 2.5,
-                };
-              } else {
-                updatedTask.spacedRepetition = undefined;
-              }
-
-              // Handle recurring
-              if (editingRecurring) {
-                const now = new Date();
-                now.setHours(0, 0, 0, 0);
-
-                updatedTask.recurring = {
-                  enabled: true,
-                  pattern: editingRecurringPattern,
-                  interval: editingRecurringInterval,
-                  daysOfWeek:
-                    editingRecurringPattern === "specific-days"
-                      ? editingRecurringDaysOfWeek
-                      : undefined,
-                  nextDue: task.recurring?.nextDue || now.getTime(),
-                  lastCompleted: task.recurring?.lastCompleted,
-                };
-              } else {
-                updatedTask.recurring = undefined;
-              }
-
-              return updatedTask;
-            }
-            return task;
-          });
-
-          saveTasks(updatedTasks);
+          updates.spacedRepetition = undefined;
         }
+
+        // Handle recurring
+        if (editingRecurring) {
+          const existingTask = tasks.find((t) => t.id === editingTaskId);
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+
+          updates.recurring = {
+            enabled: true,
+            pattern: editingRecurringPattern,
+            interval: editingRecurringInterval,
+            daysOfWeek:
+              editingRecurringPattern === "specific-days"
+                ? editingRecurringDaysOfWeek
+                : undefined,
+            nextDue: existingTask?.recurring?.nextDue || now.getTime(),
+            lastCompleted: existingTask?.recurring?.lastCompleted,
+          };
+        } else {
+          updates.recurring = undefined;
+        }
+
+        await updateTask.mutateAsync({ id: editingTaskId, updates });
 
         toast({
           title: "Task updated successfully!",
@@ -961,99 +752,48 @@ export function TaskManager({
         });
       } else {
         // Creating new task
-        if (storageService) {
-          const taskData: any = {
-            title: editingTitle.trim(),
-            description: editingDescription.trim() || undefined,
-            estimatedSessions: editingEstimate,
-            priority: editingPriorityEnabled ? editingPriority : undefined,
-            category:
-              editingCategory && editingCategory !== "none"
-                ? editingCategory.trim()
-                : undefined,
-            dueDate: editingDueDate ? editingDueDate.getTime() : undefined,
-            tags: [],
+        const taskData: any = {
+          title: editingTitle.trim(),
+          description: editingDescription.trim() || undefined,
+          estimatedSessions: editingEstimate,
+          priority: editingPriorityEnabled ? editingPriority : undefined,
+          category:
+            editingCategory && editingCategory !== "none"
+              ? editingCategory.trim()
+              : undefined,
+          dueDate: editingDueDate ? editingDueDate.getTime() : undefined,
+          tags: [],
+        };
+
+        // Handle spaced repetition
+        if (editingSpacedRepetition) {
+          taskData.spacedRepetition = {
+            enabled: true,
+            difficulty: "medium",
+            interval: 1,
+            nextReviewDate: Date.now(),
+            easeFactor: 2.5,
           };
-
-          // Handle spaced repetition
-          if (editingSpacedRepetition) {
-            taskData.spacedRepetition = {
-              enabled: true,
-              difficulty: "medium", // Default to medium, will be set on first review
-              interval: 1,
-              nextReviewDate: Date.now(), // Available immediately for first review
-              easeFactor: 2.5, // Default SM-2 ease factor
-            };
-          }
-
-          // Handle recurring
-          if (editingRecurring) {
-            const now = new Date();
-            now.setHours(0, 0, 0, 0); // Start of today
-
-            taskData.recurring = {
-              enabled: true,
-              pattern: editingRecurringPattern,
-              interval: editingRecurringInterval,
-              daysOfWeek:
-                editingRecurringPattern === "specific-days"
-                  ? editingRecurringDaysOfWeek
-                  : undefined,
-              nextDue: now.getTime(),
-            };
-          }
-
-          await storageService.createTask(taskData);
-          await loadTasks();
-        } else {
-          // Fallback to localStorage
-          const newTask: Task = {
-            id: Date.now().toString(),
-            title: editingTitle.trim(),
-            description: editingDescription.trim() || undefined,
-            completed: false,
-            sessionsCompleted: 0,
-            estimatedSessions: editingEstimate,
-            createdAt: Date.now(),
-            priority: editingPriorityEnabled ? editingPriority : undefined,
-            category:
-              editingCategory && editingCategory !== "none"
-                ? editingCategory.trim()
-                : undefined,
-          };
-
-          // Handle spaced repetition
-          if (editingSpacedRepetition) {
-            newTask.spacedRepetition = {
-              enabled: true,
-              difficulty: "medium", // Default to medium, will be set on first review
-              nextReviewDate: Date.now(),
-              reviewCount: 0,
-              interval: 1,
-              easeFactor: 2.5, // Default SM-2 ease factor
-            };
-          }
-
-          // Handle recurring
-          if (editingRecurring) {
-            const now = new Date();
-            now.setHours(0, 0, 0, 0); // Start of today
-
-            newTask.recurring = {
-              enabled: true,
-              pattern: editingRecurringPattern,
-              interval: editingRecurringInterval,
-              daysOfWeek:
-                editingRecurringPattern === "specific-days"
-                  ? editingRecurringDaysOfWeek
-                  : undefined,
-              nextDue: now.getTime(),
-            };
-          }
-
-          const updatedTasks = [...tasks, newTask];
-          saveTasks(updatedTasks);
         }
+
+        // Handle recurring
+        if (editingRecurring) {
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+
+          taskData.recurring = {
+            enabled: true,
+            pattern: editingRecurringPattern,
+            interval: editingRecurringInterval,
+            daysOfWeek:
+              editingRecurringPattern === "specific-days"
+                ? editingRecurringDaysOfWeek
+                : undefined,
+            nextDue: now.getTime(),
+          };
+        }
+
+        await createTask.mutateAsync(taskData);
 
         toast({
           title: "Task added successfully!",
@@ -1077,19 +817,12 @@ export function TaskManager({
     setShowEditDialog(false);
   };
 
-  const deleteTask = async (taskId: string) => {
+  const handleDeleteTask = async (taskId: string) => {
     const taskToDelete = tasks.find((t) => t.id === taskId);
     if (!taskToDelete) return;
 
     try {
-      if (storageService) {
-        await storageService.deleteTask(taskId);
-        await loadTasks();
-      } else {
-        // Fallback to localStorage
-        const updatedTasks = tasks.filter((task) => task.id !== taskId);
-        saveTasks(updatedTasks);
-      }
+      await deleteTask.mutateAsync(taskId);
 
       toast({
         title: "Task deleted",
@@ -1300,7 +1033,7 @@ export function TaskManager({
     });
   };
 
-  const clearFinishedTasks = () => {
+  const clearFinishedTasks = async () => {
     const completedCount = tasks.filter((task) => task.completed).length;
 
     if (completedCount === 0) {
@@ -1311,14 +1044,26 @@ export function TaskManager({
       return;
     }
 
-    const updatedTasks = tasks.filter((task) => !task.completed);
-    saveTasks(updatedTasks);
-    toast({
-      title: "Completed tasks cleared",
-      description: `Removed ${completedCount} completed task${
-        completedCount > 1 ? "s" : ""
-      }.`,
-    });
+    try {
+      // Delete completed tasks using the mutation
+      const completedTasks = tasks.filter((task) => task.completed);
+      await Promise.all(
+        completedTasks.map((task) => handleDeleteTask(task.id))
+      );
+
+      toast({
+        title: "Completed tasks cleared",
+        description: `Removed ${completedCount} completed task${
+          completedCount > 1 ? "s" : ""
+        }.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to clear completed tasks",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const filteredTasks = getFilteredTasks();
@@ -1386,60 +1131,58 @@ export function TaskManager({
     return filters.join(", ");
   };
 
-  // Get today's stats from LocalStorage for daily view
-  const todayStats = LocalStorage.getTodaysStats();
-
-  // Calculate today's completed tasks (not all-time)
-  const today = new Date();
-  const todayStart = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
-  ).getTime();
-  const todayEnd = todayStart + 24 * 60 * 60 * 1000 - 1;
-
-  const completedCount = tasks.filter((task) => {
-    // Regular completed tasks completed today
-    if (
-      task.completed &&
-      !task.recurring?.enabled &&
-      !task.spacedRepetition?.enabled &&
-      task.completedAt &&
-      task.completedAt >= todayStart &&
-      task.completedAt <= todayEnd
-    ) {
-      return true;
-    }
-
-    // Recurring tasks completed today
-    if (
-      task.recurring?.enabled &&
-      task.recurring.lastCompleted &&
-      task.recurring.lastCompleted >= todayStart &&
-      task.recurring.lastCompleted <= todayEnd
-    ) {
-      return true;
-    }
-
-    // Spaced repetition tasks reviewed today
-    if (
-      task.spacedRepetition?.enabled &&
-      task.spacedRepetition.lastReviewed &&
-      task.spacedRepetition.lastReviewed >= todayStart &&
-      task.spacedRepetition.lastReviewed <= todayEnd
-    ) {
-      return true;
-    }
-
-    return false;
-  }).length;
+  // Use optimized stats
+  const completedCount = todaysStats.tasksCompleted;
+  const totalSessions = todaysStats.sessions;
 
   // Show active tasks count (tasks that are currently available to work on)
   const activeTasks = showCompleted ? tasks : getFilteredTasks();
   const totalTasks = activeTasks.length;
 
-  // Show today's sessions (not all-time sessions)
-  const totalSessions = todayStats.sessions;
+  // Show loading state
+  if (tasksLoading || categoriesLoading) {
+    return (
+      <div className="h-full flex flex-col">
+        {/* Header - Fixed position */}
+        <div className="sticky top-0 z-10 bg-background p-4 pr-16 border-b flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-foreground">Tasks</h2>
+        </div>
+
+        {/* Loading content */}
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading tasks...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (tasksError) {
+    return (
+      <div className="h-full flex flex-col">
+        {/* Header - Fixed position */}
+        <div className="sticky top-0 z-10 bg-background p-4 pr-16 border-b flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-foreground">Tasks</h2>
+        </div>
+
+        {/* Error content */}
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="text-center">
+            <div className="text-red-500 mb-2">⚠️</div>
+            <h3 className="text-lg font-semibold text-foreground mb-2">
+              Error Loading Tasks
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              {tasksError.message || "Failed to load tasks. Please try again."}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Show empty state for unauthenticated users
   if (!user) {
@@ -1937,78 +1680,10 @@ export function TaskManager({
                         !canCompleteRecurringTask(task))
                     ) &&
                     task.estimatedSessions > 0 && (
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <div className="flex items-center gap-2">
-                            {/* Show completed sessions as pomodoro timer logos */}
-                            <div className="flex items-center gap-1">
-                              {Array.from(
-                                { length: task.estimatedSessions },
-                                (_, index) => (
-                                  <div key={index} className="w-6 h-6">
-                                    {index <
-                                    (todaysTaskSessions[task.id] || 0) ? (
-                                      <Logo className="w-6 h-6" />
-                                    ) : (
-                                      <svg
-                                        width="50"
-                                        height="50"
-                                        viewBox="0 0 100 100"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        fill="none"
-                                        className="w-6 h-6"
-                                      >
-                                        {/* Main timer body - disabled/empty state */}
-                                        <circle
-                                          cx="50"
-                                          cy="50"
-                                          r="35"
-                                          fill="#FECACA"
-                                          stroke="#B91C1C"
-                                          strokeWidth="4"
-                                        />
-                                        {/* Clock hands pointing to 1 o'clock - disabled */}
-                                        <line
-                                          x1="50"
-                                          y1="50"
-                                          x2="50"
-                                          y2="32"
-                                          stroke="#B91C1C"
-                                          strokeWidth="4"
-                                          strokeLinecap="round"
-                                          opacity="0.4"
-                                        />
-                                        <line
-                                          x1="50"
-                                          y1="50"
-                                          x2="58"
-                                          y2="42"
-                                          stroke="#B91C1C"
-                                          strokeWidth="3"
-                                          strokeLinecap="round"
-                                          opacity="0.4"
-                                        />
-                                        {/* Center dot - disabled */}
-                                        <circle
-                                          cx="50"
-                                          cy="50"
-                                          r="3"
-                                          fill="#B91C1C"
-                                          opacity="0.4"
-                                        />
-                                      </svg>
-                                    )}
-                                  </div>
-                                )
-                              )}
-                            </div>
-                            {/* <span>
-                              {todaysTaskSessions[task.id] || 0}/
-                              {task.estimatedSessions}
-                            </span> */}
-                          </div>
-                        </div>
-                      </div>
+                      <TaskSessionDisplay
+                        taskId={task.id}
+                        estimatedSessions={task.estimatedSessions}
+                      />
                     )}
 
                   {/* Line 5: Description (if exists) */}
@@ -2180,7 +1855,7 @@ export function TaskManager({
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => deleteTask(task.id)}
+                              onClick={() => handleDeleteTask(task.id)}
                               className="h-8 w-8 p-0 hover:bg-destructive/10  cursor-pointer"
                             >
                               <Trash2 className="w-3 h-3" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,21 +24,21 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
     new Date()
   );
 
-  // Use optimized hooks for data fetching
+  // Use optimized hooks for data fetching - reuse cached data from stats hooks
   const { data: tasks = [], isLoading: tasksLoading } = useTasks();
   const { data: sessions = [], isLoading: sessionsLoading } = useSessions();
 
   const loading = tasksLoading || sessionsLoading;
 
-  // Generate stats arrays from sessions data
-  const { weeklyStats, monthlyStats } = (() => {
+  // Memoized stats arrays to prevent recalculation on every render
+  const { weeklyStats, monthlyStats } = useMemo(() => {
     if (!sessions.length) {
       return { weeklyStats: [], monthlyStats: [] };
     }
 
     const today = new Date();
 
-    // Generate weekly stats array
+    // Generate weekly stats array (optimized with memoization)
     const weeklyStatsArray: TodaysStats[] = [];
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today);
@@ -77,7 +77,7 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
       });
     }
 
-    // Generate monthly stats
+    // Generate monthly stats (optimized with memoization)
     const monthlyStatsArray: TodaysStats[] = [];
     const daysInMonth = new Date(
       today.getFullYear(),
@@ -118,102 +118,105 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
     }
 
     return { weeklyStats: weeklyStatsArray, monthlyStats: monthlyStatsArray };
-  })();
+  }, [sessions]); // Only recalculate when sessions data changes
 
-  const getTasksForDate = (date: Date) => {
-    const checkDate = new Date(date);
-    checkDate.setHours(0, 0, 0, 0);
-    const checkDateStart = checkDate.getTime();
-    const checkDateEnd = checkDateStart + 24 * 60 * 60 * 1000 - 1;
+  // Memoized task filtering function to prevent recalculation
+  const getTasksForDate = useMemo(() => {
+    return (date: Date) => {
+      const checkDate = new Date(date);
+      checkDate.setHours(0, 0, 0, 0);
+      const checkDateStart = checkDate.getTime();
+      const checkDateEnd = checkDateStart + 24 * 60 * 60 * 1000 - 1;
 
-    return tasks.filter((task) => {
-      // Regular completed tasks on this date
-      if (
-        task.completedAt &&
-        task.completedAt >= checkDateStart &&
-        task.completedAt <= checkDateEnd
-      ) {
-        return true;
-      }
+      return tasks.filter((task) => {
+        // Regular completed tasks on this date
+        if (
+          task.completedAt &&
+          task.completedAt >= checkDateStart &&
+          task.completedAt <= checkDateEnd
+        ) {
+          return true;
+        }
 
-      // Recurring tasks completed on this date
-      if (
-        task.recurring?.enabled &&
-        task.recurring.lastCompleted &&
-        task.recurring.lastCompleted >= checkDateStart &&
-        task.recurring.lastCompleted <= checkDateEnd
-      ) {
-        return true;
-      }
-
-      // Spaced repetition tasks reviewed on this date
-      if (
-        task.spacedRepetition?.enabled &&
-        task.spacedRepetition.lastReviewed &&
-        task.spacedRepetition.lastReviewed >= checkDateStart &&
-        task.spacedRepetition.lastReviewed <= checkDateEnd
-      ) {
-        return true;
-      }
-
-      // Regular tasks with due dates on this date (not completed)
-      if (
-        !task.recurring?.enabled &&
-        !task.spacedRepetition?.enabled &&
-        task.dueDate &&
-        !task.completed
-      ) {
-        const taskDueDate = new Date(task.dueDate);
-        taskDueDate.setHours(0, 0, 0, 0);
-        if (taskDueDate.getTime() === checkDateStart) return true;
-      }
-
-      // Due tasks (spaced repetition) - only show if not completed today
-      if (
-        task.spacedRepetition?.enabled &&
-        task.spacedRepetition.nextReviewDate &&
-        !(
-          task.spacedRepetition.lastReviewed &&
-          task.spacedRepetition.lastReviewed >= checkDateStart &&
-          task.spacedRepetition.lastReviewed <= checkDateEnd
-        )
-      ) {
-        const dueDate = new Date(task.spacedRepetition.nextReviewDate);
-        dueDate.setHours(0, 0, 0, 0);
-        if (dueDate.getTime() === checkDateStart) return true;
-      }
-
-      // Recurring tasks - check if they should appear on this date (only if not completed today)
-      if (
-        task.recurring?.enabled &&
-        !(
+        // Recurring tasks completed on this date
+        if (
+          task.recurring?.enabled &&
           task.recurring.lastCompleted &&
           task.recurring.lastCompleted >= checkDateStart &&
           task.recurring.lastCompleted <= checkDateEnd
-        )
-      ) {
-        const pattern = task.recurring.pattern;
-        const dayOfWeek = checkDate.getDay();
-
-        switch (pattern) {
-          case "daily":
-            return true; // Daily tasks appear every day
-          case "weekdays":
-            return dayOfWeek !== 0 && dayOfWeek !== 6; // Monday-Friday
-          case "weekly":
-            // Check if it's the same day of week as the original
-            const originalDate = new Date(task.createdAt);
-            return dayOfWeek === originalDate.getDay();
-          case "specific-days":
-            return task.recurring.daysOfWeek?.includes(dayOfWeek) || false;
-          default:
-            return false;
+        ) {
+          return true;
         }
-      }
 
-      return false;
-    });
-  };
+        // Spaced repetition tasks reviewed on this date
+        if (
+          task.spacedRepetition?.enabled &&
+          task.spacedRepetition.lastReviewed &&
+          task.spacedRepetition.lastReviewed >= checkDateStart &&
+          task.spacedRepetition.lastReviewed <= checkDateEnd
+        ) {
+          return true;
+        }
+
+        // Regular tasks with due dates on this date (not completed)
+        if (
+          !task.recurring?.enabled &&
+          !task.spacedRepetition?.enabled &&
+          task.dueDate &&
+          !task.completed
+        ) {
+          const taskDueDate = new Date(task.dueDate);
+          taskDueDate.setHours(0, 0, 0, 0);
+          if (taskDueDate.getTime() === checkDateStart) return true;
+        }
+
+        // Due tasks (spaced repetition) - only show if not completed today
+        if (
+          task.spacedRepetition?.enabled &&
+          task.spacedRepetition.nextReviewDate &&
+          !(
+            task.spacedRepetition.lastReviewed &&
+            task.spacedRepetition.lastReviewed >= checkDateStart &&
+            task.spacedRepetition.lastReviewed <= checkDateEnd
+          )
+        ) {
+          const dueDate = new Date(task.spacedRepetition.nextReviewDate);
+          dueDate.setHours(0, 0, 0, 0);
+          if (dueDate.getTime() === checkDateStart) return true;
+        }
+
+        // Recurring tasks - check if they should appear on this date (only if not completed today)
+        if (
+          task.recurring?.enabled &&
+          !(
+            task.recurring.lastCompleted &&
+            task.recurring.lastCompleted >= checkDateStart &&
+            task.recurring.lastCompleted <= checkDateEnd
+          )
+        ) {
+          const pattern = task.recurring.pattern;
+          const dayOfWeek = checkDate.getDay();
+
+          switch (pattern) {
+            case "daily":
+              return true; // Daily tasks appear every day
+            case "weekdays":
+              return dayOfWeek !== 0 && dayOfWeek !== 6; // Monday-Friday
+            case "weekly":
+              // Check if it's the same day of week as the original
+              const originalDate = new Date(task.createdAt);
+              return dayOfWeek === originalDate.getDay();
+            case "specific-days":
+              return task.recurring.daysOfWeek?.includes(dayOfWeek) || false;
+            default:
+              return false;
+          }
+        }
+
+        return false;
+      });
+    };
+  }, [tasks]); // Only recalculate when tasks data changes
 
   if (!user) {
     return (

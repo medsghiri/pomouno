@@ -1,17 +1,18 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { TimerDisplay } from './timer-display';
-import { BreakReminderDisplay } from './break-reminder-display';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from '@/lib/firebase';
-import { LocalStorage, PomodoroSession } from '@/lib/storage';
-import { useAuth } from '@/lib/auth-context';
-import { TimerSession } from '@/lib/auth-storage-provider';
-import { useToast } from '@/hooks/use-toast';
-import AudioService from '@/lib/audio-service';
-import VibrationService from '@/lib/vibration-service';
-import NotificationService from '@/lib/notification-service';
+import { useState, useEffect, useCallback, useRef } from "react";
+import { TimerDisplay } from "./timer-display";
+import { BreakReminderDisplay } from "./break-reminder-display";
+import { useAuthState } from "react-firebase-hooks/auth";
+import { auth } from "@/lib/firebase";
+import { LocalStorage, PomodoroSession } from "@/lib/storage";
+import { useAuth } from "@/lib/auth-context";
+import { TimerSession } from "@/lib/auth-storage-provider";
+import { useToast } from "@/hooks/use-toast";
+import { useTodaysStats } from "@/hooks/use-app-data";
+import AudioService from "@/lib/audio-service";
+import VibrationService from "@/lib/vibration-service";
+import NotificationService from "@/lib/notification-service";
 
 interface TimerContainerProps {
   onSessionComplete: (session: PomodoroSession) => void;
@@ -19,20 +20,28 @@ interface TimerContainerProps {
   onTaskSessionComplete?: (taskId: string) => void;
 }
 
-export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessionComplete }: TimerContainerProps) {
+export function TimerContainer({
+  onSessionComplete,
+  selectedTaskId,
+  onTaskSessionComplete,
+}: TimerContainerProps) {
   const [timeLeft, setTimeLeft] = useState(25 * 60); // 25 minutes in seconds
   const [totalTime, setTotalTime] = useState(25 * 60);
   const [isActive, setIsActive] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [sessionType, setSessionType] = useState<'work' | 'shortBreak' | 'longBreak'>('work');
+  const [sessionType, setSessionType] = useState<
+    "work" | "shortBreak" | "longBreak"
+  >("work");
   const [currentSession, setCurrentSession] = useState(1);
   const [totalSessions, setTotalSessions] = useState(4);
   const [settings, setSettings] = useState(LocalStorage.getSettings());
   const [currentTask, setCurrentTask] = useState<any | null>(null);
   const [showBreakReminders, setShowBreakReminders] = useState(false);
-  const [breakRemindersCompleted, setBreakRemindersCompleted] = useState<string[]>([]);
+  const [breakRemindersCompleted, setBreakRemindersCompleted] = useState<
+    string[]
+  >([]);
   const [breakRemindersShown, setBreakRemindersShown] = useState<string[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string>('');
+  const [currentSessionId, setCurrentSessionId] = useState<string>("");
   const { toast } = useToast();
   const { storageProvider } = useAuth();
   const audioService = AudioService.getInstance();
@@ -40,6 +49,9 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
   const notificationService = NotificationService.getInstance();
   const breakRemindersTriggered = useRef<string | null>(null);
   const [user] = useAuthState(auth);
+
+  // Get today's stats for session counting
+  const todaysStats = useTodaysStats();
 
   // Restore session on component mount
   useEffect(() => {
@@ -74,9 +86,17 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
         }
 
         // Show confirmation dialog if session was active
-        if (savedSession.isActive && !savedSession.isPaused && newTimeLeft > 0) {
+        if (
+          savedSession.isActive &&
+          !savedSession.isPaused &&
+          newTimeLeft > 0
+        ) {
           const shouldContinue = window.confirm(
-            `You have an active ${savedSession.sessionType === 'work' ? 'focus' : 'break'} session with ${Math.ceil(newTimeLeft / 60)} minutes remaining. Would you like to continue?`
+            `You have an active ${
+              savedSession.sessionType === "work" ? "focus" : "break"
+            } session with ${Math.ceil(
+              newTimeLeft / 60
+            )} minutes remaining. Would you like to continue?`
           );
 
           if (!shouldContinue) {
@@ -96,9 +116,16 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
   useEffect(() => {
     if (isActive || isPaused) {
       const sessionData: TimerSession = {
-        id: currentSessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        type: sessionType === 'work' ? 'work' : sessionType === 'shortBreak' ? 'short-break' : 'long-break',
-        startTime: Date.now() - ((totalTime - timeLeft) * 1000),
+        id:
+          currentSessionId ||
+          `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type:
+          sessionType === "work"
+            ? "work"
+            : sessionType === "shortBreak"
+            ? "short-break"
+            : "long-break",
+        startTime: Date.now() - (totalTime - timeLeft) * 1000,
         duration: totalTime,
         totalTime,
         timeLeft,
@@ -116,23 +143,36 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
       // Clear session when stopped
       storageProvider.basic.clearCurrentSession();
     }
-  }, [isActive, isPaused, timeLeft, totalTime, sessionType, currentSession, totalSessions, selectedTaskId, currentSessionId, storageProvider]);
+  }, [
+    isActive,
+    isPaused,
+    timeLeft,
+    totalTime,
+    sessionType,
+    currentSession,
+    totalSessions,
+    selectedTaskId,
+    currentSessionId,
+    storageProvider,
+  ]);
 
   // Add beforeunload event listener for confirmation dialog
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (isActive && !isPaused) {
-        const message = `You have an active ${sessionType === 'work' ? 'focus' : 'break'} session running. Are you sure you want to leave?`;
+        const message = `You have an active ${
+          sessionType === "work" ? "focus" : "break"
+        } session running. Are you sure you want to leave?`;
         event.preventDefault();
         event.returnValue = message;
         return message;
       }
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [isActive, isPaused, sessionType]);
 
@@ -140,7 +180,7 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
   useEffect(() => {
     const handleSettingsUpdate = (event: CustomEvent) => {
       const newSettings = event.detail;
-      setSettings(prevSettings => {
+      setSettings((prevSettings) => {
         // Only update if settings have actually changed
         if (JSON.stringify(prevSettings) !== JSON.stringify(newSettings)) {
           return newSettings;
@@ -151,7 +191,7 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
 
     const handleAudioChange = (event: CustomEvent) => {
       const audioChanges = event.detail;
-      setSettings(prevSettings => {
+      setSettings((prevSettings) => {
         const updatedSettings = { ...prevSettings, ...audioChanges };
         // Only update if the settings have actually changed
         if (JSON.stringify(prevSettings) !== JSON.stringify(updatedSettings)) {
@@ -162,12 +202,21 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
       });
     };
 
-    window.addEventListener('settingsUpdated', handleSettingsUpdate as EventListener);
-    window.addEventListener('audioChanged', handleAudioChange as EventListener);
+    window.addEventListener(
+      "settingsUpdated",
+      handleSettingsUpdate as EventListener
+    );
+    window.addEventListener("audioChanged", handleAudioChange as EventListener);
 
     return () => {
-      window.removeEventListener('settingsUpdated', handleSettingsUpdate as EventListener);
-      window.removeEventListener('audioChanged', handleAudioChange as EventListener);
+      window.removeEventListener(
+        "settingsUpdated",
+        handleSettingsUpdate as EventListener
+      );
+      window.removeEventListener(
+        "audioChanged",
+        handleAudioChange as EventListener
+      );
     };
   }, []); // Remove settings dependency to prevent infinite loop
 
@@ -182,13 +231,13 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
     let duration: number;
 
     switch (sessionType) {
-      case 'work':
+      case "work":
         duration = settings.workDuration * 60;
         break;
-      case 'shortBreak':
+      case "shortBreak":
         duration = settings.shortBreakDuration * 60;
         break;
-      case 'longBreak':
+      case "longBreak":
         duration = settings.longBreakDuration * 60;
         break;
       default:
@@ -201,7 +250,14 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
       setTotalTime(duration);
     }
     setTotalSessions(settings.sessionsUntilLongBreak);
-  }, [sessionType, isActive, settings.workDuration, settings.shortBreakDuration, settings.longBreakDuration, settings.sessionsUntilLongBreak]);
+  }, [
+    sessionType,
+    isActive,
+    settings.workDuration,
+    settings.shortBreakDuration,
+    settings.longBreakDuration,
+    settings.sessionsUntilLongBreak,
+  ]);
 
   // Timer logic
   useEffect(() => {
@@ -209,7 +265,7 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
 
     if (isActive && !isPaused && timeLeft > 0) {
       interval = setInterval(() => {
-        setTimeLeft(timeLeft => timeLeft - 1);
+        setTimeLeft((timeLeft) => timeLeft - 1);
       }, 1000);
     } else if (timeLeft === 0 && isActive) {
       // Session completed
@@ -233,9 +289,9 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
 
   // Show break reminders when break starts
   useEffect(() => {
-    if (sessionType !== 'work' && isActive) {
+    if (sessionType !== "work" && isActive) {
       // Only show break reminders if they haven't been manually closed for this session
-      const breakType = sessionType === 'shortBreak' ? 'short' : 'long';
+      const breakType = sessionType === "shortBreak" ? "short" : "long";
       const sessionKey = `${sessionType}-${currentSession}`;
 
       if (breakRemindersTriggered.current !== sessionKey) {
@@ -244,28 +300,37 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
       }
     } else {
       // Only auto-hide when switching to work session or stopping timer
-      if (sessionType === 'work' || !isActive) {
+      if (sessionType === "work" || !isActive) {
         setShowBreakReminders(false);
         breakRemindersTriggered.current = null;
         // Clear completed reminders when starting a work session
-        if (sessionType === 'work' && isActive) {
-          localStorage.removeItem('currentBreakRemindersCompleted');
+        if (sessionType === "work" && isActive) {
+          localStorage.removeItem("currentBreakRemindersCompleted");
         }
       }
     }
   }, [sessionType, isActive, currentSession]);
 
   const handleSessionComplete = useCallback(async () => {
-    const sessionId = currentSessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const sessionId =
+      currentSessionId ||
+      `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const session: PomodoroSession = {
       id: sessionId,
-      type: sessionType === 'work' ? 'work' : sessionType === 'shortBreak' ? 'short-break' : 'long-break',
+      type:
+        sessionType === "work"
+          ? "work"
+          : sessionType === "shortBreak"
+          ? "short-break"
+          : "long-break",
       duration: totalTime / 60, // Convert to minutes
       completed: true,
       timestamp: Date.now(),
       ...(currentTask?.id && { taskId: currentTask.id }),
-      ...(sessionType !== 'work' && breakRemindersCompleted.length > 0 && { breakRemindersCompleted }),
-      ...(sessionType !== 'work' && breakRemindersShown.length > 0 && { breakRemindersShown }),
+      ...(sessionType !== "work" &&
+        breakRemindersCompleted.length > 0 && { breakRemindersCompleted }),
+      ...(sessionType !== "work" &&
+        breakRemindersShown.length > 0 && { breakRemindersShown }),
     };
 
     // Clear the saved session since it's completed
@@ -278,27 +343,31 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
     if (user && storageProvider.advanced) {
       try {
         await storageProvider.advanced.recordSession(session);
-        console.log('Session saved to Firebase:', session);
+        console.log("Session saved to Firebase:", session);
       } catch (error) {
-        console.error('Failed to save session to Firebase:', error);
+        console.error("Failed to save session to Firebase:", error);
       }
     }
 
     onSessionComplete(session);
 
     // Handle task session completion
-    if (sessionType === 'work' && currentTask && onTaskSessionComplete) {
+    if (sessionType === "work" && currentTask && onTaskSessionComplete) {
       onTaskSessionComplete(currentTask.id);
     }
 
     // Dispatch events for statistics updates
-    window.dispatchEvent(new CustomEvent('sessionCompleted', { detail: session }));
-    if (sessionType === 'work' && currentTask) {
-      window.dispatchEvent(new CustomEvent('taskSessionCompleted', { detail: currentTask.id }));
+    window.dispatchEvent(
+      new CustomEvent("sessionCompleted", { detail: session })
+    );
+    if (sessionType === "work" && currentTask) {
+      window.dispatchEvent(
+        new CustomEvent("taskSessionCompleted", { detail: currentTask.id })
+      );
     }
 
     // Play notification sound and vibrate
-    if (settings.notificationAudio !== 'none') {
+    if (settings.notificationAudio !== "none") {
       audioService.playNotification(settings.notificationAudio);
     }
     vibrationService.sessionComplete();
@@ -310,10 +379,12 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
 
     // Show toast
     toast({
-      title: sessionType === 'work' ? "Work session completed!" : "Break time over!",
-      description: sessionType === 'work'
-        ? "Great job staying focused! Time for a break."
-        : "Hope you're refreshed. Let's get back to work!",
+      title:
+        sessionType === "work" ? "Work session completed!" : "Break time over!",
+      description:
+        sessionType === "work"
+          ? "Great job staying focused! Time for a break."
+          : "Hope you're refreshed. Let's get back to work!",
     });
 
     // Always transition to the next session type, but only auto-start if enabled
@@ -321,8 +392,8 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
 
     // Auto-start next session if enabled
     if (
-      (sessionType === 'work' && settings.autoStartBreaks) ||
-      (sessionType !== 'work' && settings.autoStartWork)
+      (sessionType === "work" && settings.autoStartBreaks) ||
+      (sessionType !== "work" && settings.autoStartWork)
     ) {
       // Keep the timer active for auto-start
       setIsActive(true);
@@ -332,12 +403,25 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
       setIsActive(false);
       setIsPaused(false);
     }
-  }, [sessionType, totalTime, onSessionComplete, toast, settings, user, storageProvider, vibrationService, notificationService]);
+  }, [
+    sessionType,
+    totalTime,
+    onSessionComplete,
+    toast,
+    settings,
+    user,
+    storageProvider,
+    vibrationService,
+    notificationService,
+  ]);
 
-  const handleRemindersCompleted = useCallback((completed: string[], shown: string[]) => {
-    setBreakRemindersCompleted(completed);
-    setBreakRemindersShown(shown);
-  }, []);
+  const handleRemindersCompleted = useCallback(
+    (completed: string[], shown: string[]) => {
+      setBreakRemindersCompleted(completed);
+      setBreakRemindersShown(shown);
+    },
+    []
+  );
 
   const handleCloseBreakReminders = useCallback(() => {
     setShowBreakReminders(false);
@@ -345,21 +429,24 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
 
   const startNextSession = () => {
     // Reset session ID for the next session
-    setCurrentSessionId('');
+    setCurrentSessionId("");
 
-    let newSessionType: 'work' | 'shortBreak' | 'longBreak';
+    let newSessionType: "work" | "shortBreak" | "longBreak";
     let duration: number;
 
-    if (sessionType === 'work') {
+    if (sessionType === "work") {
       // Switch to break
-      const isLongBreak = currentSession % settings.sessionsUntilLongBreak === 0;
-      newSessionType = isLongBreak ? 'longBreak' : 'shortBreak';
-      duration = isLongBreak ? settings.longBreakDuration * 60 : settings.shortBreakDuration * 60;
+      const isLongBreak =
+        currentSession % settings.sessionsUntilLongBreak === 0;
+      newSessionType = isLongBreak ? "longBreak" : "shortBreak";
+      duration = isLongBreak
+        ? settings.longBreakDuration * 60
+        : settings.shortBreakDuration * 60;
     } else {
       // Switch to work
-      newSessionType = 'work';
+      newSessionType = "work";
       duration = settings.workDuration * 60;
-      setCurrentSession(prev => prev + 1);
+      setCurrentSession((prev) => prev + 1);
     }
 
     setSessionType(newSessionType);
@@ -367,14 +454,19 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
     setTotalTime(duration);
   };
 
-  const handleSessionTypeChange = (newType: 'work' | 'shortBreak' | 'longBreak') => {
+  const handleSessionTypeChange = (
+    newType: "work" | "shortBreak" | "longBreak"
+  ) => {
     // Only allow session type changes when timer is not active
     if (!isActive) {
       setSessionType(newType);
       // Reset timer to new session type duration
-      const newDuration = newType === 'work' ? settings.workDuration :
-        newType === 'shortBreak' ? settings.shortBreakDuration :
-          settings.longBreakDuration;
+      const newDuration =
+        newType === "work"
+          ? settings.workDuration
+          : newType === "shortBreak"
+          ? settings.shortBreakDuration
+          : settings.longBreakDuration;
       setTimeLeft(newDuration * 60);
       setTotalTime(newDuration * 60);
     }
@@ -391,7 +483,9 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
 
     // Generate a new session ID when starting a timer
     if (!currentSessionId) {
-      setCurrentSessionId(`session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+      setCurrentSessionId(
+        `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      );
     }
 
     // Resume audio if it was paused
@@ -420,13 +514,13 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
     let duration: number;
 
     switch (sessionType) {
-      case 'work':
+      case "work":
         duration = settings.workDuration * 60;
         break;
-      case 'shortBreak':
+      case "shortBreak":
         duration = settings.shortBreakDuration * 60;
         break;
-      case 'longBreak':
+      case "longBreak":
         duration = settings.longBreakDuration * 60;
         break;
       default:
@@ -440,7 +534,7 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
   const handleReset = () => {
     setIsActive(false);
     setIsPaused(false);
-    setSessionType('work');
+    setSessionType("work");
     setCurrentSession(1);
     audioService.stopAll();
     vibrationService.timerStop();
@@ -470,11 +564,12 @@ export function TimerContainer({ onSessionComplete, selectedTaskId, onTaskSessio
         totalSessions={totalSessions}
         settings={settings}
         currentTask={currentTask}
+        todaysWorkSessions={todaysStats?.sessions || 0}
       />
 
       {/* Break Reminders Dialog */}
       <BreakReminderDisplay
-        breakType={sessionType === 'shortBreak' ? 'short' : 'long'}
+        breakType={sessionType === "shortBreak" ? "short" : "long"}
         isVisible={showBreakReminders}
         sessionId={currentSessionId}
         onClose={handleCloseBreakReminders}

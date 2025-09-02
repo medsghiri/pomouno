@@ -12,8 +12,10 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Settings, BarChart3, X } from "lucide-react";
 import { Footer } from "@/components/layout/footer";
+import { useAuth } from "@/lib/auth-context";
 
 export default function AccountPage() {
+  const { user, loading } = useAuth();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showStats, setShowStats] = useState(false);
@@ -21,13 +23,19 @@ export default function AccountPage() {
   const router = useRouter();
 
   useEffect(() => {
+    // Redirect to auth if not authenticated and not loading
+    if (!loading && !user) {
+      router.push("/auth");
+      return;
+    }
+
     // Load theme settings
     const settings = LocalStorage.getSettings();
     setIsDarkMode(settings.darkMode);
 
     // Apply theme to document
     document.documentElement.classList.toggle("dark", settings.darkMode);
-  }, []);
+  }, [user, loading, router]);
 
   // Listen for theme changes and unsaved settings
   useEffect(() => {
@@ -81,6 +89,23 @@ export default function AccountPage() {
     // Use red/tomato theme for pomodoro focus
     return isDarkMode ? "theme-focus-dark" : "theme-focus-light";
   };
+
+  // Show loading state while checking authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render anything if not authenticated (will redirect)
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className={cn("min-h-screen", getThemeClasses())}>

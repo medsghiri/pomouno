@@ -15,22 +15,40 @@ import type {
 } from '@/lib/advanced-storage-service';
 import { FirebaseService } from '@/lib/firebase-service';
 import { LocalStorage } from '@/lib/storage';
+import type { Settings } from '@/lib/storage';
 import { useMemo } from 'react';
 
-// Query Keys
+// Enhanced hierarchical query keys for better cache invalidation and user scoping
 export const queryKeys = {
-    tasks: (userId: string) => ['tasks', userId],
-    task: (userId: string, taskId: string) => ['task', userId, taskId],
-    taskSessions: (userId: string, taskId: string, date: string) => ['taskSessions', userId, taskId, date],
-    breakReminders: (userId: string) => ['breakReminders', userId],
-    breakReminderCompletions: (userId: string, date?: string) => ['breakReminderCompletions', userId, date],
-    taskCategories: (userId: string) => ['taskCategories', userId],
-    breakReminderCategories: (userId: string) => ['breakReminderCategories', userId],
-    statistics: (userId: string, dateRange: DateRange) => ['statistics', userId, dateRange.start, dateRange.end],
-    sessions: (userId: string, limit?: number) => ['sessions', userId, limit],
-    dailyStats: (userId: string, date: string) => ['dailyStats', userId, date],
-    weeklyStats: (userId: string, weekStart: string) => ['weeklyStats', userId, weekStart],
-    monthlyStats: (userId: string, month: string) => ['monthlyStats', userId, month],
+    // Root user scope - prevents cross-user data leaks
+    user: (userId: string) => ['user', userId] as const,
+
+    // Tasks hierarchy
+    tasks: (userId: string) => ['user', userId, 'tasks'] as const,
+    task: (userId: string, taskId: string) => ['user', userId, 'tasks', taskId] as const,
+    taskSessions: (userId: string, taskId: string, date: string) => ['user', userId, 'tasks', taskId, 'sessions', date] as const,
+
+    // Categories hierarchy
+    categories: (userId: string, type: 'task' | 'breakReminder') => ['user', userId, 'categories', type] as const,
+    taskCategories: (userId: string) => ['user', userId, 'categories', 'task'] as const,
+    breakReminderCategories: (userId: string) => ['user', userId, 'categories', 'breakReminder'] as const,
+
+    // Break reminders hierarchy
+    breakReminders: (userId: string) => ['user', userId, 'breakReminders'] as const,
+    breakReminder: (userId: string, reminderId: string) => ['user', userId, 'breakReminders', reminderId] as const,
+    breakReminderCompletions: (userId: string, date?: string) => ['user', userId, 'breakReminders', 'completions', date || 'all'] as const,
+
+    // Sessions hierarchy
+    sessions: (userId: string, limit?: number) => ['user', userId, 'sessions', limit || 'all'] as const,
+
+    // Statistics hierarchy
+    statistics: (userId: string, dateRange: DateRange) => ['user', userId, 'statistics', dateRange.start, dateRange.end] as const,
+    dailyStats: (userId: string, date: string) => ['user', userId, 'statistics', 'daily', date] as const,
+    weeklyStats: (userId: string, weekStart: string) => ['user', userId, 'statistics', 'weekly', weekStart] as const,
+    monthlyStats: (userId: string, month: string) => ['user', userId, 'statistics', 'monthly', month] as const,
+
+    // Settings hierarchy
+    settings: (userId: string) => ['user', userId, 'settings'] as const,
 };
 
 // Helper function to get today's date string
@@ -40,6 +58,33 @@ const getTodayString = () => {
         String(today.getMonth() + 1).padStart(2, '0') + '-' +
         String(today.getDate()).padStart(2, '0');
 };
+
+// Smart completion tracking hook that uses cached data efficiently
+export function useBreakReminderCompletionCounts() {
+    const { data: breakReminders = [] } = useBreakReminders();
+    const { data: todaysCompletions = [] } = useTodaysBreakReminderCompletions();
+
+    return useMemo(() => {
+        // Create a map of reminder ID to today's completion count
+        const completionCounts = new Map<string, number>();
+
+        // Count completions for each reminder from today's data
+        todaysCompletions.forEach(completion => {
+            const currentCount = completionCounts.get(completion.reminderId) || 0;
+            completionCounts.set(completion.reminderId, currentCount + 1);
+        });
+
+        // Return completion data for each reminder
+        return breakReminders.map(reminder => ({
+            reminderId: reminder.id,
+            title: reminder.title,
+            todaysCompletions: completionCounts.get(reminder.id) || 0,
+            totalCompletions: reminder.completionCount || 0,
+            lastCompleted: reminder.lastCompleted,
+            enabled: reminder.enabled
+        }));
+    }, [breakReminders, todaysCompletions]);
+}
 
 // Tasks
 export function useTasks() {
@@ -119,10 +164,10 @@ export function useBreakReminders() {
         },
         enabled: !!user && !!storageService,
         staleTime: Infinity, // Never consider data stale - rely on manual invalidation
-        gcTime: 10 * 60 * 1000, // 10 minutes
+        gcTime: 15 * 60 * 1000, // 15 minutes - longer cache time for better performance
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
-        refetchOnMount: 'always', // Always refetch on mount to get latest data
+        refetchOnMount: false, // Don't refetch on mount - rely on cache and mutations
         refetchInterval: false, // Disable automatic refetching
         retry: 1, // Reduce retries to prevent multiple calls
     });
@@ -144,11 +189,12 @@ export function useTodaysBreakReminderCompletions() {
         },
         enabled: !!user && !!storageService,
         staleTime: Infinity, // Never consider data stale - rely on manual invalidation
-        gcTime: 10 * 60 * 1000, // 10 minutes
+        gcTime: 15 * 60 * 1000, // 15 minutes - longer cache time for better performance
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
-        refetchOnMount: false, // Don't refetch on component mount
+        refetchOnMount: false, // Don't refetch on component mount - rely on cache and mutations
         refetchInterval: false, // Disable automatic refetching
+        retry: 1, // Reduce retries to prevent multiple calls
     });
 }
 
@@ -237,9 +283,13 @@ export function useSessions(limit: number = 100) {
             }
             return await FirebaseService.getRecentSessions(user, limit);
         },
-        enabled: !!user,
-        staleTime: 1 * 60 * 1000, // 1 minute - sessions change frequently
+        enabled: true, // Always enabled - works for both authenticated and non-authenticated users
+        staleTime: 30 * 1000, // 30 seconds - sessions change frequently, shorter stale time
         gcTime: 3 * 60 * 1000, // 3 minutes
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        refetchOnMount: 'always', // Always refetch on mount to ensure fresh data
+        refetchInterval: false, // Disable automatic refetching
     });
 }
 
@@ -260,7 +310,72 @@ export function useTodaysStats() {
 
     return useMemo(() => {
         if (!user) {
-            return LocalStorage.getTodaysStats();
+            // For non-authenticated users, calculate stats from the sessions data from React Query
+            // This ensures the stats update when sessions are added via the mutation
+            const todaySessions = sessions.filter(session => {
+                const sessionDate = new Date(session.timestamp);
+                const sessionStart = new Date(
+                    sessionDate.getFullYear(),
+                    sessionDate.getMonth(),
+                    sessionDate.getDate()
+                ).getTime();
+                return sessionStart === todayStart;
+            });
+
+            const workSessions = todaySessions.filter(s => s.type === 'work').length;
+            const focusTime = todaySessions
+                .filter(s => s.type === 'work')
+                .reduce((sum, s) => {
+                    let duration = typeof s.duration === 'number' ? s.duration : 0;
+                    if (duration > 60) {
+                        duration = Math.round(duration / 60);
+                    }
+                    return sum + duration;
+                }, 0);
+
+            // For non-authenticated users, get tasks from localStorage
+            const localTasks = LocalStorage.getTasks();
+            const tasksCompleted = localTasks.filter((task: any) => {
+                if (task.completedAt && task.completedAt >= todayStart && task.completedAt <= todayEnd) return true;
+                if (task.recurring?.lastCompleted && task.recurring.lastCompleted >= todayStart && task.recurring.lastCompleted <= todayEnd) return true;
+                if (task.spacedRepetition?.lastReviewed && task.spacedRepetition.lastReviewed >= todayStart && task.spacedRepetition.lastReviewed <= todayEnd) return true;
+                return false;
+            }).length;
+
+            // Calculate streak for non-authenticated users
+            let streak = 0;
+            const todayDate = new Date();
+            for (let i = 0; i < 365; i++) {
+                const checkDate = new Date(todayDate);
+                checkDate.setDate(todayDate.getDate() - i);
+                checkDate.setHours(0, 0, 0, 0);
+                const dayStart = checkDate.getTime();
+
+                const dayHasSessions = sessions.some(s => {
+                    const sessionDate = new Date(s.timestamp);
+                    sessionDate.setHours(0, 0, 0, 0);
+                    return sessionDate.getTime() === dayStart && s.type === 'work';
+                });
+
+                if (dayHasSessions) {
+                    streak++;
+                } else {
+                    break;
+                }
+            }
+
+            return {
+                sessions: workSessions,
+                focusTime,
+                date: today,
+                workSessions,
+                shortBreakSessions: todaySessions.filter(s => s.type === 'short-break').length,
+                longBreakSessions: todaySessions.filter(s => s.type === 'long-break').length,
+                tasksCompleted,
+                streak,
+                breakRemindersShown: 0,
+                breakRemindersCompleted: 0, // For non-authenticated users
+            };
         }
 
         // Filter sessions for today
@@ -463,6 +578,80 @@ export function useMonthlyStats(currentDate: Date) {
     }, [sessions, tasks, currentDate]);
 }
 
+// Helper function to calculate spaced repetition intervals (simplified SM-2 algorithm)
+const calculateSpacedRepetitionInterval = (
+    difficulty: 'easy' | 'medium' | 'hard',
+    currentInterval: number,
+    reviewCount: number,
+    easeFactor: number
+) => {
+    let newInterval = currentInterval;
+    let newEaseFactor = easeFactor;
+
+    if (difficulty === 'hard') {
+        // Hard: Reset to 1 day, decrease ease factor
+        newInterval = 1;
+        newEaseFactor = Math.max(1.3, easeFactor - 0.2);
+    } else if (difficulty === 'medium') {
+        // Medium: Moderate increase (1.3x multiplier), maintain ease factor
+        newInterval = Math.max(2, Math.round(currentInterval * 1.3));
+        newEaseFactor = easeFactor;
+    } else { // easy
+        // Easy: Significant increase (2.5x multiplier), increase ease factor
+        newInterval = Math.max(4, Math.round(currentInterval * 2.5));
+        newEaseFactor = Math.min(3.0, easeFactor + 0.1);
+    }
+
+    return { newInterval, newEaseFactor };
+};
+
+// Helper function to calculate recurring task next due date
+const calculateRecurringNextDue = (
+    completionTime: number,
+    pattern: string,
+    interval: number,
+    daysOfWeek?: number[],
+    dayOfMonth?: number
+) => {
+    const now = new Date(completionTime);
+    let nextDue = new Date(now);
+
+    switch (pattern) {
+        case 'daily':
+            nextDue.setDate(now.getDate() + interval);
+            break;
+        case 'weekly':
+            nextDue.setDate(now.getDate() + (interval * 7));
+            break;
+        case 'monthly':
+            nextDue.setMonth(now.getMonth() + interval);
+            if (dayOfMonth) {
+                nextDue.setDate(dayOfMonth);
+            }
+            break;
+        case 'weekdays':
+            // Find next weekday (Monday-Friday)
+            do {
+                nextDue.setDate(nextDue.getDate() + 1);
+            } while (nextDue.getDay() === 0 || nextDue.getDay() === 6); // Skip weekends
+            break;
+        case 'specific-days':
+            if (daysOfWeek && daysOfWeek.length > 0) {
+                // Find next occurrence of specified days
+                do {
+                    nextDue.setDate(nextDue.getDate() + 1);
+                } while (!daysOfWeek.includes(nextDue.getDay()));
+            } else {
+                nextDue.setDate(now.getDate() + 1);
+            }
+            break;
+        default:
+            nextDue.setDate(now.getDate() + interval);
+    }
+
+    return nextDue.getTime();
+};
+
 // Mutation hooks for optimistic updates
 export function useTaskMutations() {
     const queryClient = useQueryClient();
@@ -478,19 +667,39 @@ export function useTaskMutations() {
             return await storageService.createTask(taskData);
         },
         onMutate: async (newTaskData) => {
-            // Cancel any outgoing refetches
+            // Cancel any outgoing refetches using hierarchical query key
             await queryClient.cancelQueries({ queryKey: queryKeys.tasks(user?.uid || '') });
 
             // Snapshot the previous value
             const previousTasks = queryClient.getQueryData(queryKeys.tasks(user?.uid || ''));
 
-            // Optimistically update to the new value
+            // Create optimistic task with proper defaults
             const optimisticTask = {
                 id: `temp_${Date.now()}`,
-                ...newTaskData,
+                title: newTaskData.title || '',
+                description: newTaskData.description || '',
                 completed: false,
                 sessionsCompleted: 0,
+                estimatedSessions: newTaskData.estimatedSessions || 1,
                 createdAt: Date.now(),
+                category: newTaskData.category || '',
+                priority: newTaskData.priority || 'medium',
+                tags: newTaskData.tags || [],
+                // Handle spaced repetition fields
+                spacedRepetitionEnabled: newTaskData.spacedRepetitionEnabled || false,
+                spacedRepetitionDifficulty: newTaskData.spacedRepetitionDifficulty || 'medium',
+                spacedRepetitionInterval: newTaskData.spacedRepetitionInterval || 1,
+                spacedRepetitionNextReviewDate: newTaskData.spacedRepetitionNextReviewDate || Date.now(),
+                spacedRepetitionReviewCount: 0,
+                spacedRepetitionEaseFactor: 2.5,
+                // Handle recurring fields
+                recurringEnabled: newTaskData.recurringEnabled || false,
+                recurringPattern: newTaskData.recurringPattern || 'daily',
+                recurringInterval: newTaskData.recurringInterval || 1,
+                recurringNextDue: newTaskData.recurringNextDue || Date.now(),
+                // Due date
+                dueDate: newTaskData.dueDate,
+                ...newTaskData
             };
 
             queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), (old: any[]) =>
@@ -503,6 +712,7 @@ export function useTaskMutations() {
         onError: (err, newTaskData, context) => {
             // If the mutation fails, use the context returned from onMutate to roll back
             queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), context?.previousTasks);
+            console.error('Failed to create task:', err);
         },
         onSuccess: (createdTask) => {
             // Replace the temporary task with the real one from server
@@ -522,20 +732,38 @@ export function useTaskMutations() {
             return await storageService.updateTask(id, updates);
         },
         onMutate: async ({ id, updates }) => {
-            // Cancel any outgoing refetches
+            // Cancel any outgoing refetches using hierarchical query key
             await queryClient.cancelQueries({ queryKey: queryKeys.tasks(user?.uid || '') });
 
             // Snapshot the previous value
             const previousTasks = queryClient.getQueryData(queryKeys.tasks(user?.uid || ''));
 
-            // Optimistically update the task
+            // Optimistically update the task with proper field handling
             queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), (old: any[]) => {
                 if (!old) return old;
-                return old.map(task =>
-                    task.id === id
-                        ? { ...task, ...updates }
-                        : task
-                );
+                return old.map(task => {
+                    if (task.id === id) {
+                        const updatedTask = { ...task, ...updates };
+
+                        // Handle nested object updates properly
+                        if (updates.spacedRepetition) {
+                            updatedTask.spacedRepetition = {
+                                ...task.spacedRepetition,
+                                ...updates.spacedRepetition
+                            };
+                        }
+
+                        if (updates.recurring) {
+                            updatedTask.recurring = {
+                                ...task.recurring,
+                                ...updates.recurring
+                            };
+                        }
+
+                        return updatedTask;
+                    }
+                    return task;
+                });
             });
 
             return { previousTasks };
@@ -543,9 +771,10 @@ export function useTaskMutations() {
         onError: (err, { id, updates }, context) => {
             // Roll back on error
             queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), context?.previousTasks);
+            console.error('Failed to update task:', err);
         },
         onSuccess: (updatedTask, { id }) => {
-            // Update cache with server response
+            // Update cache with server response to ensure consistency
             queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), (old: any[]) => {
                 if (!old) return old;
                 return old.map(task =>
@@ -562,23 +791,39 @@ export function useTaskMutations() {
             return await storageService.deleteTask(id);
         },
         onMutate: async (id) => {
-            // Cancel any outgoing refetches
+            // Cancel any outgoing refetches using hierarchical query key
             await queryClient.cancelQueries({ queryKey: queryKeys.tasks(user?.uid || '') });
+            // Also cancel related queries that might reference this task
+            await queryClient.cancelQueries({ queryKey: queryKeys.task(user?.uid || '', id) });
+            await queryClient.cancelQueries({ queryKey: queryKeys.taskSessions(user?.uid || '', id, getTodayString()) });
 
-            // Snapshot the previous value
+            // Snapshot the previous values
             const previousTasks = queryClient.getQueryData(queryKeys.tasks(user?.uid || ''));
+            const previousTask = queryClient.getQueryData(queryKeys.task(user?.uid || '', id));
+            const previousTaskSessions = queryClient.getQueryData(queryKeys.taskSessions(user?.uid || '', id, getTodayString()));
 
-            // Optimistically remove the task
+            // Optimistically remove the task from all relevant caches
             queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), (old: any[]) => {
                 if (!old) return old;
                 return old.filter(task => task.id !== id);
             });
 
-            return { previousTasks };
+            // Remove individual task cache
+            queryClient.removeQueries({ queryKey: queryKeys.task(user?.uid || '', id) });
+            queryClient.removeQueries({ queryKey: queryKeys.taskSessions(user?.uid || '', id, getTodayString()) });
+
+            return { previousTasks, previousTask, previousTaskSessions };
         },
         onError: (err, id, context) => {
             // Roll back on error
             queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), context?.previousTasks);
+            if (context?.previousTask) {
+                queryClient.setQueryData(queryKeys.task(user?.uid || '', id), context.previousTask);
+            }
+            if (context?.previousTaskSessions) {
+                queryClient.setQueryData(queryKeys.taskSessions(user?.uid || '', id, getTodayString()), context.previousTaskSessions);
+            }
+            console.error('Failed to delete task:', err);
         },
         // No automatic invalidation - the optimistic update is the final state
     });
@@ -588,37 +833,140 @@ export function useTaskMutations() {
             if (!storageService) throw new Error('Not authenticated');
             return await storageService.completeTask(taskId, difficulty);
         },
-        onMutate: async ({ taskId }) => {
-            // Cancel any outgoing refetches
+        onMutate: async ({ taskId, difficulty }) => {
+            // Cancel any outgoing refetches using hierarchical query key
             await queryClient.cancelQueries({ queryKey: queryKeys.tasks(user?.uid || '') });
+            await queryClient.cancelQueries({ queryKey: queryKeys.taskSessions(user?.uid || '', taskId, getTodayString()) });
 
-            // Snapshot the previous value
+            // Snapshot the previous values
             const previousTasks = queryClient.getQueryData(queryKeys.tasks(user?.uid || ''));
+            const previousTaskSessions = queryClient.getQueryData(queryKeys.taskSessions(user?.uid || '', taskId, getTodayString()));
 
-            // Optimistically update the task
+            // Optimistically update the task with proper logic for different task types
             queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), (old: any[]) => {
                 if (!old) return old;
-                return old.map(task =>
-                    task.id === taskId
-                        ? { ...task, sessionsCompleted: (task.sessionsCompleted || 0) + 1 }
-                        : task
-                );
+                return old.map(task => {
+                    if (task.id === taskId) {
+                        const now = Date.now();
+                        let updatedTask = {
+                            ...task,
+                            sessionsCompleted: (task.sessionsCompleted || 0) + 1
+                        };
+
+                        // Handle spaced repetition tasks
+                        if (task.spacedRepetitionEnabled || task.spacedRepetition?.enabled) {
+                            const currentDifficulty = difficulty || task.spacedRepetitionDifficulty || 'medium';
+                            const currentInterval = task.spacedRepetitionInterval || 1;
+                            const reviewCount = (task.spacedRepetitionReviewCount || 0) + 1;
+                            const easeFactor = task.spacedRepetitionEaseFactor || 2.5;
+
+                            // Calculate optimistic next review using helper function
+                            const { newInterval, newEaseFactor } = calculateSpacedRepetitionInterval(
+                                currentDifficulty,
+                                currentInterval,
+                                reviewCount,
+                                easeFactor
+                            );
+
+                            const nextReviewDate = now + (newInterval * 24 * 60 * 60 * 1000);
+
+                            updatedTask = {
+                                ...updatedTask,
+                                spacedRepetitionDifficulty: currentDifficulty,
+                                spacedRepetitionReviewCount: reviewCount,
+                                spacedRepetitionLastReviewed: now,
+                                spacedRepetitionInterval: newInterval,
+                                spacedRepetitionNextReviewDate: nextReviewDate,
+                                spacedRepetitionEaseFactor: newEaseFactor,
+                                completed: false // Spaced repetition tasks don't get marked as completed
+                            };
+
+                            // Update nested object if it exists
+                            if (updatedTask.spacedRepetition) {
+                                updatedTask.spacedRepetition = {
+                                    ...updatedTask.spacedRepetition,
+                                    difficulty: currentDifficulty,
+                                    reviewCount: reviewCount,
+                                    lastReviewed: now,
+                                    interval: newInterval,
+                                    nextReviewDate: nextReviewDate,
+                                    easeFactor: newEaseFactor
+                                };
+                            }
+                        }
+                        // Handle recurring tasks
+                        else if (task.recurringEnabled || task.recurring?.enabled) {
+                            const pattern = task.recurringPattern || task.recurring?.pattern || 'daily';
+                            const interval = task.recurringInterval || task.recurring?.interval || 1;
+
+                            // Calculate optimistic next due date using helper function
+                            const daysOfWeek = task.recurringDaysOfWeek || task.recurring?.daysOfWeek;
+                            const dayOfMonth = task.recurringDayOfMonth || task.recurring?.dayOfMonth;
+
+                            const nextDue = calculateRecurringNextDue(
+                                now,
+                                pattern,
+                                interval,
+                                daysOfWeek,
+                                dayOfMonth
+                            );
+
+                            updatedTask = {
+                                ...updatedTask,
+                                recurringLastCompleted: now,
+                                recurringNextDue: nextDue,
+                                completed: false, // Recurring tasks don't get marked as completed
+                                completedAt: undefined
+                            };
+
+                            // Update nested object if it exists
+                            if (updatedTask.recurring) {
+                                updatedTask.recurring = {
+                                    ...updatedTask.recurring,
+                                    lastCompleted: now,
+                                    nextDue: nextDue
+                                };
+                            }
+                        }
+                        // Handle regular tasks
+                        else {
+                            updatedTask = {
+                                ...updatedTask,
+                                completed: true,
+                                completedAt: now
+                            };
+                        }
+
+                        return updatedTask;
+                    }
+                    return task;
+                });
             });
 
-            return { previousTasks };
+            // Optimistically update task sessions count
+            queryClient.setQueryData(queryKeys.taskSessions(user?.uid || '', taskId, getTodayString()), (old: number) => {
+                return (old || 0) + 1;
+            });
+
+            return { previousTasks, previousTaskSessions };
         },
         onError: (err, { taskId }, context) => {
             // Roll back on error
             queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), context?.previousTasks);
+            queryClient.setQueryData(queryKeys.taskSessions(user?.uid || '', taskId, getTodayString()), context?.previousTaskSessions);
+            console.error('Failed to complete task:', err);
         },
         onSuccess: (completedTask, { taskId }) => {
-            // Update cache with server response
+            // Update cache with server response to ensure accuracy
             queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), (old: any[]) => {
                 if (!old) return old;
                 return old.map(task =>
                     task.id === taskId ? completedTask : task
                 );
             });
+
+            // Invalidate task sessions to get accurate count from server
+            queryClient.invalidateQueries({ queryKey: queryKeys.taskSessions(user?.uid || '', taskId, getTodayString()) });
         },
         // No automatic invalidation - rely on optimistic updates and onSuccess
     });
@@ -645,7 +993,7 @@ export function useBreakReminderMutations() {
             return await storageService.createBreakReminder(reminderData);
         },
         onMutate: async (newReminderData) => {
-            // Cancel any outgoing refetches
+            // Cancel any outgoing refetches using hierarchical query key
             await queryClient.cancelQueries({ queryKey: queryKeys.breakReminders(user?.uid || '') });
 
             // Snapshot the previous value
@@ -687,7 +1035,7 @@ export function useBreakReminderMutations() {
             return await storageService.updateBreakReminder(id, updates);
         },
         onMutate: async ({ id, updates }) => {
-            // Cancel any outgoing refetches
+            // Cancel any outgoing refetches using hierarchical query key
             await queryClient.cancelQueries({ queryKey: queryKeys.breakReminders(user?.uid || '') });
 
             // Snapshot the previous value
@@ -727,7 +1075,7 @@ export function useBreakReminderMutations() {
             return await storageService.deleteBreakReminder(id);
         },
         onMutate: async (id) => {
-            // Cancel any outgoing refetches
+            // Cancel any outgoing refetches using hierarchical query keys
             await queryClient.cancelQueries({ queryKey: queryKeys.breakReminders(user?.uid || '') });
             await queryClient.cancelQueries({ queryKey: queryKeys.breakReminderCompletions(user?.uid || '') });
 
@@ -763,7 +1111,7 @@ export function useBreakReminderMutations() {
             return await storageService.incrementBreakReminderCount(reminderId);
         },
         onMutate: async (reminderId) => {
-            // Cancel any outgoing refetches for both queries
+            // Cancel any outgoing refetches for both queries using hierarchical keys
             await queryClient.cancelQueries({ queryKey: queryKeys.breakReminderCompletions(user?.uid || '', getTodayString()) });
             await queryClient.cancelQueries({ queryKey: queryKeys.breakReminders(user?.uid || '') });
 
@@ -771,47 +1119,61 @@ export function useBreakReminderMutations() {
             const previousCompletions = queryClient.getQueryData(queryKeys.breakReminderCompletions(user?.uid || '', getTodayString()));
             const previousReminders = queryClient.getQueryData(queryKeys.breakReminders(user?.uid || ''));
 
-            // Optimistically add a completion
+            const now = Date.now();
+            const today = getTodayString();
+
+            // Optimistically add a completion with proper structure
             const newCompletion = {
-                id: `temp_${Date.now()}`,
+                id: `temp_${now}_${reminderId}`,
                 reminderId,
-                completedAt: Date.now(),
-                date: getTodayString(),
+                completedAt: now,
+                date: today,
             };
 
-            queryClient.setQueryData(queryKeys.breakReminderCompletions(user?.uid || '', getTodayString()), (old: any[]) =>
+            // Smart cache update - add completion efficiently
+            queryClient.setQueryData(queryKeys.breakReminderCompletions(user?.uid || '', today), (old: any[]) =>
                 old ? [...old, newCompletion] : [newCompletion]
             );
 
-            // Also update the reminder's lastCompleted timestamp
+            // Smart cache update - update reminder with optimized field updates
             queryClient.setQueryData(queryKeys.breakReminders(user?.uid || ''), (old: any[]) => {
                 if (!old) return old;
-                return old.map(reminder =>
-                    reminder.id === reminderId
-                        ? { ...reminder, lastCompleted: Date.now() }
-                        : reminder
-                );
+                return old.map(reminder => {
+                    if (reminder.id === reminderId) {
+                        return {
+                            ...reminder,
+                            lastCompleted: now,
+                            completionCount: (reminder.completionCount || 0) + 1
+                        };
+                    }
+                    return reminder;
+                });
             });
 
-            return { previousCompletions, previousReminders };
+            return { previousCompletions, previousReminders, optimisticCompletion: newCompletion };
         },
         onError: (err, reminderId, context) => {
-            // Roll back on error
+            // Roll back on error with detailed logging
+            console.error('Failed to increment break reminder count:', err);
             queryClient.setQueryData(queryKeys.breakReminderCompletions(user?.uid || '', getTodayString()), context?.previousCompletions);
             queryClient.setQueryData(queryKeys.breakReminders(user?.uid || ''), context?.previousReminders);
         },
-        onSuccess: (updatedReminder, reminderId) => {
-            // Update reminder with server response
-            if (updatedReminder && updatedReminder.lastCompleted !== undefined) {
+        onSuccess: (updatedReminder, reminderId, context) => {
+            // Keep the optimistic completion since it's already correct
+            // The server doesn't return completion data, only the updated reminder
+
+            // Update reminder with accurate server response
+            if (updatedReminder) {
                 queryClient.setQueryData(queryKeys.breakReminders(user?.uid || ''), (old: any[]) => {
                     if (!old) return old;
                     return old.map(reminder =>
-                        reminder.id === reminderId
-                            ? { ...reminder, lastCompleted: updatedReminder.lastCompleted }
-                            : reminder
+                        reminder.id === reminderId ? updatedReminder : reminder
                     );
                 });
             }
+
+            // DON'T invalidate queries - rely on optimistic updates to prevent flicker
+            // The optimistic updates are already correct and should persist
         },
         // No automatic invalidation - rely on optimistic updates and onSuccess
     });
@@ -822,7 +1184,7 @@ export function useBreakReminderMutations() {
             return await storageService.decrementBreakReminderCount(reminderId);
         },
         onMutate: async (reminderId) => {
-            // Cancel any outgoing refetches for both queries
+            // Cancel any outgoing refetches for both queries using hierarchical keys
             await queryClient.cancelQueries({ queryKey: queryKeys.breakReminderCompletions(user?.uid || '', getTodayString()) });
             await queryClient.cancelQueries({ queryKey: queryKeys.breakReminders(user?.uid || '') });
 
@@ -830,44 +1192,235 @@ export function useBreakReminderMutations() {
             const previousCompletions = queryClient.getQueryData(queryKeys.breakReminderCompletions(user?.uid || '', getTodayString()));
             const previousReminders = queryClient.getQueryData(queryKeys.breakReminders(user?.uid || ''));
 
-            // Optimistically remove the most recent completion for this reminder
+            let removedCompletion = null;
+
+            // Smart cache update - optimistically remove the most recent completion for this reminder
             queryClient.setQueryData(queryKeys.breakReminderCompletions(user?.uid || '', getTodayString()), (old: any[]) => {
                 if (!old) return old;
+
+                // Find completions for this specific reminder
                 const reminderCompletions = old.filter(c => c.reminderId === reminderId);
                 if (reminderCompletions.length === 0) return old;
 
-                // Remove the most recent completion (use completedAt or timestamp)
+                // Find the most recent completion (use completedAt or timestamp)
                 const mostRecentCompletion = reminderCompletions.reduce((latest, current) => {
                     const currentTime = current.completedAt || current.timestamp || 0;
                     const latestTime = latest.completedAt || latest.timestamp || 0;
                     return currentTime > latestTime ? current : latest;
                 });
 
+                removedCompletion = mostRecentCompletion;
                 return old.filter(c => c.id !== mostRecentCompletion.id);
             });
 
-            return { previousCompletions, previousReminders };
+            // Smart cache update - update reminder with decremented count
+            queryClient.setQueryData(queryKeys.breakReminders(user?.uid || ''), (old: any[]) => {
+                if (!old) return old;
+                return old.map(reminder => {
+                    if (reminder.id === reminderId) {
+                        const currentCount = reminder.completionCount || 0;
+                        const newCount = Math.max(0, currentCount - 1);
+                        return {
+                            ...reminder,
+                            completionCount: newCount,
+                            // Only update lastCompleted if we're not going to zero
+                            lastCompleted: newCount > 0 ? reminder.lastCompleted : null
+                        };
+                    }
+                    return reminder;
+                });
+            });
+
+            return { previousCompletions, previousReminders, removedCompletion };
         },
         onError: (err, reminderId, context) => {
-            // Roll back on error
+            // Roll back on error with detailed logging
+            console.error('Failed to decrement break reminder count:', err);
             queryClient.setQueryData(queryKeys.breakReminderCompletions(user?.uid || '', getTodayString()), context?.previousCompletions);
             queryClient.setQueryData(queryKeys.breakReminders(user?.uid || ''), context?.previousReminders);
         },
         onSuccess: (updatedReminder, reminderId) => {
-            // Update reminder cache with actual server response if needed
-            if (updatedReminder && updatedReminder.lastCompleted !== undefined) {
+            // Update reminder cache with accurate server response
+            if (updatedReminder) {
                 queryClient.setQueryData(queryKeys.breakReminders(user?.uid || ''), (old: any[]) => {
                     if (!old) return old;
                     return old.map(reminder =>
-                        reminder.id === reminderId
-                            ? { ...reminder, lastCompleted: updatedReminder.lastCompleted }
-                            : reminder
+                        reminder.id === reminderId ? updatedReminder : reminder
                     );
                 });
             }
+
+            // DON'T invalidate queries - rely on optimistic updates to prevent flicker
+            // The optimistic updates are already correct and should persist
         },
         // No automatic invalidation - rely on optimistic updates and onSuccess
     });
+
+    // Batched operations for better performance when multiple operations are needed
+    const batchBreakReminderOperations = useMutation({
+        mutationFn: async (operations: Array<{ reminderId: string; operation: 'increment' | 'decrement' }>) => {
+            if (!storageService) throw new Error('Not authenticated');
+
+            // Execute operations sequentially to maintain data consistency
+            const results = [];
+            for (const op of operations) {
+                try {
+                    if (op.operation === 'increment') {
+                        const result = await storageService.incrementBreakReminderCount(op.reminderId);
+                        results.push({ reminderId: op.reminderId, operation: op.operation, result });
+                    } else {
+                        const result = await storageService.decrementBreakReminderCount(op.reminderId);
+                        results.push({ reminderId: op.reminderId, operation: op.operation, result });
+                    }
+                } catch (error) {
+                    console.error(`Failed to ${op.operation} break reminder ${op.reminderId}:`, error);
+                    results.push({ reminderId: op.reminderId, operation: op.operation, error });
+                }
+            }
+            return results;
+        },
+        onMutate: async (operations) => {
+            // Cancel any outgoing refetches for both queries using hierarchical keys
+            await queryClient.cancelQueries({ queryKey: queryKeys.breakReminderCompletions(user?.uid || '', getTodayString()) });
+            await queryClient.cancelQueries({ queryKey: queryKeys.breakReminders(user?.uid || '') });
+
+            // Snapshot the previous values
+            const previousCompletions = queryClient.getQueryData(queryKeys.breakReminderCompletions(user?.uid || '', getTodayString()));
+            const previousReminders = queryClient.getQueryData(queryKeys.breakReminders(user?.uid || ''));
+
+            const now = Date.now();
+            const today = getTodayString();
+            const optimisticChanges: Array<{ type: 'completion'; data: any }> = [];
+
+            // Apply all operations optimistically
+            operations.forEach((op, index) => {
+                if (op.operation === 'increment') {
+                    const newCompletion = {
+                        id: `temp_batch_${now}_${index}_${op.reminderId}`,
+                        reminderId: op.reminderId,
+                        completedAt: now + index, // Slight offset to maintain order
+                        date: today,
+                    };
+                    optimisticChanges.push({ type: 'completion', data: newCompletion });
+                }
+            });
+
+            // Update completions cache
+            queryClient.setQueryData(queryKeys.breakReminderCompletions(user?.uid || '', today), (old: any[]) => {
+                if (!old) return optimisticChanges.filter(c => c.type === 'completion').map(c => c.data);
+
+                let updated = [...old];
+                operations.forEach((op, index) => {
+                    if (op.operation === 'increment') {
+                        const newCompletion = optimisticChanges.find(c =>
+                            c.type === 'completion' && c.data.id === `temp_batch_${now}_${index}_${op.reminderId}`
+                        );
+                        if (newCompletion) {
+                            updated.push(newCompletion.data);
+                        }
+                    } else {
+                        // Remove most recent completion for this reminder
+                        const reminderCompletions = updated.filter(c => c.reminderId === op.reminderId);
+                        if (reminderCompletions.length > 0) {
+                            const mostRecent = reminderCompletions.reduce((latest, current) => {
+                                const currentTime = current.completedAt || current.timestamp || 0;
+                                const latestTime = latest.completedAt || latest.timestamp || 0;
+                                return currentTime > latestTime ? current : latest;
+                            });
+                            updated = updated.filter(c => c.id !== mostRecent.id);
+                        }
+                    }
+                });
+                return updated;
+            });
+
+            // Update reminders cache
+            queryClient.setQueryData(queryKeys.breakReminders(user?.uid || ''), (old: any[]) => {
+                if (!old) return old;
+
+                return old.map(reminder => {
+                    const reminderOps = operations.filter(op => op.reminderId === reminder.id);
+                    if (reminderOps.length === 0) return reminder;
+
+                    let updatedReminder = { ...reminder };
+                    let countChange = 0;
+
+                    reminderOps.forEach(op => {
+                        if (op.operation === 'increment') {
+                            countChange += 1;
+                            updatedReminder.lastCompleted = now;
+                        } else {
+                            countChange -= 1;
+                        }
+                    });
+
+                    const newCount = Math.max(0, (updatedReminder.completionCount || 0) + countChange);
+                    updatedReminder.completionCount = newCount;
+
+                    if (newCount === 0) {
+                        updatedReminder.lastCompleted = null;
+                    }
+
+                    return updatedReminder;
+                });
+            });
+
+            return { previousCompletions, previousReminders, optimisticChanges };
+        },
+        onError: (err, operations, context) => {
+            // Roll back on error
+            console.error('Failed to execute batched break reminder operations:', err);
+            queryClient.setQueryData(queryKeys.breakReminderCompletions(user?.uid || '', getTodayString()), context?.previousCompletions);
+            queryClient.setQueryData(queryKeys.breakReminders(user?.uid || ''), context?.previousReminders);
+        },
+        onSuccess: (results, operations) => {
+            // Update caches with server responses
+            const today = getTodayString();
+
+            // Remove temporary completions and update with actual server state
+            queryClient.setQueryData(queryKeys.breakReminderCompletions(user?.uid || '', today), (old: any[]) => {
+                if (!old) return old;
+                // Remove all temporary batch completions
+                return old.filter(c => !c.id.startsWith('temp_batch_'));
+            });
+
+            // Update reminders with server responses
+            results.forEach(result => {
+                if (result.result && !result.error) {
+                    queryClient.setQueryData(queryKeys.breakReminders(user?.uid || ''), (old: any[]) => {
+                        if (!old) return old;
+                        return old.map(reminder =>
+                            reminder.id === result.reminderId ? result.result : reminder
+                        );
+                    });
+                }
+            });
+        },
+        // No automatic invalidation - rely on optimistic updates and onSuccess
+    });
+
+    // Helper function to check if batching would be beneficial
+    const canBatchOperations = (operations: Array<{ reminderId: string; operation: 'increment' | 'decrement' }>) => {
+        return operations.length > 1;
+    };
+
+    // Smart operation executor that chooses between individual and batch operations
+    const executeBreakReminderOperations = async (operations: Array<{ reminderId: string; operation: 'increment' | 'decrement' }>) => {
+        if (operations.length === 0) return [];
+
+        if (operations.length === 1) {
+            // Single operation - use individual mutation for better error handling
+            const op = operations[0];
+            if (op.operation === 'increment') {
+                return await incrementBreakReminderCount.mutateAsync(op.reminderId);
+            } else {
+                return await decrementBreakReminderCount.mutateAsync(op.reminderId);
+            }
+        } else {
+            // Multiple operations - use batch mutation for better performance
+            return await batchBreakReminderOperations.mutateAsync(operations);
+        }
+    };
 
     return {
         createBreakReminder,
@@ -875,6 +1428,9 @@ export function useBreakReminderMutations() {
         deleteBreakReminder,
         incrementBreakReminderCount,
         decrementBreakReminderCount,
+        batchBreakReminderOperations,
+        canBatchOperations,
+        executeBreakReminderOperations,
     };
 }
 
@@ -896,23 +1452,139 @@ export function useSessionMutations() {
             }
             return await storageService.recordSession(session);
         },
-        onSuccess: (_, session) => {
-            // Immediately invalidate and refetch relevant queries
-            queryClient.invalidateQueries({ queryKey: queryKeys.sessions(user?.uid || '') });
-            if (session.taskId) {
-                queryClient.invalidateQueries({
-                    queryKey: queryKeys.taskSessions(user?.uid || '', session.taskId, getTodayString())
+        onMutate: async (session) => {
+            // Cancel any outgoing refetches for sessions and related queries
+            await queryClient.cancelQueries({ queryKey: queryKeys.sessions(user?.uid || '') });
+
+            // Snapshot the previous value
+            const previousSessions = queryClient.getQueryData(queryKeys.sessions(user?.uid || ''));
+
+            // Create optimistic session with temporary ID
+            const optimisticSession = {
+                ...session,
+                id: `temp_${Date.now()}_${Math.random()}`,
+            };
+
+            // Optimistically update the sessions cache
+            queryClient.setQueryData(queryKeys.sessions(user?.uid || ''), (old: PomodoroSession[]) => {
+                if (!old) return [optimisticSession];
+                return [optimisticSession, ...old];
+            });
+
+            // If this is a task session, update task session count
+            if (session.taskId && session.type === 'work') {
+                const today = getTodayString();
+                const taskSessionsKey = queryKeys.taskSessions(user?.uid || '', session.taskId, today);
+
+                queryClient.setQueryData(taskSessionsKey, (old: number) => {
+                    return (old || 0) + 1;
                 });
-                // Also invalidate tasks to update session counts
-                queryClient.invalidateQueries({ queryKey: queryKeys.tasks(user?.uid || '') });
             }
 
-            // Dispatch event for other components
-            window.dispatchEvent(new CustomEvent('sessionCompleted', { detail: session }));
+            return { previousSessions, optimisticSession };
+        },
+        onError: (err, session, context) => {
+            // Roll back on error
+            queryClient.setQueryData(queryKeys.sessions(user?.uid || ''), context?.previousSessions);
+
+            if (session.taskId && session.type === 'work') {
+                const today = getTodayString();
+                const taskSessionsKey = queryKeys.taskSessions(user?.uid || '', session.taskId, today);
+
+                queryClient.setQueryData(taskSessionsKey, (old: number) => {
+                    return Math.max((old || 1) - 1, 0);
+                });
+            }
+
+            console.error('Failed to record session:', err);
+        },
+        onSuccess: (recordedSession, originalSession) => {
+            // For both authenticated and non-authenticated users, invalidate sessions to get fresh data
+            // This ensures that the stats are properly updated
+            queryClient.invalidateQueries({ queryKey: queryKeys.sessions(user?.uid || '') });
+
+            // Also invalidate task sessions if this was a task session
+            if (originalSession.taskId && originalSession.type === 'work') {
+                const today = getTodayString();
+                queryClient.invalidateQueries({ queryKey: queryKeys.taskSessions(user?.uid || '', originalSession.taskId, today) });
+            }
+
+            // Dispatch event for other components that might need to update
+            window.dispatchEvent(new CustomEvent('sessionCompleted', { detail: recordedSession }));
         },
     });
 
     return {
         recordSession,
+    };
+}
+
+// Settings hooks for React Query integration
+export function useSettings() {
+    const { user } = useAuth();
+
+    return useQuery({
+        queryKey: queryKeys.settings(user?.uid || ''),
+        queryFn: async () => {
+            if (!user) {
+                return LocalStorage.getSettings();
+            }
+            return await FirebaseService.getSettings(user);
+        },
+        enabled: true, // Always enabled - works for both authenticated and non-authenticated users
+        staleTime: 10 * 60 * 1000, // 10 minutes - settings rarely change
+        gcTime: 30 * 60 * 1000, // 30 minutes
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        refetchOnMount: false,
+        refetchInterval: false,
+    });
+}
+
+export function useSettingsMutations() {
+    const queryClient = useQueryClient();
+    const { user } = useAuth();
+
+    const updateSettings = useMutation({
+        mutationFn: async (newSettings: any) => {
+            // Always update localStorage first
+            LocalStorage.saveSettings(newSettings);
+
+            if (user) {
+                return await FirebaseService.saveSettings(user, newSettings);
+            }
+            return newSettings;
+        },
+        onMutate: async (newSettings) => {
+            // Cancel any outgoing refetches
+            await queryClient.cancelQueries({ queryKey: queryKeys.settings(user?.uid || '') });
+
+            // Snapshot the previous value
+            const previousSettings = queryClient.getQueryData(queryKeys.settings(user?.uid || ''));
+
+            // Optimistically update the settings
+            queryClient.setQueryData(queryKeys.settings(user?.uid || ''), newSettings);
+
+            return { previousSettings };
+        },
+        onError: (err, newSettings, context) => {
+            // Roll back on error
+            queryClient.setQueryData(queryKeys.settings(user?.uid || ''), context?.previousSettings);
+            console.error('Failed to update settings:', err);
+        },
+        onSuccess: (updatedSettings, variables) => {
+            // Use the variables (newSettings) if updatedSettings is null
+            const finalSettings = updatedSettings || variables;
+
+            // Ensure cache is updated with the final settings
+            queryClient.setQueryData(queryKeys.settings(user?.uid || ''), finalSettings);
+
+            // Dispatch event for components that listen to settings changes
+            window.dispatchEvent(new CustomEvent('settingsUpdated', { detail: finalSettings }));
+        },
+    });
+
+    return {
+        updateSettings,
     };
 }

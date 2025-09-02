@@ -22,6 +22,7 @@ interface TimerWithTitleProps {
   shouldAutoStart?: boolean;
   onAutoStartComplete?: () => void;
   todaysTaskSessions?: number;
+  todaysWorkSessions?: number;
 }
 
 export function TimerWithTitle({
@@ -32,6 +33,7 @@ export function TimerWithTitle({
   shouldAutoStart,
   onAutoStartComplete,
   todaysTaskSessions,
+  todaysWorkSessions,
 }: TimerWithTitleProps) {
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [totalTime, setTotalTime] = useState(25 * 60);
@@ -529,6 +531,7 @@ export function TimerWithTitle({
         settings={settings}
         currentTask={currentTask}
         todaysTaskSessions={todaysTaskSessions}
+        todaysWorkSessions={todaysWorkSessions}
       />
     </>
   );

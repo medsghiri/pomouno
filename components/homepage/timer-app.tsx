@@ -11,14 +11,13 @@ import { AuthPrompt } from "@/components/auth/auth-prompt";
 import { TaskCompletionDialog } from "@/components/tasks/task-completion-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { LocalStorage, PomodoroSession, TodaysStats } from "@/lib/storage";
-import { StatisticsEngine } from "@/lib/statistics-engine";
+import { LocalStorage, PomodoroSession } from "@/lib/storage";
 import { useAuth, useFeatureAccess } from "@/lib/auth-context";
 import { FirebaseService } from "@/lib/firebase-service";
 import { AdvancedStorageService } from "@/lib/advanced-storage-service";
 import type { Task } from "@/lib/advanced-storage-service";
 import { useToast } from "@/hooks/use-toast";
-import { useSessionMutations } from "@/hooks/use-app-data";
+import { useSessionMutations, useTodaysStats } from "@/hooks/use-app-data";
 import { Settings, BarChart3, X, Target, Coffee } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useRouter } from "next/navigation";
@@ -57,7 +56,7 @@ export function TimerApp({
   const [authPromptTrigger, setAuthPromptTrigger] = useState<
     "sessions" | "devices" | "endOfDay" | "settings" | "tasks"
   >("sessions");
-  const [sessionsCompleted, setSessionsCompleted] = useState(0);
+
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -74,101 +73,17 @@ export function TimerApp({
   const router = useRouter();
   const { recordSession } = useSessionMutations();
 
-  const loadFirebaseSessions = useCallback(async () => {
-    if (!user) return;
-
-    try {
-      // Use the same method as stats display to ensure consistency
-      const allSessions = await FirebaseService.getRecentSessions(user, 100);
-
-      // Calculate today's date range (same logic as stats display)
-      const today = new Date();
-      const todayStart = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate()
-      ).getTime();
-      const todayEnd = todayStart + 24 * 60 * 60 * 1000 - 1;
-
-      console.log(
-        `📅 Today's date range: ${new Date(
-          todayStart
-        ).toISOString()} to ${new Date(todayEnd).toISOString()}`
-      );
-      console.log(`📊 Total sessions from Firebase: ${allSessions.length}`);
-
-      // Filter sessions for today (same logic as stats display)
-      const todaySessions = allSessions.filter((s) => {
-        const sessionDate = new Date(s.timestamp);
-        const sessionStart = new Date(
-          sessionDate.getFullYear(),
-          sessionDate.getMonth(),
-          sessionDate.getDate()
-        ).getTime();
-        const isToday = sessionStart === todayStart;
-
-        if (isToday) {
-          console.log(
-            `✅ Session from today: ${new Date(
-              s.timestamp
-            ).toISOString()}, type: ${s.type}, id: ${s.id}`
-          );
-        }
-
-        return isToday;
-      });
-
-      // Count work sessions for today
-      const workSessionsToday = todaySessions.filter(
-        (s) => s.type === "work"
-      ).length;
-
-      // Sync with local storage
-      const localSessions = LocalStorage.getAllSessions();
-      const existingIds = new Set(localSessions.map((s) => s.id));
-
-      const newSessions = todaySessions.filter((s) => !existingIds.has(s.id));
-
-      if (newSessions.length > 0) {
-        // Add new sessions to local storage
-        const allLocalSessions = [...localSessions, ...newSessions];
-        LocalStorage.saveAllSessions(allLocalSessions);
-        console.log(
-          `✅ Synced ${newSessions.length} new sessions from Firebase`
-        );
-      }
-
-      // Update the sessions completed state with the actual count from Firebase
-      console.log(
-        `🎯 Setting daily goal progress: ${workSessionsToday} sessions`
-      );
-      setSessionsCompleted(workSessionsToday);
-
-      console.log(
-        `📊 Daily progress sync: ${workSessionsToday} work sessions today (${todaySessions.length} total sessions today, ${allSessions.length} total sessions from Firebase)`
-      );
-    } catch (error) {
-      console.error("❌ Failed to load Firebase sessions:", error);
-    }
-  }, [user]);
+  // Use React Query hook for today's stats instead of manual Firebase calls
+  const todaysStats = useTodaysStats();
 
   useEffect(() => {
     if (user) {
       const service = new AdvancedStorageService(user);
       setStorageService(service);
-
-      // Immediately sync sessions when user becomes available
-      // This ensures the daily goal shows the correct count from Firebase
-      console.log("🔄 User authenticated - syncing sessions for daily goal...");
-
-      // Force immediate sync with a small delay to ensure Firebase is ready
-      setTimeout(() => {
-        loadFirebaseSessions();
-      }, 500);
     } else {
       setStorageService(null);
     }
-  }, [user, loadFirebaseSessions]);
+  }, [user]);
 
   useEffect(() => {
     // Check and reset daily sessions if it's a new day
@@ -186,18 +101,6 @@ export function TimerApp({
       localStorage.setItem("pomouono_last_daily_reset", today);
     }
 
-    // Only calculate from local storage if user is not authenticated
-    // For authenticated users, Firebase sync will handle the session count
-    if (!user) {
-      const allSessions = LocalStorage.getAllSessions();
-      const todayStats = StatisticsEngine.calculateDailyStats(
-        allSessions,
-        [],
-        today
-      );
-      setSessionsCompleted(todayStats.sessions);
-    }
-
     // Load theme settings
     const settings = LocalStorage.getSettings();
     setIsDarkMode(settings.darkMode);
@@ -205,7 +108,7 @@ export function TimerApp({
     setShowDailyGoal(settings.showDailyGoal);
   }, [user]);
 
-  // Listen for theme changes and unsaved settings
+  // Listen for theme changes and settings updates
   useEffect(() => {
     const handleSettingsUpdate = (event: CustomEvent) => {
       const settings = event.detail;
@@ -214,76 +117,18 @@ export function TimerApp({
       setShowDailyGoal(settings.showDailyGoal);
     };
 
-    const handleFirebaseDataSynced = async () => {
-      // Reload sessions from Firebase when data is synced
-      if (user) {
-        await loadFirebaseSessions();
-      } else {
-        // For non-authenticated users, use local storage
-        const now = new Date();
-        const today =
-          now.getFullYear() +
-          "-" +
-          String(now.getMonth() + 1).padStart(2, "0") +
-          "-" +
-          String(now.getDate()).padStart(2, "0");
-        const allSessions = LocalStorage.getAllSessions();
-        const allTasks = LocalStorage.getTasks();
-        const todayStats = StatisticsEngine.calculateDailyStats(
-          allSessions,
-          allTasks,
-          today
-        );
-        setSessionsCompleted(todayStats.sessions);
-      }
-
-      const settings = LocalStorage.getSettings();
-      setDailyGoal(settings.dailySessionGoal);
-      setIsDarkMode(settings.darkMode);
-      setShowDailyGoal(settings.showDailyGoal);
-    };
-
     window.addEventListener(
       "settingsUpdated",
       handleSettingsUpdate as EventListener
     );
-    window.addEventListener(
-      "firebaseDataSynced",
-      handleFirebaseDataSynced as EventListener
-    );
-
-    const handleDataReset = () => {
-      const now = new Date();
-      const today =
-        now.getFullYear() +
-        "-" +
-        String(now.getMonth() + 1).padStart(2, "0") +
-        "-" +
-        String(now.getDate()).padStart(2, "0");
-      const allSessions = LocalStorage.getAllSessions();
-      const allTasks = LocalStorage.getTasks();
-      const todayStats = StatisticsEngine.calculateDailyStats(
-        allSessions,
-        allTasks,
-        today
-      );
-      setSessionsCompleted(todayStats.sessions);
-    };
-
-    window.addEventListener("dataReset", handleDataReset as EventListener);
 
     return () => {
       window.removeEventListener(
         "settingsUpdated",
         handleSettingsUpdate as EventListener
       );
-      window.removeEventListener(
-        "firebaseDataSynced",
-        handleFirebaseDataSynced as EventListener
-      );
-      window.removeEventListener("dataReset", handleDataReset as EventListener);
     };
-  }, [user, loadFirebaseSessions]);
+  }, []);
 
   const handleAuthSuccess = useCallback(async () => {
     if (!user) return;
@@ -325,127 +170,44 @@ export function TimerApp({
   useEffect(() => {
     if (user && !loading) {
       handleAuthSuccess();
-
-      // Initial sync - load sessions from Firebase when user is authenticated
-      // This will override any local storage count with Firebase data
-      loadFirebaseSessions();
-
-      // Set up periodic sync every 30 seconds to check for new sessions
-      const syncInterval = setInterval(() => {
-        if (user) {
-          loadFirebaseSessions();
-        }
-      }, 30000); // 30 seconds for more responsive cross-device sync
-
-      // Sync when user focuses back on the tab (in case they completed sessions elsewhere)
-      const handleFocus = () => {
-        if (user) {
-          console.log("🔄 Tab focused - syncing sessions...");
-          loadFirebaseSessions();
-        }
-      };
-
-      const handleVisibilityChange = () => {
-        if (!document.hidden && user) {
-          console.log("🔄 Tab visible - syncing sessions...");
-          loadFirebaseSessions();
-        }
-      };
-
-      window.addEventListener("focus", handleFocus);
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-
-      return () => {
-        clearInterval(syncInterval);
-        window.removeEventListener("focus", handleFocus);
-        document.removeEventListener(
-          "visibilitychange",
-          handleVisibilityChange
-        );
-      };
     }
-  }, [user, loading, handleAuthSuccess, loadFirebaseSessions]);
-
-  // Sync when stats panel is opened to ensure consistency
-  useEffect(() => {
-    if (showStats && user) {
-      console.log("📊 Stats panel opened - syncing for consistency...");
-      loadFirebaseSessions();
-    }
-  }, [showStats, user, loadFirebaseSessions]);
+  }, [user, loading, handleAuthSuccess]);
 
   const handleSessionComplete = useCallback(
     async (session: PomodoroSession) => {
-      const currentSessions = LocalStorage.getTodaysSessions();
-      const updatedSessions = [...currentSessions, session];
-      LocalStorage.saveTodaysSessions(updatedSessions);
-      LocalStorage.addSession(session);
-
-      const now = new Date();
-      const today =
-        now.getFullYear() +
-        "-" +
-        String(now.getMonth() + 1).padStart(2, "0") +
-        "-" +
-        String(now.getDate()).padStart(2, "0");
-      const allSessions = LocalStorage.getAllSessions();
-      const todayStats = StatisticsEngine.calculateDailyStats(
-        allSessions,
-        [],
-        today
-      );
-
-      const updatedStats: TodaysStats = {
-        sessions: todayStats.sessions,
-        focusTime: todayStats.focusTime,
-        streak: todayStats.streak,
-        tasksCompleted: todayStats.tasksCompleted,
-        date: today,
-        workSessions: todayStats.workSessions || 0,
-        shortBreakSessions: todayStats.shortBreakSessions || 0,
-        longBreakSessions: todayStats.longBreakSessions || 0,
-        breakRemindersShown: todayStats.breakRemindersShown || 0,
-        breakRemindersCompleted: todayStats.breakRemindersCompleted || 0,
-      };
-      LocalStorage.saveTodaysStats(updatedStats);
-
-      // For authenticated users, the Firebase sync will update the count
-      // For non-authenticated users, update immediately from local stats
-      if (!user) {
-        setSessionsCompleted(todayStats.sessions);
-      }
-
       // Update today's task sessions count if a task was selected
       if (selectedTaskId && session.type === "work") {
         // Immediately increment the count for instant feedback
         setTodaysTaskSessions((prev) => prev + 1);
       }
 
-      if (todayStats.sessions === dailyGoal) {
+      // Check if daily goal will be achieved with this session
+      const currentSessions = todaysStats?.sessions || 0;
+      const newSessionCount =
+        session.type === "work" ? currentSessions + 1 : currentSessions;
+
+      if (newSessionCount === dailyGoal) {
         toast({
           title: "🎯 Daily goal achieved!",
           description: `Congratulations! You've completed ${dailyGoal} sessions today. Outstanding work!`,
         });
       }
 
-      // Use the optimized session mutation
+      // Use the React Query mutation which handles all storage operations
       recordSession.mutate(session);
 
-      if (user) {
-        FirebaseService.saveStats(user, updatedStats).catch(console.error);
-      }
-
+      // Show auth prompts for non-authenticated users
       if (!user) {
-        if (todayStats.sessions === 3) {
+        if (newSessionCount === 3) {
           setAuthPromptTrigger("sessions");
           setShowAuthPrompt(true);
-        } else if (todayStats.sessions >= 5 && Math.random() < 0.3) {
+        } else if (newSessionCount >= 5 && Math.random() < 0.3) {
           setAuthPromptTrigger("endOfDay");
           setShowAuthPrompt(true);
         }
       }
     },
-    [user, toast, dailyGoal, selectedTaskId, storageService, todaysTaskSessions]
+    [user, toast, dailyGoal, selectedTaskId, todaysStats, recordSession]
   );
 
   const handleStartFocusSession = useCallback(
@@ -604,7 +366,7 @@ export function TimerApp({
         <div className="mb-6">
           <AuthPrompt
             trigger={authPromptTrigger}
-            sessionsCompleted={sessionsCompleted}
+            sessionsCompleted={todaysStats?.sessions || 0}
             onDismiss={() => setShowAuthPrompt(false)}
             onSignUp={handleSignUp}
           />
@@ -651,6 +413,7 @@ export function TimerApp({
               shouldAutoStart={shouldAutoStartTimer}
               onAutoStartComplete={() => setShouldAutoStartTimer(false)}
               todaysTaskSessions={todaysTaskSessions}
+              todaysWorkSessions={todaysStats?.sessions || 0}
             />
 
             {/* Productivity Tools */}
@@ -706,7 +469,7 @@ export function TimerApp({
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-foreground">
-                        {sessionsCompleted} / {dailyGoal}
+                        {todaysStats?.sessions || 0} / {dailyGoal}
                       </h3>
                       <p className="text-xs text-muted-foreground">
                         sessions today
@@ -715,7 +478,10 @@ export function TimerApp({
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                      {Math.round((sessionsCompleted / dailyGoal) * 100)}%
+                      {Math.round(
+                        ((todaysStats?.sessions || 0) / dailyGoal) * 100
+                      )}
+                      %
                     </div>
                     <p className="text-xs text-muted-foreground">complete</p>
                   </div>
@@ -726,24 +492,24 @@ export function TimerApp({
                     className="bg-gradient-to-r from-red-500 to-orange-500 h-3 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
                     style={{
                       width: `${Math.min(
-                        (sessionsCompleted / dailyGoal) * 100,
+                        ((todaysStats?.sessions || 0) / dailyGoal) * 100,
                         100
                       )}%`,
                     }}
                   >
-                    {sessionsCompleted > 0 && (
+                    {(todaysStats?.sessions || 0) > 0 && (
                       <div className="w-2 h-2 bg-white rounded-full shadow-sm"></div>
                     )}
                   </div>
                 </div>
 
                 <p className="text-sm text-center text-muted-foreground">
-                  {sessionsCompleted >= dailyGoal
+                  {(todaysStats?.sessions || 0) >= dailyGoal
                     ? "🎯 Daily goal achieved! Outstanding work!"
-                    : sessionsCompleted === 0
+                    : (todaysStats?.sessions || 0) === 0
                     ? "Ready to start your productive day?"
                     : `${
-                        dailyGoal - sessionsCompleted
+                        dailyGoal - (todaysStats?.sessions || 0)
                       } more to reach your goal`}
                 </p>
               </div>

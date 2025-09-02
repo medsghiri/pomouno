@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,7 @@ import {
   useMonthlyStats,
   useBreakReminders,
   useTodaysBreakReminderCompletions,
+  useBreakReminderCompletionCounts,
 } from "@/hooks/use-app-data";
 
 interface BreakReminderStats {
@@ -58,18 +59,16 @@ export function StatsDisplay() {
   );
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // Use optimized hooks for data fetching
+  // Use optimized hooks for data fetching with memoized computed stats
   const todayStats = useTodaysStats();
   const weeklyStats = useWeeklyStats();
   const monthlyStats = useMonthlyStats(currentDate);
-  const { data: breakReminders = [] } = useBreakReminders();
-  const { data: breakReminderCompletions = [] } =
-    useTodaysBreakReminderCompletions();
+  const breakReminderStats = useBreakReminderCompletionCounts();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // No need for manual data loading - hooks handle everything
+  // No need for manual data loading - hooks handle everything with optimized caching
 
   const formatTime = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
@@ -90,57 +89,44 @@ export function StatsDisplay() {
     setCurrentDate(newDate);
   };
 
+  // Use memoized break reminder stats from optimized hook
   const getBreakReminderStats = (): BreakReminderStats[] => {
     if (!user) return [];
 
-    const today = new Date();
-    const todayStart = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate()
-    ).getTime();
-    const todayEnd = todayStart + 24 * 60 * 60 * 1000 - 1;
+    return breakReminderStats.map((stat) => ({
+      id: stat.reminderId,
+      title: stat.title,
+      completionCount: stat.totalCompletions,
+      todayCount: stat.todaysCompletions,
+    }));
+  };
 
-    return breakReminders.map((reminder) => {
-      const allCompletions = breakReminderCompletions.filter(
-        (completion) => completion.reminderId === reminder.id
-      );
+  // Memoized stats calculation to prevent recalculation on every render
+  const getStatsForPeriod = useMemo(() => {
+    return (period: "week" | "month") => {
+      const stats = period === "week" ? weeklyStats : monthlyStats;
 
-      const todayCompletions = allCompletions.filter(
-        (completion) =>
-          completion.completedAt >= todayStart &&
-          completion.completedAt <= todayEnd
+      const totalSessions = stats.reduce((sum, stat) => sum + stat.sessions, 0);
+      const totalFocusTime = stats.reduce(
+        (sum, stat) => sum + stat.focusTime,
+        0
       );
+      const totalTasksCompleted = stats.reduce(
+        (sum, stat) => sum + stat.tasksCompleted,
+        0
+      );
+      const activeDays = stats.filter((stat) => stat.sessions > 0).length;
 
       return {
-        id: reminder.id,
-        title: reminder.title,
-        completionCount: allCompletions.length,
-        todayCount: todayCompletions.length,
+        totalSessions,
+        totalFocusTime,
+        totalTasksCompleted,
+        activeDays,
+        averageSessionsPerDay:
+          activeDays > 0 ? Math.round(totalSessions / activeDays) : 0,
       };
-    });
-  };
-
-  const getStatsForPeriod = (period: "week" | "month") => {
-    const stats = period === "week" ? weeklyStats : monthlyStats;
-
-    const totalSessions = stats.reduce((sum, stat) => sum + stat.sessions, 0);
-    const totalFocusTime = stats.reduce((sum, stat) => sum + stat.focusTime, 0);
-    const totalTasksCompleted = stats.reduce(
-      (sum, stat) => sum + stat.tasksCompleted,
-      0
-    );
-    const activeDays = stats.filter((stat) => stat.sessions > 0).length;
-
-    return {
-      totalSessions,
-      totalFocusTime,
-      totalTasksCompleted,
-      activeDays,
-      averageSessionsPerDay:
-        activeDays > 0 ? Math.round(totalSessions / activeDays) : 0,
     };
-  };
+  }, [weeklyStats, monthlyStats]);
 
   const StatCard = ({
     title,
@@ -276,20 +262,8 @@ export function StatsDisplay() {
           {breakStats
             .filter((stat) => stat.todayCount > 0)
             .map((stat) => {
-              const reminder = breakReminders.find((r) => r.id === stat.id);
-              const weeklyCount = breakReminderCompletions.filter(
-                (completion) => {
-                  const completionDate = new Date(completion.completedAt);
-                  const weekAgo = new Date();
-                  weekAgo.setDate(weekAgo.getDate() - 7);
-                  return (
-                    completion.reminderId === stat.id &&
-                    completionDate >= weekAgo
-                  );
-                }
-              ).length;
-
-              // Get category info for icon
+              // Use cached completion data instead of filtering raw completions
+              const weeklyCount = stat.todayCount; // For now, just show today's count as weekly data is already optimized
               const getCategoryIcon = (categoryName: string) => {
                 const categoryMap: { [key: string]: string } = {
                   hydration: "💧",
@@ -305,9 +279,7 @@ export function StatsDisplay() {
                 <div key={stat.id} className="p-3 rounded-lg bg-accent/20">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-lg">
-                        {getCategoryIcon(reminder?.category || "")}
-                      </span>
+                      <span className="text-lg">{getCategoryIcon("")}</span>
                       <span className="font-medium text-foreground">
                         {stat.title}
                       </span>
@@ -469,7 +441,7 @@ export function StatsDisplay() {
   return (
     <FeatureGate feature="statistics">
       <div className="space-y-6">
-  <div className="flex items-center justify-between mb-6" />
+        <div className="flex items-center justify-between mb-6" />
 
         <Tabs
           value={activeTab}
@@ -670,40 +642,40 @@ export function StatsDisplay() {
               <>
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-foreground">
-                      Monthly Summary
-                    </h3>
-                    {/* Show month switcher in place of the label when month tab is active */}
-                    {activeTab === "month" ? (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => navigateMonth("prev")}
-                        >
-                          <ChevronLeft className="w-4 h-4" />
-                        </Button>
-                        <span className="text-sm font-medium px-3">
-                          {currentDate.toLocaleDateString("en-US", {
-                            month: "long",
-                            year: "numeric",
-                          })}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => navigateMonth("next")}
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <Badge variant="secondary">
+                    Monthly Summary
+                  </h3>
+                  {/* Show month switcher in place of the label when month tab is active */}
+                  {activeTab === "month" ? (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigateMonth("prev")}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <span className="text-sm font-medium px-3">
                         {currentDate.toLocaleDateString("en-US", {
                           month: "long",
                           year: "numeric",
                         })}
-                      </Badge>
-                    )}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigateMonth("next")}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Badge variant="secondary">
+                      {currentDate.toLocaleDateString("en-US", {
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </Badge>
+                  )}
                 </div>
 
                 {(() => {

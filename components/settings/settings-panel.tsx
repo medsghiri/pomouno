@@ -37,7 +37,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import { UpgradePrompt } from "@/components/auth/upgrade-prompt";
-import { FirebaseService } from "@/lib/firebase-service";
+import { useSettings, useSettingsMutations } from "@/hooks/use-app-data";
 import AudioService from "@/lib/audio-service";
 
 const DEFAULT_SETTINGS: Settings = {
@@ -66,7 +66,9 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
   const { user, storageProvider } = useAuth();
-  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const { data: settingsData } = useSettings();
+  const settings = settingsData || DEFAULT_SETTINGS;
+  const { updateSettings } = useSettingsMutations();
   const [previewingAudio, setPreviewingAudio] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUserChanging, setIsUserChanging] = useState(false);
@@ -75,64 +77,29 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
   const audioService = AudioService.getInstance();
 
   useEffect(() => {
-    const savedSettings = LocalStorage.getSettings();
-    setSettings(savedSettings);
     audioService.initialize();
 
-    // Listen for settings updates from other components (like sound control popover)
-    // But ignore them if user is actively changing settings
-    const handleSettingsUpdate = (event: CustomEvent) => {
-      if (isUserChanging) return; // Ignore external updates during user changes
-
-      const updatedSettings = event.detail;
-      setSettings((prevSettings) => {
-        // Only update if settings have actually changed
-        if (JSON.stringify(prevSettings) !== JSON.stringify(updatedSettings)) {
-          return { ...prevSettings, ...updatedSettings };
-        }
-        return prevSettings;
-      });
-    };
-
-    // Listen for volume changes from AudioService
+    // Listen for volume changes from AudioService and update settings via React Query
     const handleVolumeChange = (newVolume: number) => {
-      setSettings((prevSettings) => ({
-        ...prevSettings,
-        soundVolume: newVolume,
-      }));
+      if (!isUserChanging) {
+        updateSettings.mutate({
+          ...settings,
+          soundVolume: newVolume,
+        });
+      }
     };
 
-    // Listen for Firebase data sync to refresh settings
-    const handleFirebaseDataSynced = () => {
-      const savedSettings = LocalStorage.getSettings();
-      setSettings(savedSettings);
-    };
-
-    window.addEventListener(
-      "settingsUpdated",
-      handleSettingsUpdate as EventListener
-    );
-    window.addEventListener("firebaseDataSynced", handleFirebaseDataSynced);
     audioService.onVolumeChange(handleVolumeChange);
 
     return () => {
-      window.removeEventListener(
-        "settingsUpdated",
-        handleSettingsUpdate as EventListener
-      );
-      window.removeEventListener(
-        "firebaseDataSynced",
-        handleFirebaseDataSynced
-      );
       audioService.removeVolumeChangeCallback(handleVolumeChange);
     };
-  }, [isUserChanging]);
+  }, [isUserChanging, settings, updateSettings]);
 
   const handleSettingChange = async (key: keyof Settings, value: any) => {
     setIsUserChanging(true); // Prevent external updates during user changes
 
     const newSettings = { ...settings, [key]: value };
-    setSettings(newSettings);
     onSettingsChange?.();
 
     // Handle theme changes immediately
@@ -144,73 +111,59 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
       }
     }
 
-    // Save immediately to localStorage
-    LocalStorage.saveSettings(newSettings);
-
-    // Save to Firebase if user is logged in
-    if (user) {
-      try {
-        await FirebaseService.saveSettings(user, newSettings);
-      } catch (error) {
-        console.error("Failed to sync settings to cloud:", error);
-      }
-    }
-
-    // Dispatch update event for other components
-    window.dispatchEvent(
-      new CustomEvent("settingsUpdated", { detail: newSettings })
-    );
-
-    // Reset user changing flag after a short delay
-    setTimeout(() => {
-      setIsUserChanging(false);
-    }, 100);
+    // Use React Query mutation to save settings
+    updateSettings.mutate(newSettings, {
+      onSuccess: () => {
+        // Reset user changing flag after successful save
+        setTimeout(() => {
+          setIsUserChanging(false);
+        }, 100);
+      },
+      onError: (error) => {
+        console.error("Failed to save settings:", error);
+        toast({
+          title: "Failed to save settings",
+          description: "Please try again.",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          setIsUserChanging(false);
+        }, 100);
+      },
+    });
   };
 
   const saveSettings = async () => {
-    // This function is now mainly used for reset functionality
-    LocalStorage.saveSettings(settings);
-
-    if (user) {
-      try {
-        await FirebaseService.saveSettings(user, settings);
-      } catch (error) {
-        console.error("Failed to sync settings to cloud:", error);
-      }
-    }
-
-    window.dispatchEvent(
-      new CustomEvent("settingsUpdated", { detail: settings })
-    );
+    // Use React Query mutation to save current settings
+    updateSettings.mutate(settings);
   };
 
   const resetSettings = async () => {
     setIsUserChanging(true);
-    setSettings(DEFAULT_SETTINGS);
-    LocalStorage.saveSettings(DEFAULT_SETTINGS);
 
-    // Save to Firebase if user is logged in
-    if (user) {
-      try {
-        await FirebaseService.saveSettings(user, DEFAULT_SETTINGS);
-      } catch (error) {
-        console.error("Failed to sync settings to cloud:", error);
-      }
-    }
-
-    toast({
-      title: "Settings reset",
-      description: "All settings have been restored to defaults.",
+    // Use React Query mutation to reset settings
+    updateSettings.mutate(DEFAULT_SETTINGS, {
+      onSuccess: () => {
+        toast({
+          title: "Settings reset",
+          description: "All settings have been restored to defaults.",
+        });
+        setTimeout(() => {
+          setIsUserChanging(false);
+        }, 100);
+      },
+      onError: (error) => {
+        console.error("Failed to reset settings:", error);
+        toast({
+          title: "Failed to reset settings",
+          description: "Please try again.",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          setIsUserChanging(false);
+        }, 100);
+      },
     });
-
-    // Trigger a custom event to notify other components
-    window.dispatchEvent(
-      new CustomEvent("settingsUpdated", { detail: DEFAULT_SETTINGS })
-    );
-
-    setTimeout(() => {
-      setIsUserChanging(false);
-    }, 100);
   };
 
   const requestNotificationPermission = async () => {

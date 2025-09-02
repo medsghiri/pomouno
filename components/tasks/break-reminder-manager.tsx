@@ -93,9 +93,15 @@ export function BreakReminderManager() {
 
   // Initialize default categories and reminders if needed
   useEffect(() => {
+    let isInitializing = false;
+
     const initializeDefaults = async () => {
       // Only initialize if user is authenticated and data has loaded
-      if (!user || remindersLoading || categoriesLoading) return;
+      if (!user || remindersLoading || categoriesLoading || isInitializing)
+        return;
+
+      // Prevent multiple simultaneous initializations
+      isInitializing = true;
 
       try {
         const storageService = new AdvancedStorageService(user);
@@ -109,7 +115,10 @@ export function BreakReminderManager() {
         const needsCategories = categories.length === 0;
         const needsReminders = reminders.length === 0;
 
-        if (!needsCategories && !needsReminders) return;
+        if (!needsCategories && !needsReminders) {
+          isInitializing = false;
+          return;
+        }
 
         // Create default categories if none exist
         if (needsCategories) {
@@ -136,14 +145,14 @@ export function BreakReminderManager() {
               title: "Drink Water",
               description: "Stay hydrated! Take a sip of water.",
               category: "hydration",
-              enabled: true,
+              enabled: false,
               breakType: "all" as const,
             },
             {
               title: "Stretch",
               description: "Stand up and do some light stretching.",
               category: "movement",
-              enabled: true,
+              enabled: false,
               breakType: "all" as const,
             },
             {
@@ -172,6 +181,8 @@ export function BreakReminderManager() {
         }
       } catch (error) {
         console.error("Failed to initialize defaults:", error);
+      } finally {
+        isInitializing = false;
       }
     };
 
@@ -179,6 +190,11 @@ export function BreakReminderManager() {
     if (user && !remindersLoading && !categoriesLoading) {
       initializeDefaults();
     }
+
+    // Cleanup function to prevent race conditions
+    return () => {
+      isInitializing = false;
+    };
   }, [user?.uid, remindersLoading, categoriesLoading]); // Only depend on user ID and loading states
 
   const resetForm = () => {

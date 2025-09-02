@@ -13,7 +13,6 @@ import {
 import { SoundControlPopover } from "./sound-control-popover";
 import { cn } from "@/lib/utils";
 import { Settings } from "@/lib/storage";
-import { StatisticsEngine } from "@/lib/statistics-engine";
 import AudioService from "@/lib/audio-service";
 import VibrationService from "@/lib/vibration-service";
 
@@ -33,6 +32,7 @@ interface TimerDisplayProps {
   settings: Settings;
   currentTask?: any | null;
   todaysTaskSessions?: number;
+  todaysWorkSessions?: number;
 }
 
 export function TimerDisplay({
@@ -51,46 +51,15 @@ export function TimerDisplay({
   settings,
   currentTask,
   todaysTaskSessions,
+  todaysWorkSessions,
 }: TimerDisplayProps) {
   const [mounted, setMounted] = useState(false);
-  const [homepageStats, setHomepageStats] = useState({
-    focusLabel: "Goal 0 / 4",
-    goalProgress: "Goal 0 / 4",
-    completionRate: 0,
-  });
   const [isAudioServiceReady, setIsAudioServiceReady] = useState(false);
   const audioService = AudioService.getInstance();
   const vibrationService = VibrationService.getInstance();
 
   useEffect(() => {
     setMounted(true);
-
-    // Load homepage statistics
-    const updateStats = () => {
-      const stats = StatisticsEngine.getHomepageFocusStats();
-      setHomepageStats({
-        focusLabel: stats.focusLabel,
-        goalProgress: stats.goalProgress,
-        completionRate: stats.completionRate,
-      });
-    };
-
-    updateStats();
-
-    // Update stats when sessions change
-    const handleStatsUpdate = () => {
-      updateStats();
-    };
-
-    window.addEventListener("sessionCompleted", handleStatsUpdate);
-    window.addEventListener("taskCompleted", handleStatsUpdate);
-    window.addEventListener("firebaseDataSynced", handleStatsUpdate);
-
-    return () => {
-      window.removeEventListener("sessionCompleted", handleStatsUpdate);
-      window.removeEventListener("taskCompleted", handleStatsUpdate);
-      window.removeEventListener("firebaseDataSynced", handleStatsUpdate);
-    };
   }, []);
 
   // Initialize audio service and handle volume changes
@@ -378,7 +347,7 @@ export function TimerDisplay({
             {sessionType === "work"
               ? currentTask
                 ? `Working on: ${truncateTaskTitle(currentTask.title)}`
-                : `#${currentSession} Time to focus!`
+                : `#${(todaysWorkSessions || 0) + 1} Time to focus!`
               : "Take a break!"}
           </span>
         )}
@@ -393,7 +362,7 @@ export function TimerDisplay({
           <span>
             {currentTask
               ? `Ready to work on: ${truncateTaskTitle(currentTask.title)}`
-              : `#${currentSession} Time to focus!`}
+              : `#${(todaysWorkSessions || 0) + 1} Time to focus!`}
           </span>
         )}
       </div>

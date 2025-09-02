@@ -469,32 +469,7 @@ export function StatsDisplay() {
   return (
     <FeatureGate feature="statistics">
       <div className="space-y-6">
-        <div className="flex items-center justify-between mb-6">
-          {user && activeTab === "month" && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigateMonth("prev")}
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <span className="text-sm font-medium px-3">
-                {currentDate.toLocaleDateString("en-US", {
-                  month: "long",
-                  year: "numeric",
-                })}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigateMonth("next")}
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-          )}
-        </div>
+  <div className="flex items-center justify-between mb-6" />
 
         <Tabs
           value={activeTab}
@@ -695,14 +670,40 @@ export function StatsDisplay() {
               <>
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-foreground">
-                    Monthly Summary
-                  </h3>
-                  <Badge variant="secondary">
-                    {currentDate.toLocaleDateString("en-US", {
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </Badge>
+                      Monthly Summary
+                    </h3>
+                    {/* Show month switcher in place of the label when month tab is active */}
+                    {activeTab === "month" ? (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigateMonth("prev")}
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </Button>
+                        <span className="text-sm font-medium px-3">
+                          {currentDate.toLocaleDateString("en-US", {
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigateMonth("next")}
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Badge variant="secondary">
+                        {currentDate.toLocaleDateString("en-US", {
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </Badge>
+                    )}
                 </div>
 
                 {(() => {

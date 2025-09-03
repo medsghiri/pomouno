@@ -106,8 +106,9 @@ export function BreakReminderManager() {
       try {
         const storageService = new AdvancedStorageService(user);
 
-        // First, clean up any existing duplicates
+        // First, fix any break reminders with old data structure
         if (reminders.length > 0) {
+          await storageService.fixBreakReminderDataStructure();
           await storageService.cleanupDuplicateBreakReminders();
         }
 

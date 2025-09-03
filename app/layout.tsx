@@ -38,11 +38,6 @@ export const metadata: Metadata = {
     "work from home productivity",
     "time blocking",
   ],
-  authors: [{ name: "PomoUno Team", url: "https://pomouno.com" }],
-  creator: "PomoUno",
-  publisher: "PomoUno",
-  category: "productivity",
-  classification: "productivity software",
   robots: {
     index: true,
     follow: true,
@@ -50,10 +45,6 @@ export const metadata: Metadata = {
     googleBot: {
       index: true,
       follow: true,
-      noimageindex: false,
-      "max-video-preview": -1,
-      "max-image-preview": "large",
-      "max-snippet": -1,
     },
   },
   openGraph: {
@@ -93,12 +84,6 @@ export const metadata: Metadata = {
     // yahoo: 'your-yahoo-verification',
   },
   applicationName: "PomoUno",
-  referrer: "origin-when-cross-origin",
-  formatDetection: {
-    email: false,
-    address: false,
-    telephone: false,
-  },
 };
 
 export const viewport: Viewport = {

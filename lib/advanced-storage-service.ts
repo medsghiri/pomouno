@@ -1002,10 +1002,15 @@ export class AdvancedStorageService {
                 orderBy('createdAt', 'desc')
             );
             const snapshot = await getDocs(remindersQuery);
-            const reminders = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            })) as BreakReminder[];
+            const reminders = snapshot.docs.map(doc => {
+                const data = doc.data();
+                // Always use Firebase document ID, ignore any internal id field
+                const { id: internalId, ...cleanData } = data;
+                return {
+                    id: doc.id, // Always use Firebase document ID
+                    ...cleanData
+                };
+            }) as BreakReminder[];
 
             this.setCached(cacheKey, reminders);
             return reminders;
@@ -1199,11 +1204,19 @@ export class AdvancedStorageService {
     // Manual increment/decrement break reminder completion count
     async incrementBreakReminderCount(reminderId: string): Promise<BreakReminder> {
         try {
+            console.log(`Attempting to increment break reminder count for ID: ${reminderId}`);
+
             const reminderRef = doc(db, 'users', this.user.uid, 'breakReminders', reminderId);
             const reminderDoc = await getDoc(reminderRef);
 
             if (!reminderDoc.exists()) {
-                throw new Error('Break reminder not found');
+                console.error(`Break reminder not found: ${reminderId}`);
+
+                // Try to find the reminder by checking all reminders
+                const allReminders = await this.getBreakReminders();
+                console.log('Available reminder IDs:', allReminders.map(r => ({ id: r.id, title: r.title })));
+
+                throw new Error(`Break reminder not found: ${reminderId}`);
             }
 
             const currentData = reminderDoc.data();
@@ -1256,11 +1269,19 @@ export class AdvancedStorageService {
 
     async decrementBreakReminderCount(reminderId: string): Promise<BreakReminder> {
         try {
+            console.log(`Attempting to decrement break reminder count for ID: ${reminderId}`);
+
             const reminderRef = doc(db, 'users', this.user.uid, 'breakReminders', reminderId);
             const reminderDoc = await getDoc(reminderRef);
 
             if (!reminderDoc.exists()) {
-                throw new Error('Break reminder not found');
+                console.error(`Break reminder not found: ${reminderId}`);
+
+                // Try to find the reminder by checking all reminders
+                const allReminders = await this.getBreakReminders();
+                console.log('Available reminder IDs:', allReminders.map(r => ({ id: r.id, title: r.title })));
+
+                throw new Error(`Break reminder not found: ${reminderId}`);
             }
 
             const currentData = reminderDoc.data();
@@ -1521,6 +1542,64 @@ export class AdvancedStorageService {
             }
         } catch (error) {
             console.error('Failed to cleanup duplicate break reminders:', error);
+        }
+    }
+
+    // Utility method to fix break reminders with old data structure
+    async fixBreakReminderDataStructure(): Promise<void> {
+        try {
+            console.log('Checking for break reminders with old data structure...');
+
+            // Get raw documents to check for internal id fields
+            const remindersQuery = query(
+                collection(db, 'users', this.user.uid, 'breakReminders'),
+                orderBy('createdAt', 'desc')
+            );
+            const snapshot = await getDocs(remindersQuery);
+
+            const batch = writeBatch(db);
+            let fixedCount = 0;
+
+            for (const docSnapshot of snapshot.docs) {
+                const data = docSnapshot.data();
+
+                // Check if this document has problematic fields from old structure
+                const hasOldStructure = data.id || data.userId || data.frequency || data.lastShown || data.updatedAt;
+
+                if (hasOldStructure) {
+                    console.log(`Fixing break reminder: ${data.title} (${docSnapshot.id})`);
+
+                    // Create clean data structure
+                    const cleanData = {
+                        title: data.title || '',
+                        description: data.description || '',
+                        category: data.category || 'hydration',
+                        enabled: data.enabled !== undefined ? data.enabled : true,
+                        breakType: data.breakType === 'both' ? 'all' : (data.breakType || 'all'),
+                        createdAt: data.createdAt || Date.now(),
+                        completionCount: data.completionCount || 0,
+                        lastCompleted: data.lastCompleted
+                    };
+
+                    // Remove undefined fields
+                    const finalData = removeUndefinedFields(cleanData);
+
+                    // Update the document
+                    const reminderRef = doc(db, 'users', this.user.uid, 'breakReminders', docSnapshot.id);
+                    batch.set(reminderRef, finalData);
+                    fixedCount++;
+                }
+            }
+
+            if (fixedCount > 0) {
+                await batch.commit();
+                this.invalidateCache('break_reminders');
+                console.log(`Fixed ${fixedCount} break reminders with old data structure`);
+            } else {
+                console.log('No break reminders need fixing');
+            }
+        } catch (error) {
+            console.error('Failed to fix break reminder data structure:', error);
         }
     }
 

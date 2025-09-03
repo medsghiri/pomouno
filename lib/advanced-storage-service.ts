@@ -848,7 +848,7 @@ export class AdvancedStorageService {
         return today.getTime() !== lastCompletedDate.getTime();
     }
 
-    // Spaced repetition algorithm based on SM-2 (SuperMemo 2)
+    // Spaced repetition algorithm matching the dialog requirements
     private calculateNextSpacedRepetitionReview(
         difficulty: 'easy' | 'medium' | 'hard',
         currentInterval: number,
@@ -858,47 +858,33 @@ export class AdvancedStorageService {
         // Initialize ease factor (default 2.5 for new items)
         let easeFactor = currentEaseFactor || 2.5;
 
-        // Map difficulty to quality score (0-5 scale in SM-2)
-        let quality: number;
-        switch (difficulty) {
-            case 'hard':
-                quality = 1; // Incorrect response, but remembered with serious difficulty
-                break;
-            case 'medium':
-                quality = 3; // Correct response recalled with serious difficulty
-                break;
-            case 'easy':
-                quality = 5; // Perfect response
-                break;
-            default:
-                quality = 3;
-        }
-
-        // Update ease factor based on SM-2 algorithm
-        // EF' = EF + (0.1 - (5-q) * (0.08 + (5-q) * 0.02))
-        easeFactor = easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
-
-        // Ensure ease factor doesn't go below 1.3
-        easeFactor = Math.max(1.3, easeFactor);
-
-        // Calculate new interval based on SM-2 algorithm
+        // Calculate new interval based on difficulty
         let newInterval: number;
 
-        if (quality < 3) {
-            // If quality is less than 3, restart the sequence
-            newInterval = 1;
-        } else {
-            if (reviewCount === 0) {
-                newInterval = 1; // First review after 1 day
-            } else if (reviewCount === 1) {
-                newInterval = 6; // Second review after 6 days
-            } else {
-                // For subsequent reviews: I(n) = I(n-1) * EF
-                newInterval = Math.ceil(currentInterval * easeFactor);
-            }
+        switch (difficulty) {
+            case 'easy':
+                // Easy: Increase interval significantly (2.5x factor), minimum 4 days
+                newInterval = Math.max(Math.ceil(currentInterval * 2.5), 4);
+                // Update ease factor positively for easy responses
+                easeFactor = Math.min(easeFactor + 0.1, 3.0);
+                break;
+            case 'medium':
+                // Medium: Moderate increase (1.3x factor), minimum 2 days
+                newInterval = Math.max(Math.ceil(currentInterval * 1.3), 2);
+                // Keep ease factor relatively stable for medium responses
+                easeFactor = Math.max(easeFactor - 0.05, 1.3);
+                break;
+            case 'hard':
+                // Hard: Reset to 1 day (fixed)
+                newInterval = 1;
+                // Decrease ease factor for hard responses
+                easeFactor = Math.max(easeFactor - 0.2, 1.3);
+                break;
+            default:
+                newInterval = 2;
         }
 
-        // Ensure minimum interval of 1 day and maximum of 365 days
+        // Ensure reasonable bounds: minimum 1 day, maximum 365 days
         newInterval = Math.max(1, Math.min(365, newInterval));
 
         // Calculate next review date

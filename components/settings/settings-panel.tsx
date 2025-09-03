@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
+import { NumberPicker } from "@/components/ui/number-picker";
 import {
   Select,
   SelectContent,
@@ -264,126 +265,64 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
 
         <div className="grid grid-cols-1 gap-4">
           <Card className="p-4 bg-white/10 backdrop-blur-sm text-gray-900 dark:text-white dark:bg-gray-800/50">
-            <div className="space-y-2">
-              <Label
-                htmlFor="work-duration"
-                className="text-gray-900 dark:text-white font-medium"
-              >
-                Work Duration (minutes)
-              </Label>
-              <Input
-                id="work-duration"
-                type="number"
-                min="1"
-                max="60"
-                value={settings.workDuration}
-                onChange={(e) =>
-                  handleSettingChange(
-                    "workDuration",
-                    parseInt(e.target.value) || 25
-                  )
-                }
-                className="w-full bg-white/20 dark:bg-gray-700/50 text-gray-900 dark:text-white backdrop-blur-sm"
-              />
-            </div>
+            <NumberPicker
+              value={settings.workDuration}
+              onChange={(value) => handleSettingChange("workDuration", value)}
+              min={1}
+              max={60}
+              label="Work Duration (minutes)"
+              suffix=" min"
+            />
+          </Card>
+
+          <Card className="p-4 bg-white/10 backdrop-blur-sm text-gray-900 dark:text-white dark:bg-gray-800/50">
+            <NumberPicker
+              value={settings.shortBreakDuration}
+              onChange={(value) =>
+                handleSettingChange("shortBreakDuration", value)
+              }
+              min={1}
+              max={30}
+              label="Short Break (minutes)"
+              suffix=" min"
+            />
+          </Card>
+
+          <Card className="p-4 bg-white/10 backdrop-blur-sm text-gray-900 dark:text-white dark:bg-gray-800/50">
+            <NumberPicker
+              value={settings.longBreakDuration}
+              onChange={(value) =>
+                handleSettingChange("longBreakDuration", value)
+              }
+              min={1}
+              max={60}
+              label="Long Break (minutes)"
+              suffix=" min"
+            />
+          </Card>
+
+          <Card className="p-4 bg-white/10 backdrop-blur-sm text-gray-900 dark:text-white dark:bg-gray-800/50">
+            <NumberPicker
+              value={settings.sessionsUntilLongBreak}
+              onChange={(value) =>
+                handleSettingChange("sessionsUntilLongBreak", value)
+              }
+              min={2}
+              max={10}
+              label="Sessions until Long Break"
+            />
           </Card>
 
           <Card className="p-4 bg-white/10 backdrop-blur-sm text-gray-900 dark:text-white dark:bg-gray-800/50">
             <div className="space-y-2">
-              <Label
-                htmlFor="short-break"
-                className="text-gray-900 dark:text-white font-medium"
-              >
-                Short Break (minutes)
-              </Label>
-              <Input
-                id="short-break"
-                type="number"
-                min="1"
-                max="30"
-                value={settings.shortBreakDuration}
-                onChange={(e) =>
-                  handleSettingChange(
-                    "shortBreakDuration",
-                    parseInt(e.target.value) || 5
-                  )
-                }
-                className="w-full bg-white/20 dark:bg-gray-700/50 text-gray-900 dark:text-white backdrop-blur-sm"
-              />
-            </div>
-          </Card>
-
-          <Card className="p-4 bg-white/10 backdrop-blur-sm text-gray-900 dark:text-white dark:bg-gray-800/50">
-            <div className="space-y-2">
-              <Label
-                htmlFor="long-break"
-                className="text-gray-900 dark:text-white font-medium"
-              >
-                Long Break (minutes)
-              </Label>
-              <Input
-                id="long-break"
-                type="number"
-                min="1"
-                max="60"
-                value={settings.longBreakDuration}
-                onChange={(e) =>
-                  handleSettingChange(
-                    "longBreakDuration",
-                    parseInt(e.target.value) || 15
-                  )
-                }
-                className="w-full bg-white/20 dark:bg-gray-700/50 text-gray-900 dark:text-white backdrop-blur-sm"
-              />
-            </div>
-          </Card>
-
-          <Card className="p-4 bg-white/10 backdrop-blur-sm text-gray-900 dark:text-white dark:bg-gray-800/50">
-            <div className="space-y-2">
-              <Label
-                htmlFor="sessions-until-long"
-                className="text-gray-900 dark:text-white font-medium"
-              >
-                Sessions until Long Break
-              </Label>
-              <Input
-                id="sessions-until-long"
-                type="number"
-                min="2"
-                max="10"
-                value={settings.sessionsUntilLongBreak}
-                onChange={(e) =>
-                  handleSettingChange(
-                    "sessionsUntilLongBreak",
-                    parseInt(e.target.value) || 4
-                  )
-                }
-                className="w-full bg-white/20 dark:bg-gray-700/50 text-gray-900 dark:text-white backdrop-blur-sm"
-              />
-            </div>
-          </Card>
-
-          <Card className="p-4 bg-white/10 backdrop-blur-sm text-gray-900 dark:text-white dark:bg-gray-800/50">
-            <div className="space-y-2">
-              <Label
-                htmlFor="daily-goal"
-                className="text-gray-900 dark:text-white font-medium"
-              >
-                Daily Session Goal
-              </Label>
-              <Input
-                id="daily-goal"
-                type="number"
-                min="1"
-                max="20"
+              <NumberPicker
                 value={settings.dailySessionGoal}
-                onChange={(e) =>
-                  handleSettingChange(
-                    "dailySessionGoal",
-                    parseInt(e.target.value) || 8
-                  )
+                onChange={(value) =>
+                  handleSettingChange("dailySessionGoal", value)
                 }
-                className="w-full bg-white/20 dark:bg-gray-700/50 text-gray-900 dark:text-white backdrop-blur-sm"
+                min={1}
+                max={20}
+                label="Daily Session Goal"
               />
               <p className="text-xs text-gray-600 dark:text-gray-400">
                 Set your daily session target for progress tracking.{" "}

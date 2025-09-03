@@ -9,7 +9,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Menu,
   User,
@@ -96,13 +96,17 @@ export function MobileMenu({
                 <div className="mb-6">
                   <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 rounded-xl border border-red-200/50 dark:border-red-700/30">
                     <Avatar className="w-12 h-12 ring-2 ring-red-200 dark:ring-red-700">
+                      {user.photoURL && (
+                        <AvatarImage src={user.photoURL} alt="Profile" />
+                      )}
                       <AvatarFallback className="bg-red-600 text-white text-base font-semibold">
                         {user.email?.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-foreground truncate">
-                        {user.displayName || user.email?.split("@")[0]}
+                        {user.displayName?.split(" ")[0] ||
+                          user.email?.split("@")[0]}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">
                         {user.email}

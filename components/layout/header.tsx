@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -184,13 +184,6 @@ export function Header({
                     <span className="hidden sm:inline">Settings</span>
                   </Button>
 
-                  {/* Theme Toggle */}
-                  <ThemeToggle
-                    variant="ghost"
-                    size="sm"
-                    className="text-foreground hover:text-foreground hover:bg-accent transition-colors px-2 sm:px-3"
-                  />
-
                   {user ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -200,12 +193,16 @@ export function Header({
                           className="gap-1 sm:gap-2 hover:bg-accent transition-colors px-2 sm:px-3"
                         >
                           <Avatar className="w-6 h-6">
+                            {user.photoURL && (
+                              <AvatarImage src={user.photoURL} alt="Profile" />
+                            )}
                             <AvatarFallback className="bg-red-900 text-xs font-semibold text-white">
                               {user.email?.charAt(0).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <span className="hidden sm:inline text-sm font-medium">
-                            {user.displayName || user.email?.split("@")[0]}
+                            {user.displayName?.split(" ")[0] ||
+                              user.email?.split("@")[0]}
                           </span>
                         </Button>
                       </DropdownMenuTrigger>

@@ -197,7 +197,11 @@ export function Header({
                               <AvatarImage src={user.photoURL} alt="Profile" />
                             )}
                             <AvatarFallback className="bg-red-900 text-xs font-semibold text-white">
-                              {user.email?.charAt(0).toUpperCase()}
+                              {(
+                                user.displayName?.charAt(0) ||
+                                user.email?.charAt(0) ||
+                                "U"
+                              ).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <span className="hidden sm:inline text-sm font-medium">

@@ -100,7 +100,11 @@ export function MobileMenu({
                         <AvatarImage src={user.photoURL} alt="Profile" />
                       )}
                       <AvatarFallback className="bg-red-600 text-white text-base font-semibold">
-                        {user.email?.charAt(0).toUpperCase()}
+                        {(
+                          user.displayName?.charAt(0) ||
+                          user.email?.charAt(0) ||
+                          "U"
+                        ).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">

@@ -21,12 +21,14 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { FeatureGate } from "@/components/auth/feature-gate";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { IconSelector, IconItem } from "@/components/ui/icon-selector";
 import type {
   BreakReminder,
   BreakReminderCategory,
@@ -37,16 +39,33 @@ import {
   useBreakReminderCategories,
   useTodaysBreakReminderCompletions,
   useBreakReminderMutations,
+  useCategoryMutations,
   getStorageService,
 } from "@/hooks/use-app-data";
 
-// Default categories for break reminders
+// SIMPLIFIED: Use static default categories only (matching use-app-data.ts)
 const DEFAULT_CATEGORIES = [
   { id: "hydration", name: "Hydration", icon: "💧", color: "#3B82F6" },
   { id: "movement", name: "Movement", icon: "🏃", color: "#10B981" },
   { id: "rest", name: "Rest", icon: "💜", color: "#8B5CF6" },
   { id: "nutrition", name: "Nutrition", icon: "🍎", color: "#F59E0B" },
   { id: "mindfulness", name: "Mindfulness", icon: "🧘", color: "#EC4899" },
+];
+
+// Default color palette for categories (matching settings page)
+const DEFAULT_COLORS = [
+  "#EF4444", // Red
+  "#F97316", // Orange
+  "#EAB308", // Yellow
+  "#22C55E", // Green
+  "#06B6D4", // Cyan
+  "#3B82F6", // Blue
+  "#8B5CF6", // Purple
+  "#EC4899", // Pink
+  "#6B7280", // Gray
+  "#DC2626", // Dark Red
+  "#EA580C", // Dark Orange
+  "#CA8A04", // Dark Yellow
 ];
 
 export function BreakReminderManager() {
@@ -69,6 +88,9 @@ export function BreakReminderManager() {
     decrementBreakReminderCount,
   } = useBreakReminderMutations();
 
+  // Category mutations for creating new categories
+  const { createBreakReminderCategory } = useCategoryMutations();
+
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -78,6 +100,13 @@ export function BreakReminderManager() {
   const [category, setCategory] = useState<string>("hydration");
   const [enabled, setEnabled] = useState(true);
   const [breakType, setBreakType] = useState<"all" | "short" | "long">("all");
+
+  // Category creation states
+  const [showCategoryDialog, setShowCategoryDialog] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryIcon, setNewCategoryIcon] = useState("📝");
+  const [newCategoryColor, setNewCategoryColor] = useState("#3B82F6");
+  const [showIconSelector, setShowIconSelector] = useState(false);
 
   const { toast } = useToast();
   const { user } = useAuth();
@@ -91,125 +120,7 @@ export function BreakReminderManager() {
     return map;
   }, [todaysCompletions]);
 
-  // Flag to track if initialization has been attempted
-  const [initializationAttempted, setInitializationAttempted] = React.useState(false);
-
-  // Initialize default categories and reminders if needed - FIXED: Run only once
-  useEffect(() => {
-    // Early exit if already attempted or missing prerequisites
-    if (initializationAttempted || !user || remindersLoading || categoriesLoading) {
-      return;
-    }
-
-    const initializeDefaults = async () => {
-      try {
-        console.log("Initializing break reminder defaults...");
-        setInitializationAttempted(true);
-
-        // EMERGENCY FIX: Use singleton storage service to prevent multiple Firebase calls
-        const storageService = getStorageService(user);
-        if (!storageService) {
-          return;
-        }
-
-        // CRITICAL FIX: Check current data state (not from deps to avoid loops)
-        const currentCategories = categories;
-        const currentReminders = reminders;
-        
-        // Only initialize if truly empty (not loading)
-        const needsCategories = !categoriesLoading && currentCategories.length === 0;
-        const needsReminders = !remindersLoading && currentReminders.length === 0;
-
-        console.log(`Initialization check: categories=${currentCategories.length}, reminders=${currentReminders.length}, needsCategories=${needsCategories}, needsReminders=${needsReminders}`);
-
-        if (!needsCategories && !needsReminders) {
-          console.log("Skipping initialization - data already exists");
-          return;
-        }
-
-        // FIXED: Batch create categories to prevent multiple Firebase calls + duplicate prevention
-        if (needsCategories) {
-          console.log("Creating default break reminder categories...");
-          
-          // Check for existing categories by name to prevent duplicates
-          const existingCategoryNames = new Set(categories.map(cat => cat.name.toLowerCase()));
-          const categoriesToCreate = DEFAULT_CATEGORIES.filter(
-            defaultCat => !existingCategoryNames.has(defaultCat.name.toLowerCase())
-          );
-
-          if (categoriesToCreate.length > 0) {
-            // Create categories in parallel instead of sequential loop
-            const categoryPromises = categoriesToCreate.map(defaultCat =>
-              storageService.createCategory({
-                name: defaultCat.name,
-                color: defaultCat.color,
-                icon: defaultCat.icon,
-                type: "break-reminder",
-              }).catch(error => {
-                console.error(`Failed to create category ${defaultCat.name}:`, error);
-                return null; // Continue with other categories
-              })
-            );
-            
-            await Promise.allSettled(categoryPromises);
-            console.log(`Created ${categoriesToCreate.length} new categories`);
-          } else {
-            console.log("All default categories already exist, skipping creation");
-          }
-        }
-
-        // FIXED: Batch create reminders to prevent multiple Firebase calls
-        if (needsReminders) {
-          console.log("Creating default break reminders...");
-          const defaultReminderData = [
-            {
-              title: "Drink Water",
-              description: "Stay hydrated! Take a sip of water.",
-              category: "hydration",
-              enabled: false,
-              breakType: "all" as const,
-            },
-            {
-              title: "Stretch",
-              description: "Stand up and do some light stretching.",
-              category: "movement",
-              enabled: false,
-              breakType: "all" as const,
-            },
-            {
-              title: "Deep Breathing",
-              description: "Take 5 deep breaths to relax.",
-              category: "rest",
-              enabled: false,
-              breakType: "long" as const,
-            },
-            {
-              title: "Walk Around",
-              description: "Take a short walk to get your blood flowing.",
-              category: "movement",
-              enabled: false,
-              breakType: "long" as const,
-            },
-          ];
-
-          // FIXED: Create reminders in parallel to prevent sequential Firebase calls
-          const reminderPromises = defaultReminderData.map(reminderData =>
-            createBreakReminder.mutateAsync(reminderData).catch(error => {
-              console.error(`Failed to create reminder ${reminderData.title}:`, error);
-              return null; // Continue with other reminders
-            })
-          );
-          
-          await Promise.allSettled(reminderPromises);
-        }
-      } catch (error) {
-        console.error("Failed to initialize defaults:", error);
-      }
-    };
-
-    // Run initialization
-    initializeDefaults();
-  }, [user?.uid, remindersLoading, categoriesLoading]); // CRITICAL FIX: Remove length deps to prevent infinite loop
+  // SIMPLIFIED: No initialization needed - using static categories only
 
   const resetForm = () => {
     setTitle("");
@@ -218,6 +129,53 @@ export function BreakReminderManager() {
     setEnabled(true);
     setBreakType("all");
     setEditingId(null);
+  };
+
+  // Category creation functions
+  const createCategory = async () => {
+    if (!newCategoryName.trim()) {
+      toast({
+        title: "Category name required",
+        description: "Please enter a name for the category.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await createBreakReminderCategory.mutateAsync({
+        name: newCategoryName.trim(),
+        icon: newCategoryIcon,
+        color: newCategoryColor,
+      });
+
+      toast({
+        title: "Category created",
+        description: `"${newCategoryName}" has been created successfully.`,
+      });
+
+      // Select the new category and close dialog
+      setCategory(newCategoryName.trim());
+      setShowCategoryDialog(false);
+      setNewCategoryName("");
+      setNewCategoryIcon("📝");
+      setNewCategoryColor("#3B82F6");
+    } catch (error: any) {
+      toast({
+        title: "Failed to create category",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAddNewCategory = () => {
+    setShowCategoryDialog(true);
+  };
+
+  const handleIconSelect = (icon: IconItem) => {
+    setNewCategoryIcon(icon.emoji);
+    setShowIconSelector(false);
   };
 
   const handleSave = async () => {
@@ -349,26 +307,36 @@ export function BreakReminderManager() {
     }
   };
 
+  // SIMPLIFIED: Use static categories directly - no Firebase calls needed
+  // OPTIMIZED: Use cached categories with minimal Firebase reads
+  const { data: availableCategories = [] } = useBreakReminderCategories();
+
+  // REMOVED: Category creation - using static categories only
+
+  // SIMPLIFIED: Get category info from static defaults
   const getCategoryInfo = (categoryId: string) => {
-    const category = categories.find(
-      (cat) => cat.id === categoryId || cat.name.toLowerCase() === categoryId
+    const category = availableCategories.find(
+      (cat) => cat.id === categoryId || cat.name.toLowerCase() === categoryId.toLowerCase()
     );
-    return category || { name: "Custom", icon: "📝", color: "#6B7280" };
+    if (category) return category;
+
+    // Final fallback
+    return { id: categoryId, name: "Custom", icon: "📝", color: "#6B7280" };
   };
 
   const getCategoryId = (categoryValue: string) => {
-    // First try to find by ID
-    const categoryById = categories.find((cat) => cat.id === categoryValue);
+    // Try to find by ID in available categories
+    const categoryById = availableCategories.find((cat) => cat.id === categoryValue);
     if (categoryById) return categoryById.id;
 
-    // Then try to find by name (case insensitive)
-    const categoryByName = categories.find(
+    // Try to find by name (case insensitive) in available categories
+    const categoryByName = availableCategories.find(
       (cat) => cat.name.toLowerCase() === categoryValue.toLowerCase()
     );
     if (categoryByName) return categoryByName.id;
 
-    // Default to first category if available
-    return categories.length > 0 ? categories[0].id : "hydration";
+    // Default to hydration
+    return "hydration";
   };
 
   const getTodaysCount = (reminderId: string) => {
@@ -731,39 +699,53 @@ export function BreakReminderManager() {
             </div>
 
             <div>
-              <Label htmlFor="category">Category</Label>
-              <Select
-                value={category}
-                onValueChange={setCategory}
-                disabled={
-                  createBreakReminder.isPending || updateBreakReminder.isPending
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a category">
-                    {categories.find((cat) => cat.id === category) && (
-                      <div className="flex items-center gap-2">
-                        <span>
-                          {categories.find((cat) => cat.id === category)?.icon}
-                        </span>
-                        <span>
-                          {categories.find((cat) => cat.id === category)?.name}
-                        </span>
-                      </div>
-                    )}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      <div className="flex items-center gap-2">
-                        <span>{cat.icon}</span>
-                        <span>{cat.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="category">Category</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAddNewCategory}
+                  className="text-xs text-red-600 hover:text-red-700"
+                >
+                  <Plus className="w-3 h-3 mr-1" />
+                  Add New Category
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <Select
+                  value={category}
+                  onValueChange={setCategory}
+                  disabled={
+                    createBreakReminder.isPending || updateBreakReminder.isPending
+                  }
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder="Select a category">
+                      {availableCategories.find((cat) => cat.id === category) && (
+                        <div className="flex items-center gap-2">
+                          <span>
+                            {availableCategories.find((cat) => cat.id === category)?.icon}
+                          </span>
+                          <span>
+                            {availableCategories.find((cat) => cat.id === category)?.name}
+                          </span>
+                        </div>
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableCategories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{cat.icon}</span>
+                          <span>{cat.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div>
@@ -828,6 +810,93 @@ export function BreakReminderManager() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Category Creation Dialog */}
+      <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Category</DialogTitle>
+            <DialogDescription>
+              Add a new category to organize your break reminders better.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="category-name">Category Name</Label>
+              <Input
+                id="category-name"
+                placeholder="e.g., Work, Personal, Study"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                maxLength={50}
+              />
+            </div>
+
+            <div>
+              <Label>Icon</Label>
+              <div className="mt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowIconSelector(true)}
+                  className="w-full justify-start"
+                >
+                  <span className="text-lg mr-2">{newCategoryIcon}</span>
+                  Select Icon
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <Label>Color</Label>
+              <div className="mt-2 grid grid-cols-6 gap-2">
+                {DEFAULT_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={cn(
+                      "w-8 h-8 rounded-full border-2 transition-all",
+                      newCategoryColor === color
+                        ? "border-foreground scale-110"
+                        : "border-border hover:scale-105"
+                    )}
+                    style={{ backgroundColor: color }}
+                    onClick={() => setNewCategoryColor(color)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowCategoryDialog(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={createCategory}
+                disabled={!newCategoryName.trim() || createBreakReminderCategory.isPending}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+              >
+                {createBreakReminderCategory.isPending ? "Creating..." : "Create Category"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Icon Selector */}
+      <IconSelector
+        selectedIcon={newCategoryIcon}
+        onIconSelect={handleIconSelect}
+        open={showIconSelector}
+        onOpenChange={setShowIconSelector}
+      />
     </FeatureGate>
   );
 }

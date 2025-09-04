@@ -84,6 +84,7 @@ import {
   useTaskCategories,
   useTodaysTaskSessions,
   useTaskMutations,
+  useCategoryMutations,
   useTodaysStats,
   getStorageService,
 } from "@/hooks/use-app-data";
@@ -93,6 +94,15 @@ const truncateText = (text: string, maxLength: number): string => {
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength).trim() + "...";
 };
+
+// SIMPLIFIED: Static categories only - no Firebase queries needed
+const DEFAULT_TASK_CATEGORIES = [
+  { id: "work", name: "Work", color: "#3B82F6", icon: "💼" },
+  { id: "personal", name: "Personal", color: "#10B981", icon: "🏠" },
+  { id: "study", name: "Study", color: "#8B5CF6", icon: "📚" },
+  { id: "health", name: "Health", color: "#F59E0B", icon: "🏃" },
+  { id: "creative", name: "Creative", color: "#EC4899", icon: "🎨" },
+];
 
 // Default color palette for categories (matching settings page)
 const DEFAULT_COLORS = [
@@ -123,19 +133,25 @@ export function TaskManager({
 }: TaskManagerProps) {
   const { user } = useAuth();
 
-  // Use optimized hooks for data fetching
+  // Use optimized hooks for data fetching - SIMPLIFIED: No categories query
   const {
     data: tasks = [],
     isLoading: tasksLoading,
     error: tasksError,
   } = useTasks();
-  const { data: availableCategories = [], isLoading: categoriesLoading } =
-    useTaskCategories();
   const todaysStats = useTodaysStats();
+
+  // SIMPLIFIED: Use static categories - no Firebase calls
+  // OPTIMIZED: Use cached categories with minimal Firebase reads
+  const { data: availableCategories = [] } = useTaskCategories();
+  const categoriesLoading = false;
 
   // Use mutation hooks for optimistic updates
   const { createTask, updateTask, deleteTask, completeTask } =
     useTaskMutations();
+
+  // Category mutations for creating new categories
+  const { createTaskCategory } = useCategoryMutations();
 
   // Animation states
   const [showCompletionAnimation, setShowCompletionAnimation] = useState(false);
@@ -188,12 +204,14 @@ export function TaskManager({
     number[]
   >([]);
 
-  // Category management states
+  // Category creation states
   const [showCategoryDialog, setShowCategoryDialog] = useState(false);
-  const [showIconSelector, setShowIconSelector] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [newCategoryColor, setNewCategoryColor] = useState("#EF4444");
-  const [newCategoryIcon, setNewCategoryIcon] = useState<IconItem | null>(null);
+  const [newCategoryIcon, setNewCategoryIcon] = useState("📝");
+  const [newCategoryColor, setNewCategoryColor] = useState("#3B82F6");
+  const [showIconSelector, setShowIconSelector] = useState(false);
+
+  // REMOVED: Category creation - using static categories only
   const { toast } = useToast();
   const [settings, setSettings] = useState(LocalStorage.getSettings());
 
@@ -222,6 +240,7 @@ export function TaskManager({
     };
   }, []);
 
+  // Category creation functions
   const createCategory = async () => {
     if (!newCategoryName.trim()) {
       toast({
@@ -232,63 +251,40 @@ export function TaskManager({
       return;
     }
 
-    let createdCategory: any = null;
-    const categoryName = newCategoryName.trim();
+    try {
+      await createTaskCategory.mutateAsync({
+        name: newCategoryName.trim(),
+        icon: newCategoryIcon,
+        color: newCategoryColor,
+      });
 
-    if (user) {
-      // Create category in Firebase using singleton AdvancedStorageService
-      try {
-        const storageService = getStorageService(user);
-        if (!storageService) {
-          throw new Error('Storage service not available');
-        }
-        createdCategory = await storageService.createCategory({
-          name: categoryName,
-          color: newCategoryColor,
-          icon: newCategoryIcon?.emoji,
-          type: "task",
-        });
-      } catch (error) {
-        console.error("Failed to create category:", error);
-        toast({
-          title: "Failed to create category",
-          description: "Please try again later.",
-          variant: "destructive",
-        });
-        return;
-      }
-    } else {
-      // Fallback to localStorage for unauthenticated users
-      createdCategory = TaskUtils.createTaskCategory(
-        categoryName,
-        newCategoryColor,
-        newCategoryIcon?.emoji
-      );
+      toast({
+        title: "Category created",
+        description: `"${newCategoryName}" has been created successfully.`,
+      });
+
+      // Select the new category and close dialog
+      setEditingCategory(newCategoryName.trim());
+      setShowCategoryDialog(false);
+      setNewCategoryName("");
+      setNewCategoryIcon("📝");
+      setNewCategoryColor("#3B82F6");
+    } catch (error: any) {
+      toast({
+        title: "Failed to create category",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
     }
-
-    // Set the new category as selected
-    setEditingCategory(createdCategory.name);
-
-    // Reset form
-    resetCategoryForm();
-
-    toast({
-      title: "Category created",
-      description: `"${createdCategory.name}" has been added to your categories.`,
-    });
   };
 
-  // Reset category form
-  const resetCategoryForm = () => {
-    setNewCategoryName("");
-    setNewCategoryColor(DEFAULT_COLORS[0]);
-    setNewCategoryIcon(null);
-    setShowCategoryDialog(false);
+  const handleAddNewCategory = () => {
+    setShowCategoryDialog(true);
   };
 
-  // Handle icon selection
   const handleIconSelect = (icon: IconItem) => {
-    setNewCategoryIcon(icon);
+    setNewCategoryIcon(icon.emoji);
+    setShowIconSelector(false);
   };
 
   const toggleTask = async (taskId: string) => {
@@ -2274,11 +2270,11 @@ export function TaskManager({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowCategoryDialog(true)}
-                    className="text-xs h-6 px-2"
+                    onClick={handleAddNewCategory}
+                    className="text-xs text-red-600 hover:text-red-700"
                   >
                     <Plus className="w-3 h-3 mr-1" />
-                    Add Category
+                    Add New Category
                   </Button>
                 </div>
                 <Select
@@ -2497,11 +2493,14 @@ export function TaskManager({
         </DialogContent>
       </Dialog>
 
-      {/* Create Category Dialog */}
+      {/* Category Creation Dialog */}
       <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
-        <DialogContent className="bg-background">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Create Task Category</DialogTitle>
+            <DialogTitle>Create New Category</DialogTitle>
+            <DialogDescription>
+              Add a new category to organize your tasks better.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -2509,54 +2508,41 @@ export function TaskManager({
               <Label htmlFor="category-name">Category Name</Label>
               <Input
                 id="category-name"
-                placeholder="Enter category name"
+                placeholder="e.g., Work, Personal, Study"
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
-                className="mt-1"
+                maxLength={50}
               />
             </div>
 
             <div>
-              <Label>Icon (Optional)</Label>
-              <div className="flex items-center gap-2 mt-1">
+              <Label>Icon</Label>
+              <div className="mt-2">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setShowIconSelector(true)}
-                  className="h-12 w-12 p-0 text-xl"
+                  className="w-full justify-start"
                 >
-                  {newCategoryIcon ? newCategoryIcon.emoji : "+"}
+                  <span className="text-lg mr-2">{newCategoryIcon}</span>
+                  Select Icon
                 </Button>
-                {newCategoryIcon && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">
-                      {newCategoryIcon.name}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setNewCategoryIcon(null)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                )}
               </div>
             </div>
 
             <div>
               <Label>Color</Label>
-              <div className="flex flex-wrap gap-2 mt-2">
+              <div className="mt-2 grid grid-cols-6 gap-2">
                 {DEFAULT_COLORS.map((color) => (
                   <button
                     key={color}
                     type="button"
-                    className={`w-8 h-8 rounded-full border-2 ${
+                    className={cn(
+                      "w-8 h-8 rounded-full border-2 transition-all",
                       newCategoryColor === color
-                        ? "border-foreground"
-                        : "border-border"
-                    }`}
+                        ? "border-foreground scale-110"
+                        : "border-border hover:scale-105"
+                    )}
                     style={{ backgroundColor: color }}
                     onClick={() => setNewCategoryColor(color)}
                   />
@@ -2564,19 +2550,22 @@ export function TaskManager({
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-4">
+            <div className="flex gap-2 pt-4">
               <Button
                 type="button"
                 variant="outline"
-                onClick={resetCategoryForm}
+                onClick={() => setShowCategoryDialog(false)}
+                className="flex-1"
               >
                 Cancel
               </Button>
               <Button
+                type="button"
                 onClick={createCategory}
-                disabled={!newCategoryName.trim()}
+                disabled={!newCategoryName.trim() || createTaskCategory.isPending}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
               >
-                Create Category
+                {createTaskCategory.isPending ? "Creating..." : "Create Category"}
               </Button>
             </div>
           </div>
@@ -2585,7 +2574,7 @@ export function TaskManager({
 
       {/* Icon Selector */}
       <IconSelector
-        selectedIcon={newCategoryIcon?.emoji}
+        selectedIcon={newCategoryIcon}
         onIconSelect={handleIconSelect}
         open={showIconSelector}
         onOpenChange={setShowIconSelector}

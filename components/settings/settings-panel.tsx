@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { LocalStorage, Settings } from "@/lib/storage";
-import { CategoryManagement } from "@/components/settings/category-management";
+import { CategoryManagement } from "./category-management";
 import {
   RotateCcw,
   Volume2,
@@ -787,8 +787,8 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
 
       <Separator className="border-gray-300/20 dark:border-gray-700/20" />
 
-      {/* Category Management */}
-      {user && <CategoryManagement onCategoriesChange={onSettingsChange} />}
+      {/* Categories Management */}
+      <CategoryManagement />
 
       {/* Bottom Action Buttons */}
       <Separator className="border-gray-300/20 dark:border-gray-700/20" />

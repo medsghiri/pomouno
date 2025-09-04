@@ -29,9 +29,10 @@ export const queryKeys = {
     task: (userId: string, taskId: string) => ['user', userId, 'tasks', taskId] as const,
     taskSessions: (userId: string, taskId: string, date: string) => ['user', userId, 'tasks', taskId, 'sessions', date] as const,
 
-    // Categories hierarchy - OPTIMIZED: Cached categories with minimal Firebase reads
-    taskCategories: (userId: string) => ['user', userId, 'taskCategories'] as const,
-    breakReminderCategories: (userId: string) => ['user', userId, 'breakReminderCategories'] as const,
+    // Categories hierarchy - OPTIMIZED: Separated by type for better caching
+    categories: (userId: string, type: 'task' | 'breakReminder') => ['user', userId, 'categories', type] as const,
+    taskCategories: (userId: string) => ['user', userId, 'categories', 'task'] as const,
+    breakReminderCategories: (userId: string) => ['user', userId, 'categories', 'breakReminder'] as const,
 
     // Break reminders hierarchy - OPTIMIZED: Better date-based caching
     breakReminders: (userId: string) => ['user', userId, 'breakReminders'] as const,
@@ -208,85 +209,46 @@ export function useTodaysBreakReminderCompletions() {
     });
 }
 
-// SIMPLIFIED: Static category definitions - no Firebase queries needed
-const TASK_CATEGORIES = [
-    { id: "work", name: "Work", color: "#3B82F6", icon: "💼" },
-    { id: "personal", name: "Personal", color: "#10B981", icon: "🏠" },
-    { id: "study", name: "Study", color: "#8B5CF6", icon: "📚" },
-    { id: "health", name: "Health", color: "#F59E0B", icon: "🏃" },
-    { id: "creative", name: "Creative", color: "#EC4899", icon: "🎨" },
-];
-
-const BREAK_REMINDER_CATEGORIES = [
-    { id: "hydration", name: "Hydration", icon: "💧", color: "#3B82F6" },
-    { id: "movement", name: "Movement", icon: "🏃", color: "#10B981" },
-    { id: "rest", name: "Rest", icon: "💜", color: "#8B5CF6" },
-    { id: "nutrition", name: "Nutrition", icon: "🍎", color: "#F59E0B" },
-    { id: "mindfulness", name: "Mindfulness", icon: "🧘", color: "#EC4899" },
-];
-
-// OPTIMIZED: Task categories with minimal Firebase reads
+// Categories - EMERGENCY FIX: Use singleton storage service
 export function useTaskCategories() {
     const { user } = useAuth();
+    const storageService = getStorageService(user); // FIXED: Use singleton
 
     return useQuery({
         queryKey: queryKeys.taskCategories(user?.uid || ''),
         queryFn: async () => {
-            if (!user) {
-                return TASK_CATEGORIES; // Return static categories for non-authenticated users
-            }
-            
-            const storageService = getStorageService(user);
-            if (!storageService) return TASK_CATEGORIES;
-            
-            try {
-                const categories = await storageService.getTaskCategories();
-                // If no custom categories, return static defaults
-                return categories.length > 0 ? categories : TASK_CATEGORIES;
-            } catch (error) {
-                console.warn('Failed to load task categories, using defaults:', error);
-                return TASK_CATEGORIES;
-            }
+            if (!storageService) return [];
+            return await storageService.getTaskCategories();
         },
-        enabled: true,
-        staleTime: Infinity, // Categories rarely change - cache forever until manually invalidated
-        gcTime: 24 * 60 * 60 * 1000, // 24 hours garbage collection
+        enabled: !!user && !!storageService,
+        staleTime: Infinity, // OPTIMIZED: Categories rarely change - make them infinite stale
+        gcTime: 2 * 60 * 60 * 1000, // OPTIMIZED: 2 hours cache - categories are very stable
         refetchOnWindowFocus: false,
-        refetchOnMount: false,
         refetchOnReconnect: false,
-        retry: 1, // Only retry once on failure
+        refetchOnMount: false,
+        refetchInterval: false,
+        retry: 0, // OPTIMIZED: No retries to prevent duplicate Firebase calls
     });
 }
 
 export function useBreakReminderCategories() {
     const { user } = useAuth();
+    const storageService = getStorageService(user); // FIXED: Use singleton
 
     return useQuery({
         queryKey: queryKeys.breakReminderCategories(user?.uid || ''),
         queryFn: async () => {
-            if (!user) {
-                return BREAK_REMINDER_CATEGORIES; // Return static categories for non-authenticated users
-            }
-            
-            const storageService = getStorageService(user);
-            if (!storageService) return BREAK_REMINDER_CATEGORIES;
-            
-            try {
-                const categories = await storageService.getBreakReminderCategories();
-                // If no custom categories, return static defaults
-                return categories.length > 0 ? categories : BREAK_REMINDER_CATEGORIES;
-            } catch (error) {
-                console.warn('Failed to load break reminder categories, using defaults:', error);
-                return BREAK_REMINDER_CATEGORIES;
-            }
+            if (!storageService) return [];
+            return await storageService.getBreakReminderCategories();
         },
-        enabled: true,
-        staleTime: Infinity, // Categories rarely change - cache forever until manually invalidated
-        gcTime: 24 * 60 * 60 * 1000, // 24 hours garbage collection
+        enabled: !!user && !!storageService,
+        staleTime: Infinity, // OPTIMIZED: Categories rarely change - make them infinite stale
+        gcTime: 2 * 60 * 60 * 1000, // OPTIMIZED: 2 hours cache - categories are very stable
         refetchOnWindowFocus: false,
-        refetchOnMount: false,
         refetchOnReconnect: false,
-        retry: 1, // Only retry once on failure
+        refetchOnMount: false, // CRITICAL FIX: Don't always refetch - this was causing excessive reads!
+        refetchInterval: false,
+        retry: 0, // OPTIMIZED: No retries to prevent duplicate Firebase calls
     });
 }
 
@@ -449,17 +411,9 @@ export function useTodaysStats() {
                 .reduce((sum: number, s: any) => sum + (s.duration || 0), 0);
 
             const tasksCompleted = tasks.filter((task: any) => {
-                // Regular tasks completed today
                 if (task.completedAt && task.completedAt >= todayStartTime && task.completedAt <= todayEndTime) return true;
-                
-                // Recurring tasks completed today (check both nested and flattened fields)
                 if (task.recurring?.lastCompleted && task.recurring.lastCompleted >= todayStartTime && task.recurring.lastCompleted <= todayEndTime) return true;
-                if (task.recurringLastCompleted && task.recurringLastCompleted >= todayStartTime && task.recurringLastCompleted <= todayEndTime) return true;
-                
-                // Spaced repetition tasks reviewed today (check both nested and flattened fields)
                 if (task.spacedRepetition?.lastReviewed && task.spacedRepetition.lastReviewed >= todayStartTime && task.spacedRepetition.lastReviewed <= todayEndTime) return true;
-                if (task.spacedRepetitionLastReviewed && task.spacedRepetitionLastReviewed >= todayStartTime && task.spacedRepetitionLastReviewed <= todayEndTime) return true;
-                
                 return false;
             }).length;
 
@@ -1042,10 +996,7 @@ export function useTaskMutations() {
                 return (old || 0) + 1; // Increment optimistically
             });
             
-            // CRITICAL FIX: Invalidate today's stats to update task completion count
-            queryClient.invalidateQueries({ queryKey: queryKeys.todayStats(user?.uid || '') });
-            
-            // NO OTHER INVALIDATION - prevents Firebase reads
+            // NO INVALIDATION - prevents Firebase reads
         },
         // No automatic invalidation - rely on optimistic updates and onSuccess
     });
@@ -1507,128 +1458,6 @@ export function useBreakReminderMutations() {
         batchBreakReminderOperations,
         canBatchOperations,
         executeBreakReminderOperations,
-    };
-}
-
-// OPTIMIZED: Category mutations with minimal Firebase usage
-export function useCategoryMutations() {
-    const queryClient = useQueryClient();
-    const { user } = useAuth();
-    const storageService = getStorageService(user);
-
-    const createTaskCategory = useMutation({
-        mutationFn: async (categoryData: any) => {
-            if (!storageService) throw new Error('Not authenticated');
-            return await storageService.createCategory({ ...categoryData, type: 'task' });
-        },
-        onMutate: async (newCategoryData) => {
-            await queryClient.cancelQueries({ queryKey: queryKeys.taskCategories(user?.uid || '') });
-            const previousCategories = queryClient.getQueryData(queryKeys.taskCategories(user?.uid || ''));
-
-            const optimisticCategory = {
-                id: `temp_${Date.now()}`,
-                ...newCategoryData,
-                createdAt: Date.now(),
-            };
-
-            queryClient.setQueryData(queryKeys.taskCategories(user?.uid || ''), (old: any[]) =>
-                old ? [optimisticCategory, ...old] : [optimisticCategory]
-            );
-
-            return { previousCategories };
-        },
-        onError: (err, newCategoryData, context) => {
-            queryClient.setQueryData(queryKeys.taskCategories(user?.uid || ''), context?.previousCategories);
-        },
-        onSuccess: (createdCategory) => {
-            queryClient.setQueryData(queryKeys.taskCategories(user?.uid || ''), (old: any[]) => {
-                if (!old) return [createdCategory];
-                const withoutTemp = old.filter(c => !c.id.startsWith('temp_'));
-                return [createdCategory, ...withoutTemp];
-            });
-        },
-    });
-
-    const createBreakReminderCategory = useMutation({
-        mutationFn: async (categoryData: any) => {
-            if (!storageService) throw new Error('Not authenticated');
-            return await storageService.createCategory({ ...categoryData, type: 'breakReminder' });
-        },
-        onMutate: async (newCategoryData) => {
-            await queryClient.cancelQueries({ queryKey: queryKeys.breakReminderCategories(user?.uid || '') });
-            const previousCategories = queryClient.getQueryData(queryKeys.breakReminderCategories(user?.uid || ''));
-
-            const optimisticCategory = {
-                id: `temp_${Date.now()}`,
-                ...newCategoryData,
-                createdAt: Date.now(),
-            };
-
-            queryClient.setQueryData(queryKeys.breakReminderCategories(user?.uid || ''), (old: any[]) =>
-                old ? [optimisticCategory, ...old] : [optimisticCategory]
-            );
-
-            return { previousCategories };
-        },
-        onError: (err, newCategoryData, context) => {
-            queryClient.setQueryData(queryKeys.breakReminderCategories(user?.uid || ''), context?.previousCategories);
-        },
-        onSuccess: (createdCategory) => {
-            queryClient.setQueryData(queryKeys.breakReminderCategories(user?.uid || ''), (old: any[]) => {
-                if (!old) return [createdCategory];
-                const withoutTemp = old.filter(c => !c.id.startsWith('temp_'));
-                return [createdCategory, ...withoutTemp];
-            });
-        },
-    });
-
-    const deleteTaskCategory = useMutation({
-        mutationFn: async (categoryId: string) => {
-            if (!storageService) throw new Error('Not authenticated');
-            return await storageService.deleteCategory(categoryId);
-        },
-        onMutate: async (categoryId) => {
-            await queryClient.cancelQueries({ queryKey: queryKeys.taskCategories(user?.uid || '') });
-            const previousCategories = queryClient.getQueryData(queryKeys.taskCategories(user?.uid || ''));
-
-            queryClient.setQueryData(queryKeys.taskCategories(user?.uid || ''), (old: any[]) => {
-                if (!old) return old;
-                return old.filter(category => category.id !== categoryId);
-            });
-
-            return { previousCategories };
-        },
-        onError: (err, categoryId, context) => {
-            queryClient.setQueryData(queryKeys.taskCategories(user?.uid || ''), context?.previousCategories);
-        },
-    });
-
-    const deleteBreakReminderCategory = useMutation({
-        mutationFn: async (categoryId: string) => {
-            if (!storageService) throw new Error('Not authenticated');
-            return await storageService.deleteCategory(categoryId);
-        },
-        onMutate: async (categoryId) => {
-            await queryClient.cancelQueries({ queryKey: queryKeys.breakReminderCategories(user?.uid || '') });
-            const previousCategories = queryClient.getQueryData(queryKeys.breakReminderCategories(user?.uid || ''));
-
-            queryClient.setQueryData(queryKeys.breakReminderCategories(user?.uid || ''), (old: any[]) => {
-                if (!old) return old;
-                return old.filter(category => category.id !== categoryId);
-            });
-
-            return { previousCategories };
-        },
-        onError: (err, categoryId, context) => {
-            queryClient.setQueryData(queryKeys.breakReminderCategories(user?.uid || ''), context?.previousCategories);
-        },
-    });
-
-    return {
-        createTaskCategory,
-        createBreakReminderCategory,
-        deleteTaskCategory,
-        deleteBreakReminderCategory,
     };
 }
 

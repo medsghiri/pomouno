@@ -32,17 +32,18 @@ if (missingKeys.length > 0) {
 }
 
 const app = initializeApp(firebaseConfig);
+
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
-// Initialize Analytics (only in browser environment)
-export const analytics = typeof window !== 'undefined' && firebaseConfig.measurementId
-  ? isSupported().then(yes => yes ? getAnalytics(app) : null)
-  : null;
-
 // Configure Google provider
 googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
+
+// Initialize Analytics (only in browser environment)
+export const analytics = typeof window !== 'undefined' && firebaseConfig.measurementId
+  ? isSupported().then(yes => yes ? getAnalytics(app) : null)
+  : null;

@@ -69,13 +69,11 @@ import { DaySelector } from "@/components/ui/day-selector";
 import { IconSelector, IconItem } from "@/components/ui/icon-selector";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { LocalStorage, TaskUtils } from "@/lib/storage";
-import { AdvancedStorageService } from "@/lib/advanced-storage-service";
 import type { Task, TaskCategory } from "@/lib/advanced-storage-service";
 import { TaskCompletionAnimation } from "./task-completion-animation";
 import { DifficultySelectionDialog } from "./difficulty-selection-dialog";
 import { TaskCompletionEstimation } from "./task-completion-estimation";
 import { TaskSessionDisplay } from "./task-session-display";
-import { Logo } from "@/components/logo";
 
 import { FeatureGate } from "@/components/auth/feature-gate";
 import { useToast } from "@/hooks/use-toast";
@@ -87,6 +85,7 @@ import {
   useTodaysTaskSessions,
   useTaskMutations,
   useTodaysStats,
+  getStorageService,
 } from "@/hooks/use-app-data";
 
 // Utility function to truncate text
@@ -237,9 +236,12 @@ export function TaskManager({
     const categoryName = newCategoryName.trim();
 
     if (user) {
-      // Create category in Firebase using AdvancedStorageService
+      // Create category in Firebase using singleton AdvancedStorageService
       try {
-        const storageService = new AdvancedStorageService(user);
+        const storageService = getStorageService(user);
+        if (!storageService) {
+          throw new Error('Storage service not available');
+        }
         createdCategory = await storageService.createCategory({
           name: categoryName,
           color: newCategoryColor,

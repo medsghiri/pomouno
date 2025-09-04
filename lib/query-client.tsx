@@ -10,24 +10,24 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // Cache for 15 minutes (increased from 5 minutes)
-            staleTime: 15 * 60 * 1000,
-            // Keep data in cache for 30 minutes (increased from 10 minutes)
-            gcTime: 30 * 60 * 1000,
-            // Retry failed requests only once (reduced from 2)
-            retry: 1,
-            // Don't refetch on window focus to minimize Firebase reads
+            // EMERGENCY FIX: Much longer stale time for static-like data
+            staleTime: 60 * 60 * 1000, // 1 HOUR - this data doesn't change frequently!
+            // OPTIMIZED: Longer garbage collection time
+            gcTime: 2 * 60 * 60 * 1000, // 2 hours
+            // OPTIMIZED: No retries to prevent duplicate Firebase calls
+            retry: 0,
+            // OPTIMIZED: Never refetch automatically to minimize Firebase reads
             refetchOnWindowFocus: false,
-            // Don't refetch on reconnect to minimize Firebase reads
             refetchOnReconnect: false,
-            // No automatic refetch intervals to prevent excessive Firebase calls
             refetchInterval: false,
-            // Don't refetch on mount if data exists to use cached data
-            refetchOnMount: false,
+            refetchOnMount: false, // Critical: Don't refetch if data exists
+            // OPTIMIZED: Network mode to prevent unnecessary calls
+            networkMode: 'online',
           },
           mutations: {
-            // No retries for mutations to prevent duplicate writes
             retry: 0,
+            // OPTIMIZED: Add mutation defaults
+            networkMode: 'online',
           },
         },
       })

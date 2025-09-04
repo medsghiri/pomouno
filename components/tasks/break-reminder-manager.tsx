@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Plus, Trash2, Edit3, Coffee, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -26,7 +26,6 @@ import { FeatureGate } from "@/components/auth/feature-gate";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
-import { AdvancedStorageService } from "@/lib/advanced-storage-service";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type {
   BreakReminder,
@@ -38,6 +37,7 @@ import {
   useBreakReminderCategories,
   useTodaysBreakReminderCompletions,
   useBreakReminderMutations,
+  getStorageService,
 } from "@/hooks/use-app-data";
 
 // Default categories for break reminders
@@ -91,54 +91,74 @@ export function BreakReminderManager() {
     return map;
   }, [todaysCompletions]);
 
-  // Initialize default categories and reminders if needed
+  // Flag to track if initialization has been attempted
+  const [initializationAttempted, setInitializationAttempted] = React.useState(false);
+
+  // Initialize default categories and reminders if needed - FIXED: Run only once
   useEffect(() => {
-    let isInitializing = false;
+    // Early exit if already attempted or missing prerequisites
+    if (initializationAttempted || !user || remindersLoading || categoriesLoading) {
+      return;
+    }
 
     const initializeDefaults = async () => {
-      // Only initialize if user is authenticated and data has loaded
-      if (!user || remindersLoading || categoriesLoading || isInitializing)
-        return;
-
-      // Prevent multiple simultaneous initializations
-      isInitializing = true;
-
       try {
-        const storageService = new AdvancedStorageService(user);
+        console.log("Initializing break reminder defaults...");
+        setInitializationAttempted(true);
 
-        // First, fix any break reminders with old data structure
-        if (reminders.length > 0) {
-          await storageService.fixBreakReminderDataStructure();
-          await storageService.cleanupDuplicateBreakReminders();
-        }
-
-        // Check if we need to initialize (no existing data)
-        const needsCategories = categories.length === 0;
-        const needsReminders = reminders.length === 0;
-
-        if (!needsCategories && !needsReminders) {
-          isInitializing = false;
+        // EMERGENCY FIX: Use singleton storage service to prevent multiple Firebase calls
+        const storageService = getStorageService(user);
+        if (!storageService) {
           return;
         }
 
-        // Create default categories if none exist
+        // CRITICAL FIX: Check current data state (not from deps to avoid loops)
+        const currentCategories = categories;
+        const currentReminders = reminders;
+        
+        // Only initialize if truly empty (not loading)
+        const needsCategories = !categoriesLoading && currentCategories.length === 0;
+        const needsReminders = !remindersLoading && currentReminders.length === 0;
+
+        console.log(`Initialization check: categories=${currentCategories.length}, reminders=${currentReminders.length}, needsCategories=${needsCategories}, needsReminders=${needsReminders}`);
+
+        if (!needsCategories && !needsReminders) {
+          console.log("Skipping initialization - data already exists");
+          return;
+        }
+
+        // FIXED: Batch create categories to prevent multiple Firebase calls + duplicate prevention
         if (needsCategories) {
           console.log("Creating default break reminder categories...");
-          for (const defaultCat of DEFAULT_CATEGORIES) {
-            try {
-              await storageService.createCategory({
+          
+          // Check for existing categories by name to prevent duplicates
+          const existingCategoryNames = new Set(categories.map(cat => cat.name.toLowerCase()));
+          const categoriesToCreate = DEFAULT_CATEGORIES.filter(
+            defaultCat => !existingCategoryNames.has(defaultCat.name.toLowerCase())
+          );
+
+          if (categoriesToCreate.length > 0) {
+            // Create categories in parallel instead of sequential loop
+            const categoryPromises = categoriesToCreate.map(defaultCat =>
+              storageService.createCategory({
                 name: defaultCat.name,
                 color: defaultCat.color,
                 icon: defaultCat.icon,
                 type: "break-reminder",
-              });
-            } catch (error) {
-              console.error("Failed to create default category:", error);
-            }
+              }).catch(error => {
+                console.error(`Failed to create category ${defaultCat.name}:`, error);
+                return null; // Continue with other categories
+              })
+            );
+            
+            await Promise.allSettled(categoryPromises);
+            console.log(`Created ${categoriesToCreate.length} new categories`);
+          } else {
+            console.log("All default categories already exist, skipping creation");
           }
         }
 
-        // Create default reminders if none exist
+        // FIXED: Batch create reminders to prevent multiple Firebase calls
         if (needsReminders) {
           console.log("Creating default break reminders...");
           const defaultReminderData = [
@@ -172,31 +192,24 @@ export function BreakReminderManager() {
             },
           ];
 
-          for (const reminderData of defaultReminderData) {
-            try {
-              await createBreakReminder.mutateAsync(reminderData);
-            } catch (error) {
-              console.error("Failed to create default reminder:", error);
-            }
-          }
+          // FIXED: Create reminders in parallel to prevent sequential Firebase calls
+          const reminderPromises = defaultReminderData.map(reminderData =>
+            createBreakReminder.mutateAsync(reminderData).catch(error => {
+              console.error(`Failed to create reminder ${reminderData.title}:`, error);
+              return null; // Continue with other reminders
+            })
+          );
+          
+          await Promise.allSettled(reminderPromises);
         }
       } catch (error) {
         console.error("Failed to initialize defaults:", error);
-      } finally {
-        isInitializing = false;
       }
     };
 
-    // Only run once when data is loaded and user is available
-    if (user && !remindersLoading && !categoriesLoading) {
-      initializeDefaults();
-    }
-
-    // Cleanup function to prevent race conditions
-    return () => {
-      isInitializing = false;
-    };
-  }, [user?.uid, remindersLoading, categoriesLoading]); // Only depend on user ID and loading states
+    // Run initialization
+    initializeDefaults();
+  }, [user?.uid, remindersLoading, categoriesLoading]); // CRITICAL FIX: Remove length deps to prevent infinite loop
 
   const resetForm = () => {
     setTitle("");

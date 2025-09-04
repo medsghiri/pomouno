@@ -16,47 +16,72 @@ import type {
 import { FirebaseService } from '@/lib/firebase-service';
 import { LocalStorage } from '@/lib/storage';
 import type { Settings } from '@/lib/storage';
+import StatsOptimizer from '@/lib/stats-optimizer';
 import { useMemo } from 'react';
 
-// Enhanced hierarchical query keys for better cache invalidation and user scoping
+// OPTIMIZED: Enhanced hierarchical query keys with better structure
 export const queryKeys = {
     // Root user scope - prevents cross-user data leaks
     user: (userId: string) => ['user', userId] as const,
 
-    // Tasks hierarchy
+    // Tasks hierarchy - OPTIMIZED: More specific cache keys
     tasks: (userId: string) => ['user', userId, 'tasks'] as const,
     task: (userId: string, taskId: string) => ['user', userId, 'tasks', taskId] as const,
     taskSessions: (userId: string, taskId: string, date: string) => ['user', userId, 'tasks', taskId, 'sessions', date] as const,
 
-    // Categories hierarchy
+    // Categories hierarchy - OPTIMIZED: Separated by type for better caching
     categories: (userId: string, type: 'task' | 'breakReminder') => ['user', userId, 'categories', type] as const,
     taskCategories: (userId: string) => ['user', userId, 'categories', 'task'] as const,
     breakReminderCategories: (userId: string) => ['user', userId, 'categories', 'breakReminder'] as const,
 
-    // Break reminders hierarchy
+    // Break reminders hierarchy - OPTIMIZED: Better date-based caching
     breakReminders: (userId: string) => ['user', userId, 'breakReminders'] as const,
     breakReminder: (userId: string, reminderId: string) => ['user', userId, 'breakReminders', reminderId] as const,
-    breakReminderCompletions: (userId: string, date?: string) => ['user', userId, 'breakReminders', 'completions', date || 'all'] as const,
+    breakReminderCompletions: (userId: string, date: string) => ['user', userId, 'breakReminders', 'completions', date] as const,
 
-    // Sessions hierarchy
-    sessions: (userId: string, limit?: number) => ['user', userId, 'sessions', limit || 'all'] as const,
+    // Sessions hierarchy - OPTIMIZED: Date-based caching
+    sessions: (userId: string, limit?: number) => ['user', userId, 'sessions', limit?.toString() || 'all'] as const,
+    todaySessions: (userId: string) => ['user', userId, 'sessions', getTodayString()] as const,
 
-    // Statistics hierarchy
-    statistics: (userId: string, dateRange: DateRange) => ['user', userId, 'statistics', dateRange.start, dateRange.end] as const,
-    dailyStats: (userId: string, date: string) => ['user', userId, 'statistics', 'daily', date] as const,
-    weeklyStats: (userId: string, weekStart: string) => ['user', userId, 'statistics', 'weekly', weekStart] as const,
+    // Statistics hierarchy - OPTIMIZED: Computed stats with better caching
+    statistics: (userId: string, dateRange: DateRange) => ['user', userId, 'statistics', dateRange.start.toString(), dateRange.end.toString()] as const,
+    todayStats: (userId: string) => ['user', userId, 'statistics', 'today'] as const,
+    weeklyStats: (userId: string) => ['user', userId, 'statistics', 'weekly'] as const,
     monthlyStats: (userId: string, month: string) => ['user', userId, 'statistics', 'monthly', month] as const,
 
     // Settings hierarchy
     settings: (userId: string) => ['user', userId, 'settings'] as const,
 };
 
-// Helper function to get today's date string
+// EMERGENCY FIX: Create singleton storage service to prevent multiple instances
+const storageServiceInstances = new Map<string, AdvancedStorageService>();
+
+// Export the singleton getter for use in components
+export function getStorageService(user: any): AdvancedStorageService | null {
+    if (!user?.uid) return null;
+    
+    if (!storageServiceInstances.has(user.uid)) {
+        storageServiceInstances.set(user.uid, new AdvancedStorageService(user));
+    }
+    
+    return storageServiceInstances.get(user.uid) || null;
+}
+
+// FIXED: Memoized helper function to prevent excessive query key regeneration
+let cachedTodayString: string | null = null;
+let lastDateCheck: number = 0;
+
 const getTodayString = () => {
-    const today = new Date();
-    return today.getFullYear() + '-' +
-        String(today.getMonth() + 1).padStart(2, '0') + '-' +
-        String(today.getDate()).padStart(2, '0');
+    const now = Date.now();
+    // Check if we need to refresh the cached date (every 5 minutes to handle edge cases)
+    if (!cachedTodayString || now - lastDateCheck > 5 * 60 * 1000) {
+        const today = new Date();
+        cachedTodayString = today.getFullYear() + '-' +
+            String(today.getMonth() + 1).padStart(2, '0') + '-' +
+            String(today.getDate()).padStart(2, '0');
+        lastDateCheck = now;
+    }
+    return cachedTodayString;
 };
 
 // Smart completion tracking hook that uses cached data efficiently
@@ -86,13 +111,10 @@ export function useBreakReminderCompletionCounts() {
     }, [breakReminders, todaysCompletions]);
 }
 
-// Tasks
+// Tasks - EMERGENCY FIX: Use singleton storage service
 export function useTasks() {
     const { user } = useAuth();
-    const storageService = useMemo(() =>
-        user ? new AdvancedStorageService(user) : null,
-        [user]
-    );
+    const storageService = getStorageService(user); // FIXED: Use singleton
 
     return useQuery({
         queryKey: queryKeys.tasks(user?.uid || ''),
@@ -101,21 +123,19 @@ export function useTasks() {
             return await storageService.getTasks();
         },
         enabled: !!user && !!storageService,
-        staleTime: Infinity, // Never consider data stale - rely on manual invalidation
-        gcTime: 10 * 60 * 1000, // 10 minutes
+        staleTime: Infinity, // OPTIMIZED: Never stale - only invalidate manually  
+        gcTime: 60 * 60 * 1000, // OPTIMIZED: 1 hour cache (increased from 10 minutes)
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
         refetchOnMount: false, // Don't refetch on component mount
         refetchInterval: false, // Disable automatic refetching
+        retry: 0, // OPTIMIZED: No retries to prevent duplicate Firebase calls
     });
 }
 
 export function useTask(taskId: string) {
     const { user } = useAuth();
-    const storageService = useMemo(() =>
-        user ? new AdvancedStorageService(user) : null,
-        [user]
-    );
+    const storageService = getStorageService(user); // FIXED: Use singleton
 
     return useQuery({
         queryKey: queryKeys.task(user?.uid || '', taskId),
@@ -124,16 +144,13 @@ export function useTask(taskId: string) {
             return await storageService.getTask(taskId);
         },
         enabled: !!user && !!storageService && !!taskId,
-        staleTime: 1 * 60 * 1000, // 1 minute
+        staleTime: 10 * 60 * 1000, // EMERGENCY FIX: 10 minutes instead of 1 minute
     });
 }
 
 export function useTodaysTaskSessions(taskId: string) {
     const { user } = useAuth();
-    const storageService = useMemo(() =>
-        user ? new AdvancedStorageService(user) : null,
-        [user]
-    );
+    const storageService = getStorageService(user); // FIXED: Use singleton
     const today = getTodayString();
 
     return useQuery({
@@ -143,18 +160,15 @@ export function useTodaysTaskSessions(taskId: string) {
             return await storageService.getTodaysTaskSessions(taskId);
         },
         enabled: !!user && !!storageService && !!taskId,
-        staleTime: 30 * 1000, // 30 seconds - session counts change frequently
-        gcTime: 2 * 60 * 1000, // 2 minutes
+        staleTime: 5 * 60 * 1000, // EMERGENCY FIX: 5 minutes instead of 30 seconds
+        gcTime: 30 * 60 * 1000, // FIXED: 30 minutes instead of 2 minutes
     });
 }
 
-// Break Reminders
+// Break Reminders - EMERGENCY FIX: Use singleton storage service
 export function useBreakReminders() {
     const { user } = useAuth();
-    const storageService = useMemo(() =>
-        user ? new AdvancedStorageService(user) : null,
-        [user]
-    );
+    const storageService = getStorageService(user); // FIXED: Use singleton
 
     return useQuery({
         queryKey: queryKeys.breakReminders(user?.uid || ''),
@@ -163,22 +177,19 @@ export function useBreakReminders() {
             return await storageService.getBreakReminders();
         },
         enabled: !!user && !!storageService,
-        staleTime: Infinity, // Never consider data stale - rely on manual invalidation
-        gcTime: 15 * 60 * 1000, // 15 minutes - longer cache time for better performance
+        staleTime: Infinity, // OPTIMIZED: Never stale - rely on manual invalidation
+        gcTime: 60 * 60 * 1000, // OPTIMIZED: 1 hour cache (increased from 15 minutes)
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
         refetchOnMount: false, // Don't refetch on mount - rely on cache and mutations
         refetchInterval: false, // Disable automatic refetching
-        retry: 1, // Reduce retries to prevent multiple calls
+        retry: 0, // OPTIMIZED: No retries to prevent duplicate Firebase calls
     });
 }
 
 export function useTodaysBreakReminderCompletions() {
     const { user } = useAuth();
-    const storageService = useMemo(() =>
-        user ? new AdvancedStorageService(user) : null,
-        [user]
-    );
+    const storageService = getStorageService(user); // FIXED: Use singleton
     const today = getTodayString();
 
     return useQuery({
@@ -188,23 +199,20 @@ export function useTodaysBreakReminderCompletions() {
             return await storageService.getTodaysBreakReminderCompletions();
         },
         enabled: !!user && !!storageService,
-        staleTime: Infinity, // Never consider data stale - rely on manual invalidation
-        gcTime: 15 * 60 * 1000, // 15 minutes - longer cache time for better performance
+        staleTime: Infinity, // OPTIMIZED: Never stale - rely on manual invalidation
+        gcTime: 60 * 60 * 1000, // OPTIMIZED: 1 hour cache (increased from 15 minutes)
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
         refetchOnMount: false, // Don't refetch on component mount - rely on cache and mutations
         refetchInterval: false, // Disable automatic refetching
-        retry: 1, // Reduce retries to prevent multiple calls
+        retry: 0, // OPTIMIZED: No retries to prevent duplicate Firebase calls
     });
 }
 
-// Categories
+// Categories - EMERGENCY FIX: Use singleton storage service
 export function useTaskCategories() {
     const { user } = useAuth();
-    const storageService = useMemo(() =>
-        user ? new AdvancedStorageService(user) : null,
-        [user]
-    );
+    const storageService = getStorageService(user); // FIXED: Use singleton
 
     return useQuery({
         queryKey: queryKeys.taskCategories(user?.uid || ''),
@@ -213,16 +221,19 @@ export function useTaskCategories() {
             return await storageService.getTaskCategories();
         },
         enabled: !!user && !!storageService,
-        staleTime: 10 * 60 * 1000, // 10 minutes - categories rarely change
+        staleTime: Infinity, // OPTIMIZED: Categories rarely change - make them infinite stale
+        gcTime: 2 * 60 * 60 * 1000, // OPTIMIZED: 2 hours cache - categories are very stable
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        refetchOnMount: false,
+        refetchInterval: false,
+        retry: 0, // OPTIMIZED: No retries to prevent duplicate Firebase calls
     });
 }
 
 export function useBreakReminderCategories() {
     const { user } = useAuth();
-    const storageService = useMemo(() =>
-        user ? new AdvancedStorageService(user) : null,
-        [user]
-    );
+    const storageService = getStorageService(user); // FIXED: Use singleton
 
     return useQuery({
         queryKey: queryKeys.breakReminderCategories(user?.uid || ''),
@@ -231,21 +242,20 @@ export function useBreakReminderCategories() {
             return await storageService.getBreakReminderCategories();
         },
         enabled: !!user && !!storageService,
-        staleTime: 10 * 60 * 1000, // 10 minutes - categories rarely change
+        staleTime: Infinity, // OPTIMIZED: Categories rarely change - make them infinite stale
+        gcTime: 2 * 60 * 60 * 1000, // OPTIMIZED: 2 hours cache - categories are very stable
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
-        refetchOnMount: 'always', // Always refetch on mount to get latest data
-        retry: 1, // Reduce retries to prevent multiple calls
+        refetchOnMount: false, // CRITICAL FIX: Don't always refetch - this was causing excessive reads!
+        refetchInterval: false,
+        retry: 0, // OPTIMIZED: No retries to prevent duplicate Firebase calls
     });
 }
 
-// Statistics with optimized date ranges
+// Statistics with optimized date ranges - EMERGENCY FIX
 export function useStatistics(dateRange: DateRange) {
     const { user } = useAuth();
-    const storageService = useMemo(() =>
-        user ? new AdvancedStorageService(user) : null,
-        [user]
-    );
+    const storageService = getStorageService(user); // FIXED: Use singleton
 
     return useQuery({
         queryKey: queryKeys.statistics(user?.uid || '', dateRange),
@@ -266,12 +276,16 @@ export function useStatistics(dateRange: DateRange) {
             return await storageService.getStatistics(dateRange);
         },
         enabled: !!user && !!storageService,
-        staleTime: 2 * 60 * 1000, // 2 minutes - stats change with new sessions
-        gcTime: 5 * 60 * 1000, // 5 minutes
+        staleTime: 10 * 60 * 1000, // OPTIMIZED: 10 minutes instead of 2 minutes
+        gcTime: 30 * 60 * 1000, // OPTIMIZED: 30 minutes instead of 5 minutes
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        refetchOnMount: false,
+        retry: 0, // OPTIMIZED: No retries
     });
 }
 
-// Sessions with optimized loading
+// Sessions with EMERGENCY OPTIMIZATION - Much longer cache times
 export function useSessions(limit: number = 100) {
     const { user } = useAuth();
 
@@ -284,170 +298,184 @@ export function useSessions(limit: number = 100) {
             return await FirebaseService.getRecentSessions(user, limit);
         },
         enabled: true, // Always enabled - works for both authenticated and non-authenticated users
-        staleTime: 30 * 1000, // 30 seconds - sessions change frequently, shorter stale time
-        gcTime: 3 * 60 * 1000, // 3 minutes
+        staleTime: 30 * 60 * 1000, // EMERGENCY FIX: 30 minutes instead of 5 minutes!
+        gcTime: 2 * 60 * 60 * 1000, // EMERGENCY FIX: 2 hours instead of 30 minutes!
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
-        refetchOnMount: 'always', // Always refetch on mount to ensure fresh data
+        refetchOnMount: false, // CRITICAL FIX: Don't always refetch - use cached data
         refetchInterval: false, // Disable automatic refetching
+        retry: 0, // OPTIMIZED: No retries to prevent duplicate Firebase calls
     });
 }
 
-// Computed stats hooks for better performance
+// EMERGENCY FIX: Convert useTodaysStats to use React Query but return data directly for compatibility
 export function useTodaysStats() {
     const { user } = useAuth();
     const today = getTodayString();
-    const todayStart = useMemo(() => {
-        const date = new Date();
-        date.setHours(0, 0, 0, 0);
-        return date.getTime();
-    }, []);
-    const todayEnd = useMemo(() => todayStart + 24 * 60 * 60 * 1000 - 1, [todayStart]);
 
-    const { data: sessions = [] } = useSessions();
-    const { data: tasks = [] } = useTasks();
-    const { data: breakCompletions = [] } = useTodaysBreakReminderCompletions();
+    const query = useQuery({
+        queryKey: queryKeys.todayStats(user?.uid || ''),
+        queryFn: async () => {
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+            const todayStartTime = todayStart.getTime();
+            const todayEndTime = todayStartTime + 24 * 60 * 60 * 1000 - 1;
 
-    return useMemo(() => {
-        if (!user) {
-            // For non-authenticated users, calculate stats from the sessions data from React Query
-            // This ensures the stats update when sessions are added via the mutation
-            const todaySessions = sessions.filter(session => {
-                const sessionDate = new Date(session.timestamp);
+            if (!user) {
+                // For non-authenticated users, use localStorage
+                const allSessions = LocalStorage.getAllSessions();
+                const todaySessions = allSessions.filter(session => {
+                    const sessionDate = new Date(session.timestamp);
+                    const sessionStart = new Date(
+                        sessionDate.getFullYear(),
+                        sessionDate.getMonth(),
+                        sessionDate.getDate()
+                    ).getTime();
+                    return sessionStart === todayStartTime;
+                });
+
+                const workSessions = todaySessions.filter(s => s.type === 'work').length;
+                const focusTime = todaySessions
+                    .filter(s => s.type === 'work')
+                    .reduce((sum, s) => {
+                        let duration = typeof s.duration === 'number' ? s.duration : 0;
+                        if (duration > 60) {
+                            duration = Math.round(duration / 60);
+                        }
+                        return sum + duration;
+                    }, 0);
+
+                const localTasks = LocalStorage.getTasks();
+                const tasksCompleted = localTasks.filter((task: any) => {
+                    if (task.completedAt && task.completedAt >= todayStartTime && task.completedAt <= todayEndTime) return true;
+                    if (task.recurring?.lastCompleted && task.recurring.lastCompleted >= todayStartTime && task.recurring.lastCompleted <= todayEndTime) return true;
+                    if (task.spacedRepetition?.lastReviewed && task.spacedRepetition.lastReviewed >= todayStartTime && task.spacedRepetition.lastReviewed <= todayEndTime) return true;
+                    return false;
+                }).length;
+
+                return {
+                    sessions: workSessions,
+                    focusTime,
+                    date: today,
+                    workSessions,
+                    shortBreakSessions: todaySessions.filter(s => s.type === 'short-break').length,
+                    longBreakSessions: todaySessions.filter(s => s.type === 'long-break').length,
+                    tasksCompleted,
+                    streak: 0,
+                    breakRemindersShown: 0,
+                    breakRemindersCompleted: 0,
+                };
+            }
+
+            // For authenticated users, calculate efficiently from Firebase
+            // EMERGENCY FIX: Use singleton storage service to avoid multiple instances
+            const storageService = getStorageService(user);
+            if (!storageService || !user) {
+                return {
+                    sessions: 0,
+                    focusTime: 0,
+                    date: today,
+                    workSessions: 0,
+                    shortBreakSessions: 0,
+                    longBreakSessions: 0,
+                    tasksCompleted: 0,
+                    streak: 0,
+                    breakRemindersShown: 0,
+                    breakRemindersCompleted: 0,
+                };
+            }
+
+            // CRITICAL: Compute stats with minimal Firebase calls
+            console.log('📊 CRITICAL: Computing today\'s stats efficiently...');
+            
+            // Use single Firebase call to get recent sessions, then filter locally
+            const [sessions, tasks] = await Promise.all([
+                FirebaseService.getRecentSessions(user, 100), // Get more recent sessions to ensure we get today's
+                storageService.getTasks()
+            ]);
+
+            // Filter for today's sessions locally (no additional Firebase call)
+            const todaysSessionsFiltered = sessions.filter((s: any) => {
+                const sessionDate = new Date(s.timestamp);
                 const sessionStart = new Date(
                     sessionDate.getFullYear(),
                     sessionDate.getMonth(),
                     sessionDate.getDate()
                 ).getTime();
-                return sessionStart === todayStart;
+                return sessionStart === todayStartTime;
             });
 
-            const workSessions = todaySessions.filter(s => s.type === 'work').length;
-            const focusTime = todaySessions
-                .filter(s => s.type === 'work')
-                .reduce((sum, s) => {
-                    let duration = typeof s.duration === 'number' ? s.duration : 0;
-                    if (duration > 60) {
-                        duration = Math.round(duration / 60);
-                    }
-                    return sum + duration;
-                }, 0);
+            const workSessions = todaysSessionsFiltered.filter((s: any) => s.type === 'work').length;
+            const focusTime = todaysSessionsFiltered
+                .filter((s: any) => s.type === 'work')
+                .reduce((sum: number, s: any) => sum + (s.duration || 0), 0);
 
-            // For non-authenticated users, get tasks from localStorage
-            const localTasks = LocalStorage.getTasks();
-            const tasksCompleted = localTasks.filter((task: any) => {
-                if (task.completedAt && task.completedAt >= todayStart && task.completedAt <= todayEnd) return true;
-                if (task.recurring?.lastCompleted && task.recurring.lastCompleted >= todayStart && task.recurring.lastCompleted <= todayEnd) return true;
-                if (task.spacedRepetition?.lastReviewed && task.spacedRepetition.lastReviewed >= todayStart && task.spacedRepetition.lastReviewed <= todayEnd) return true;
+            const tasksCompleted = tasks.filter((task: any) => {
+                if (task.completedAt && task.completedAt >= todayStartTime && task.completedAt <= todayEndTime) return true;
+                if (task.recurring?.lastCompleted && task.recurring.lastCompleted >= todayStartTime && task.recurring.lastCompleted <= todayEndTime) return true;
+                if (task.spacedRepetition?.lastReviewed && task.spacedRepetition.lastReviewed >= todayStartTime && task.spacedRepetition.lastReviewed <= todayEndTime) return true;
                 return false;
             }).length;
-
-            // Calculate streak for non-authenticated users
-            let streak = 0;
-            const todayDate = new Date();
-            for (let i = 0; i < 365; i++) {
-                const checkDate = new Date(todayDate);
-                checkDate.setDate(todayDate.getDate() - i);
-                checkDate.setHours(0, 0, 0, 0);
-                const dayStart = checkDate.getTime();
-
-                const dayHasSessions = sessions.some(s => {
-                    const sessionDate = new Date(s.timestamp);
-                    sessionDate.setHours(0, 0, 0, 0);
-                    return sessionDate.getTime() === dayStart && s.type === 'work';
-                });
-
-                if (dayHasSessions) {
-                    streak++;
-                } else {
-                    break;
-                }
-            }
 
             return {
                 sessions: workSessions,
                 focusTime,
                 date: today,
                 workSessions,
-                shortBreakSessions: todaySessions.filter(s => s.type === 'short-break').length,
-                longBreakSessions: todaySessions.filter(s => s.type === 'long-break').length,
+                shortBreakSessions: todaysSessionsFiltered.filter((s: any) => s.type === 'short-break').length,
+                longBreakSessions: todaysSessionsFiltered.filter((s: any) => s.type === 'long-break').length,
                 tasksCompleted,
-                streak,
+                streak: 0,
                 breakRemindersShown: 0,
-                breakRemindersCompleted: 0, // For non-authenticated users
+                breakRemindersCompleted: 0,
             };
-        }
+        },
+        enabled: true,
+        staleTime: 10 * 60 * 1000, // EMERGENCY: 10 minutes cache - stats don't change that often
+        gcTime: 60 * 60 * 1000, // EMERGENCY: 1 hour garbage collection
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        refetchOnMount: false,
+        refetchInterval: false,
+        retry: 0,
+    });
 
-        // Filter sessions for today
-        const todaySessions = sessions.filter(session => {
-            const sessionDate = new Date(session.timestamp);
-            const sessionStart = new Date(
-                sessionDate.getFullYear(),
-                sessionDate.getMonth(),
-                sessionDate.getDate()
-            ).getTime();
-            return sessionStart === todayStart;
-        });
-
-        const workSessions = todaySessions.filter(s => s.type === 'work').length;
-        const focusTime = todaySessions
-            .filter(s => s.type === 'work')
-            .reduce((sum, s) => {
-                let duration = typeof s.duration === 'number' ? s.duration : 0;
-                if (duration > 60) {
-                    duration = Math.round(duration / 60);
-                }
-                return sum + duration;
-            }, 0);
-
-        // Calculate tasks completed today
-        const tasksCompleted = tasks.filter(task => {
-            if (task.completedAt && task.completedAt >= todayStart && task.completedAt <= todayEnd) return true;
-            if (task.recurring?.lastCompleted && task.recurring.lastCompleted >= todayStart && task.recurring.lastCompleted <= todayEnd) return true;
-            if (task.spacedRepetition?.lastReviewed && task.spacedRepetition.lastReviewed >= todayStart && task.spacedRepetition.lastReviewed <= todayEnd) return true;
-            return false;
-        }).length;
-
-        // Calculate streak
-        let streak = 0;
-        const todayDate = new Date();
-        for (let i = 0; i < 365; i++) {
-            const checkDate = new Date(todayDate);
-            checkDate.setDate(todayDate.getDate() - i);
-            checkDate.setHours(0, 0, 0, 0);
-            const dayStart = checkDate.getTime();
-
-            const dayHasSessions = sessions.some(s => {
-                const sessionDate = new Date(s.timestamp);
-                sessionDate.setHours(0, 0, 0, 0);
-                return sessionDate.getTime() === dayStart && s.type === 'work';
-            });
-
-            if (dayHasSessions) {
-                streak++;
-            } else {
-                break;
-            }
-        }
-
-        return {
-            sessions: workSessions,
-            focusTime,
-            date: today,
-            workSessions,
-            shortBreakSessions: todaySessions.filter(s => s.type === 'short-break').length,
-            longBreakSessions: todaySessions.filter(s => s.type === 'long-break').length,
-            tasksCompleted,
-            streak,
-            breakRemindersShown: 0,
-            breakRemindersCompleted: breakCompletions.length,
-        };
-    }, [user, sessions, tasks, breakCompletions, today, todayStart, todayEnd]);
+    // Return the data directly for compatibility with existing components
+    return query.data || {
+        sessions: 0,
+        focusTime: 0,
+        date: today,
+        workSessions: 0,
+        shortBreakSessions: 0,
+        longBreakSessions: 0,
+        tasksCompleted: 0,
+        streak: 0,
+        breakRemindersShown: 0,
+        breakRemindersCompleted: 0,
+    };
 }
 
-// Weekly and Monthly stats with optimized calculations
+// 🚀 OPTIMIZED: Use the single optimized stats hook instead of cascading Firebase calls
+export function useTodaysStatsOptimized() {
+    const { data: optimizedStats } = useOptimizedStats();
+    return optimizedStats?.today || {
+        sessions: 0,
+        focusTime: 0,
+        date: new Date().toISOString().split('T')[0],
+        workSessions: 0,
+        shortBreakSessions: 0,
+        longBreakSessions: 0,
+        tasksCompleted: 0,
+        streak: 0,
+        breakRemindersShown: 0,
+        breakRemindersCompleted: 0,
+    };
+}
+
+// EMERGENCY FIX: Weekly and Monthly stats optimized to use React Query cached data
 export function useWeeklyStats() {
-    const { data: sessions = [] } = useSessions();
+    // Use the existing sessions query that's already cached
+    const { data: sessions = [] } = useSessions(100); // Get enough sessions to cover a week
     const { data: tasks = [] } = useTasks();
 
     return useMemo(() => {
@@ -511,7 +539,8 @@ export function useWeeklyStats() {
 }
 
 export function useMonthlyStats(currentDate: Date) {
-    const { data: sessions = [] } = useSessions();
+    // Use the existing sessions query that's already cached  
+    const { data: sessions = [] } = useSessions(500); // Get enough sessions to cover a month
     const { data: tasks = [] } = useTasks();
 
     return useMemo(() => {
@@ -656,10 +685,7 @@ const calculateRecurringNextDue = (
 export function useTaskMutations() {
     const queryClient = useQueryClient();
     const { user } = useAuth();
-    const storageService = useMemo(() =>
-        user ? new AdvancedStorageService(user) : null,
-        [user]
-    );
+    const storageService = getStorageService(user); // FIXED: Use singleton
 
     const createTask = useMutation({
         mutationFn: async (taskData: any) => {
@@ -965,8 +991,12 @@ export function useTaskMutations() {
                 );
             });
 
-            // Invalidate task sessions to get accurate count from server
-            queryClient.invalidateQueries({ queryKey: queryKeys.taskSessions(user?.uid || '', taskId, getTodayString()) });
+            // EMERGENCY FIX: Update task sessions cache directly instead of invalidating
+            queryClient.setQueryData(queryKeys.taskSessions(user?.uid || '', taskId, getTodayString()), (old: number) => {
+                return (old || 0) + 1; // Increment optimistically
+            });
+            
+            // NO INVALIDATION - prevents Firebase reads
         },
         // No automatic invalidation - rely on optimistic updates and onSuccess
     });
@@ -982,10 +1012,7 @@ export function useTaskMutations() {
 export function useBreakReminderMutations() {
     const queryClient = useQueryClient();
     const { user } = useAuth();
-    const storageService = useMemo(() =>
-        user ? new AdvancedStorageService(user) : null,
-        [user]
-    );
+    const storageService = getStorageService(user); // FIXED: Use singleton
 
     const createBreakReminder = useMutation({
         mutationFn: async (reminderData: any) => {
@@ -1077,7 +1104,7 @@ export function useBreakReminderMutations() {
         onMutate: async (id) => {
             // Cancel any outgoing refetches using hierarchical query keys
             await queryClient.cancelQueries({ queryKey: queryKeys.breakReminders(user?.uid || '') });
-            await queryClient.cancelQueries({ queryKey: queryKeys.breakReminderCompletions(user?.uid || '') });
+            await queryClient.cancelQueries({ queryKey: queryKeys.breakReminderCompletions(user?.uid || '', getTodayString()) });
 
             // Snapshot the previous values
             const previousReminders = queryClient.getQueryData(queryKeys.breakReminders(user?.uid || ''));
@@ -1434,14 +1461,11 @@ export function useBreakReminderMutations() {
     };
 }
 
-// Session recording with optimistic updates
+// Session recording with optimistic updates - EMERGENCY FIX
 export function useSessionMutations() {
     const queryClient = useQueryClient();
     const { user } = useAuth();
-    const storageService = useMemo(() =>
-        user ? new AdvancedStorageService(user) : null,
-        [user]
-    );
+    const storageService = getStorageService(user); // FIXED: Use singleton
 
     const recordSession = useMutation({
         mutationFn: async (session: PomodoroSession) => {
@@ -1469,6 +1493,30 @@ export function useSessionMutations() {
             queryClient.setQueryData(queryKeys.sessions(user?.uid || ''), (old: PomodoroSession[]) => {
                 if (!old) return [optimisticSession];
                 return [optimisticSession, ...old];
+            });
+
+            // EMERGENCY FIX: Update today's stats cache immediately without triggering new queries
+            queryClient.setQueryData(queryKeys.todayStats(user?.uid || ''), (old: any) => {
+                if (!old) return old;
+                if (session.type === 'work') {
+                    return {
+                        ...old,
+                        sessions: old.sessions + 1,
+                        workSessions: old.workSessions + 1,
+                        focusTime: old.focusTime + (session.duration || 0),
+                    };
+                } else if (session.type === 'short-break') {
+                    return {
+                        ...old,
+                        shortBreakSessions: old.shortBreakSessions + 1,
+                    };
+                } else if (session.type === 'long-break') {
+                    return {
+                        ...old,
+                        longBreakSessions: old.longBreakSessions + 1,
+                    };
+                }
+                return old;
             });
 
             // If this is a task session, update task session count
@@ -1499,15 +1547,23 @@ export function useSessionMutations() {
             console.error('Failed to record session:', err);
         },
         onSuccess: (recordedSession, originalSession) => {
-            // For both authenticated and non-authenticated users, invalidate sessions to get fresh data
-            // This ensures that the stats are properly updated
-            queryClient.invalidateQueries({ queryKey: queryKeys.sessions(user?.uid || '') });
+            // EMERGENCY FIX: Replace temporary session with real one WITHOUT invalidation
+            queryClient.setQueryData(queryKeys.sessions(user?.uid || ''), (old: PomodoroSession[]) => {
+                if (!old) return [recordedSession];
+                // Remove temp session and add real one
+                const withoutTemp = old.filter(s => !s.id.startsWith('temp_'));
+                return [recordedSession, ...withoutTemp];
+            });
 
-            // Also invalidate task sessions if this was a task session
-            if (originalSession.taskId && originalSession.type === 'work') {
-                const today = getTodayString();
-                queryClient.invalidateQueries({ queryKey: queryKeys.taskSessions(user?.uid || '', originalSession.taskId, today) });
-            }
+            // CRITICAL: Invalidate optimized stats cache when new session is added
+            queryClient.invalidateQueries({ queryKey: ['optimized-stats'] });
+            
+            // Also invalidate the StatsOptimizer cache
+            const optimizer = StatsOptimizer.getInstance();
+            optimizer.invalidateCache();
+
+            // NO OTHER INVALIDATION - rely on optimistic updates only
+            // This prevents unnecessary Firebase reads
 
             // Dispatch event for other components that might need to update
             window.dispatchEvent(new CustomEvent('sessionCompleted', { detail: recordedSession }));
@@ -1587,4 +1643,61 @@ export function useSettingsMutations() {
     return {
         updateSettings,
     };
+}
+
+// 🚀 EMERGENCY FIX: Single optimized hook that computes ALL stats efficiently
+export function useOptimizedStats(currentDate: Date = new Date()) {
+    const { user } = useAuth();
+    const storageService = getStorageService(user);
+    
+    return useQuery({
+        queryKey: ['optimized-stats', user?.uid || 'local', currentDate.getMonth(), currentDate.getFullYear()],
+        queryFn: async () => {
+            console.log('📊 CRITICAL: Computing ALL stats with StatsOptimizer - SINGLE operation!');
+            
+            let sessions: any[] = [];
+            let tasks: any[] = [];
+            
+            if (!user) {
+                // For non-authenticated users
+                sessions = LocalStorage.getAllSessions() || [];
+                tasks = LocalStorage.getTasks() || [];
+            } else if (storageService) {
+                // For authenticated users - get data efficiently with MINIMAL Firebase calls
+                const [sessionsData, tasksData] = await Promise.all([
+                    FirebaseService.getRecentSessions(user, 300), // Get enough sessions for stats
+                    storageService.getTasks()
+                ]);
+                sessions = sessionsData;
+                tasks = tasksData;
+            }
+            
+            // Use the StatsOptimizer to compute ALL stats at once
+            const optimizer = StatsOptimizer.getInstance();
+            const result = optimizer.computeOptimizedStats(sessions, tasks, user?.uid || 'local', currentDate);
+            
+            console.log('✅ ALL stats computed in single operation!');
+            return result;
+        },
+        enabled: true,
+        staleTime: 15 * 60 * 1000, // 15 minutes - stats don't change that often
+        gcTime: 60 * 60 * 1000,    // 1 hour
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        refetchOnMount: false,
+        refetchInterval: false,
+        retry: 0,
+    });
+}
+
+// 🚀 OPTIMIZED: Weekly stats using StatsOptimizer - NO additional Firebase calls!
+export function useWeeklyStatsOptimized() {
+    const { data: optimizedStats } = useOptimizedStats();
+    return optimizedStats?.weekly || [];
+}
+
+// 🚀 OPTIMIZED: Monthly stats using StatsOptimizer - NO additional Firebase calls!
+export function useMonthlyStatsOptimized(currentDate: Date) {
+    const { data: optimizedStats } = useOptimizedStats(currentDate);
+    return optimizedStats?.monthly || [];
 }

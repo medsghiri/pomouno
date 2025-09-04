@@ -4,9 +4,8 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Moon, Sun } from 'lucide-react';
 import { LocalStorage } from '@/lib/storage';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from '@/lib/firebase';
-import { FirebaseService } from '@/lib/firebase-service';
+import { useAuth } from '@/lib/auth-context';
+import { useSettingsMutations } from '@/hooks/use-app-data';
 
 interface ThemeToggleProps {
     variant?: 'default' | 'ghost' | 'outline';
@@ -21,7 +20,8 @@ export function ThemeToggle({
     className = '',
     showLabel = false
 }: ThemeToggleProps) {
-    const [user] = useAuthState(auth);
+    const { user } = useAuth();
+    const { updateSettings } = useSettingsMutations();
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [mounted, setMounted] = useState(false);
 
@@ -55,10 +55,10 @@ export function ThemeToggle({
         // Apply theme to document
         document.documentElement.classList.toggle('dark', newDarkMode);
 
-        // Sync to Firebase if user is logged in
+        // FIXED: Use React Query mutation instead of direct Firebase call
         if (user) {
             try {
-                await FirebaseService.saveSettings(user, updatedSettings);
+                updateSettings.mutate(updatedSettings);
             } catch (error) {
                 console.error('Failed to sync theme setting to cloud:', error);
             }

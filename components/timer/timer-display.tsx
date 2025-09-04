@@ -62,20 +62,25 @@ export function TimerDisplay({
     setMounted(true);
   }, []);
 
-  // Initialize audio service and handle volume changes
+  // EMERGENCY FIX: Initialize audio service and handle volume changes
   useEffect(() => {
-    audioService.initialize().then(() => {
-      // Check if service is truly ready with data
-      const checkReady = () => {
-        if (audioService.isReady()) {
-          setIsAudioServiceReady(true);
-        } else {
-          // Check again in a bit
-          setTimeout(checkReady, 50);
-        }
-      };
-      checkReady();
-    });
+    // Only initialize if not already initialized to prevent multiple Firebase calls
+    if (!audioService.isReady() && typeof window !== 'undefined') {
+      audioService.initialize().then(() => {
+        // Check if service is truly ready with data
+        const checkReady = () => {
+          if (audioService.isReady()) {
+            setIsAudioServiceReady(true);
+          } else {
+            // Check again in a bit
+            setTimeout(checkReady, 50);
+          }
+        };
+        checkReady();
+      });
+    } else if (audioService.isReady()) {
+      setIsAudioServiceReady(true);
+    }
     audioService.setVolume(settings.soundVolume);
     audioService.setNotificationVolume(settings.notificationVolume);
   }, [settings.soundVolume, settings.notificationVolume]);

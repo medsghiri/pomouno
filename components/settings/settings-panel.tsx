@@ -78,7 +78,10 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
   const audioService = AudioService.getInstance();
 
   useEffect(() => {
-    audioService.initialize();
+    // EMERGENCY FIX: Only initialize once globally
+    if (!audioService.isReady() && typeof window !== 'undefined') {
+      audioService.initialize();
+    }
 
     // Listen for volume changes from AudioService and update settings via React Query
     const handleVolumeChange = (newVolume: number) => {

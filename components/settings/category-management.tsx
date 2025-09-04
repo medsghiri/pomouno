@@ -14,8 +14,8 @@ import { Plus, Trash2, Edit3, Tag, Palette } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '@/lib/firebase';
-import { AdvancedStorageService } from '@/lib/advanced-storage-service';
-import type { TaskCategory, BreakReminderCategory, CreateCategoryRequest } from '@/lib/advanced-storage-service';
+import { getStorageService } from '@/hooks/use-app-data';
+import type { AdvancedStorageService, TaskCategory, BreakReminderCategory, CreateCategoryRequest } from '@/lib/advanced-storage-service';
 
 // Default color palette for categories
 const DEFAULT_COLORS = [
@@ -64,7 +64,12 @@ export function CategoryManagement({ onCategoriesChange }: CategoryManagementPro
 
         try {
             setLoading(true);
-            const storageService = new AdvancedStorageService(user);
+            // EMERGENCY FIX: Use singleton storage service instead of creating new instances
+            const storageService = getStorageService(user);
+            if (!storageService) {
+                setLoading(false);
+                return;
+            }
 
             const [taskCats, breakCats] = await Promise.all([
                 storageService.getTaskCategories(),
@@ -112,7 +117,12 @@ export function CategoryManagement({ onCategoriesChange }: CategoryManagementPro
 
         try {
             setLoading(true);
-            const storageService = new AdvancedStorageService(user);
+            // EMERGENCY FIX: Use singleton storage service
+            const storageService = getStorageService(user);
+            if (!storageService) {
+                setLoading(false);
+                return;
+            }
 
             const categoryData: CreateCategoryRequest = {
                 name: categoryName.trim(),
@@ -155,7 +165,12 @@ export function CategoryManagement({ onCategoriesChange }: CategoryManagementPro
 
         try {
             setLoading(true);
-            const storageService = new AdvancedStorageService(user);
+            // EMERGENCY FIX: Use singleton storage service
+            const storageService = getStorageService(user);
+            if (!storageService) {
+                setLoading(false);
+                return;
+            }
 
             await storageService.deleteCategory(categoryId);
 

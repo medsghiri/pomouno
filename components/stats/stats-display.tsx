@@ -34,8 +34,6 @@ import {
 import { LocalStorage, Task, TodaysStats } from "@/lib/storage";
 import { FeatureGate } from "@/components/auth/feature-gate";
 import { useAuth } from "@/lib/auth-context";
-import { FirebaseService } from "@/lib/firebase-service";
-import { AdvancedStorageService } from "@/lib/advanced-storage-service";
 import {
   useTodaysStats,
   useWeeklyStats,
@@ -59,7 +57,7 @@ export function StatsDisplay() {
   );
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // Use optimized hooks for data fetching with memoized computed stats
+  // 🚀 OPTIMIZED: Use optimized hooks for data fetching with memoized computed stats
   const todayStats = useTodaysStats();
   const weeklyStats = useWeeklyStats();
   const monthlyStats = useMonthlyStats(currentDate);

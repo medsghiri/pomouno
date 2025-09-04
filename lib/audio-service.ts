@@ -40,7 +40,16 @@ class AudioService {
     }
 
     async initialize() {
-        if (this.isInitialized || this.isLoading || typeof window === 'undefined') return;
+        // EMERGENCY FIX: Prevent multiple simultaneous initializations
+        if (this.isInitialized || typeof window === 'undefined') return;
+        
+        if (this.isLoading) {
+            // If already loading, wait for completion instead of starting another load
+            while (this.isLoading) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            return;
+        }
 
         this.isLoading = true;
 
@@ -97,6 +106,13 @@ class AudioService {
     private async loadAudioMetadata() {
         try {
             console.log('🔍 Loading audio metadata from Firebase...');
+            
+            // EMERGENCY FIX: Add singleton check and caching
+            if (Object.keys(this.audioMetadata).length > 0) {
+                console.log('✅ Audio metadata already cached, skipping Firebase call');
+                return;
+            }
+            
             const audioCollection = collection(db, 'audio');
             const q = query(audioCollection, where('active', '==', true), orderBy('createdAt', 'desc'));
             const querySnapshot = await getDocs(q);

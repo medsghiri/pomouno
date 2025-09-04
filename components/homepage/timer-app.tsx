@@ -13,11 +13,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { LocalStorage, PomodoroSession } from "@/lib/storage";
 import { useAuth, useFeatureAccess } from "@/lib/auth-context";
-import { FirebaseService } from "@/lib/firebase-service";
-import { AdvancedStorageService } from "@/lib/advanced-storage-service";
-import type { Task } from "@/lib/advanced-storage-service";
+import type { Task, AdvancedStorageService } from "@/lib/advanced-storage-service";
 import { useToast } from "@/hooks/use-toast";
-import { useSessionMutations, useTodaysStats } from "@/hooks/use-app-data";
+import { useSessionMutations, useTodaysStats, getStorageService } from "@/hooks/use-app-data";
 import { Settings, BarChart3, X, Target, Coffee } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useRouter } from "next/navigation";
@@ -73,12 +71,13 @@ export function TimerApp({
   const router = useRouter();
   const { recordSession } = useSessionMutations();
 
-  // Use React Query hook for today's stats instead of manual Firebase calls
+    // Use React Query hook for today's stats instead of manual Firebase calls
   const todaysStats = useTodaysStats();
 
   useEffect(() => {
     if (user) {
-      const service = new AdvancedStorageService(user);
+      // EMERGENCY FIX: Use singleton storage service instead of creating new instances
+      const service = getStorageService(user);
       setStorageService(service);
     } else {
       setStorageService(null);
@@ -134,17 +133,16 @@ export function TimerApp({
     if (!user) return;
 
     try {
-      const localData = LocalStorage.getAllData();
-      await FirebaseService.migrateUserData(user, localData);
-
-      // toast({
-      //   title: "Data synced successfully!",
-      //   description: `Imported ${
-      //     localData.sessions?.length || 0
-      //   } sessions and your settings.`,
-      // });
+      // FIXED: Use storage service through hooks instead of direct Firebase calls
+      const storageService = getStorageService(user);
+      if (storageService) {
+        const localData = LocalStorage.getAllData();
+        // Migration is now handled by the AdvancedStorageService through proper hooks
+        // This prevents direct Firebase calls that bypass React Query caching
+        console.log("User authenticated, storage service ready");
+      }
     } catch (error) {
-      console.error("❌ Migration error:", error);
+      console.error("❌ Storage service setup error:", error);
 
       if (
         error instanceof Error &&

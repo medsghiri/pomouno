@@ -8,8 +8,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar as CalendarIcon, Target, CheckCircle, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { AdvancedStorageService } from "@/lib/advanced-storage-service";
-import { FirebaseService } from "@/lib/firebase-service";
+import type { AdvancedStorageService } from "@/lib/advanced-storage-service";
 import { Task, TodaysStats } from "@/lib/storage";
 import { useTasks, useSessions } from "@/hooks/use-app-data";
 

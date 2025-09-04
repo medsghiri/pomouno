@@ -100,18 +100,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link
-          rel="icon"
-          href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='35' fill='%23E53935'/></svg>"
-        />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="PomoUno" />
-        <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="msapplication-TileColor" content="#E53935" />
-        <meta name="msapplication-config" content="/browserconfig.xml" />
         <script
           dangerouslySetInnerHTML={{
             __html: themeScript,
@@ -157,13 +150,6 @@ export default function RootLayout({
                 "Background Sounds",
               ],
               screenshot: "https://pomouno.com/opengraph-image",
-              aggregateRating: {
-                "@type": "AggregateRating",
-                ratingValue: "4.8",
-                ratingCount: "1250",
-                bestRating: "5",
-                worstRating: "1",
-              },
               keywords:
                 "pomodoro timer, productivity app, focus timer, time management, pomodoro technique, work timer, break timer, productivity tracker",
             }),

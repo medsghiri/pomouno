@@ -9,6 +9,5 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       disallow: '/account/',
     },
-    sitemap: `${baseUrl}/sitemap.xml`,
   }
 } 

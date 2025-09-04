@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AdvancedStorageService, Task } from '@/lib/advanced-storage-service';
+import type { AdvancedStorageService, Task } from '@/lib/advanced-storage-service';
+import { getStorageService } from '@/hooks/use-app-data';
 import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
 
@@ -31,7 +32,8 @@ export function SpacedRepetitionCalendar({ className }: SpacedRepetitionCalendar
 
     useEffect(() => {
         if (user) {
-            const service = new AdvancedStorageService(user);
+            // EMERGENCY FIX: Use singleton storage service
+            const service = getStorageService(user);
             setStorageService(service);
         } else {
             setStorageService(null);

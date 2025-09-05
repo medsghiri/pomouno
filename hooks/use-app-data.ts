@@ -1645,6 +1645,46 @@ export function useSettingsMutations() {
     };
 }
 
+// Category mutations hook
+export function useCategoryMutations() {
+    const queryClient = useQueryClient();
+    const { user } = useAuth();
+    const storageService = getStorageService(user);
+
+    const createTaskCategory = useMutation({
+        mutationFn: async (categoryData: { name: string; color: string; icon?: string }) => {
+            if (!storageService) throw new Error('Not authenticated');
+            return await storageService.createCategory({
+                ...categoryData,
+                type: 'task'
+            });
+        },
+        onSuccess: () => {
+            // Invalidate task categories cache
+            queryClient.invalidateQueries({ queryKey: queryKeys.taskCategories(user?.uid || '') });
+        },
+    });
+
+    const createBreakReminderCategory = useMutation({
+        mutationFn: async (categoryData: { name: string; color: string; icon?: string }) => {
+            if (!storageService) throw new Error('Not authenticated');
+            return await storageService.createCategory({
+                ...categoryData,
+                type: 'break-reminder'
+            });
+        },
+        onSuccess: () => {
+            // Invalidate break reminder categories cache
+            queryClient.invalidateQueries({ queryKey: queryKeys.breakReminderCategories(user?.uid || '') });
+        },
+    });
+
+    return {
+        createTaskCategory,
+        createBreakReminderCategory,
+    };
+}
+
 // 🚀 EMERGENCY FIX: Single optimized hook that computes ALL stats efficiently
 export function useOptimizedStats(currentDate: Date = new Date()) {
     const { user } = useAuth();

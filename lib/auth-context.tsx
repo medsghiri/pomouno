@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { User } from "firebase/auth";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "./firebase";
@@ -39,64 +39,71 @@ export function AuthProvider({ children }: AuthProviderProps) {
   );
   const { toast } = useToast();
 
-  // Simple error handler for React errors
-  useEffect(() => {
-    const handleError = (event: ErrorEvent) => {
-      if (event.message?.includes('Minified React error #300')) {
-        console.error('React hook error detected, reloading page');
-        window.location.reload();
-      }
-    };
-    
-    window.addEventListener('error', handleError);
-    return () => window.removeEventListener('error', handleError);
-  }, []);
-
-  const handleUserLogin = useCallback(async (newUser: User) => {
-    try {
-      await storageProvider.login(newUser);
-    } catch (error) {
-      console.error("Login error:", error);
-    }
-  }, [storageProvider]);
-
   // Update storage provider when user changes
   useEffect(() => {
     const newProvider = new AuthStorageProvider(user || null);
     setStorageProvider(newProvider);
   }, [user]);
 
-  // Handle user login - separate effect to avoid dependency conflicts
+  // Handle user login
   useEffect(() => {
-    if (user && !loading && !error) {
+    if (user && !loading) {
       handleUserLogin(user);
     }
-  }, [user, loading, error, handleUserLogin]);
+  }, [user, loading]);
 
-  const logout = useCallback(async () => {
+  const handleUserLogin = async (newUser: User) => {
+    try {
+      await storageProvider.login(newUser);
+
+      // toast({
+      //     title: "Welcome back!",
+      //     description: "Your data has been synchronized across devices.",
+      // });
+    } catch (error) {
+      console.error("Login error:", error);
+      toast({
+        title: "Sync issue",
+        description:
+          "Some data may not have synced properly. Your local data is safe.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const logout = async () => {
     try {
       await auth.signOut();
       storageProvider.logout();
+
+      toast({
+        title: "Signed out",
+        description:
+          "You've been signed out. Your basic timer functionality is still available.",
+      });
     } catch (error) {
       console.error("Logout error:", error);
-      // Force reload on logout error to clear state
-      window.location.reload();
+      toast({
+        title: "Sign out error",
+        description: "There was an issue signing out. Please try again.",
+        variant: "destructive",
+      });
     }
-  }, [storageProvider]);
+  };
 
-  const canAccessFeature = useCallback((feature: Feature): boolean => {
+  const canAccessFeature = (feature: Feature): boolean => {
     return storageProvider.canAccessFeature(feature);
-  }, [storageProvider]);
+  };
 
-  const requiresAuth = useCallback((feature: Feature): boolean => {
+  const requiresAuth = (feature: Feature): boolean => {
     return storageProvider.requiresAuth(feature);
-  }, [storageProvider]);
+  };
 
-  const getFeatureAccessMessage = useCallback((feature: Feature): string => {
+  const getFeatureAccessMessage = (feature: Feature): string => {
     return storageProvider.getFeatureAccessMessage(feature);
-  }, [storageProvider]);
+  };
 
-  const showUpgradePrompt = useCallback((feature: Feature, context?: string) => {
+  const showUpgradePrompt = (feature: Feature, context?: string) => {
     if (canAccessFeature(feature)) {
       return; // User already has access
     }
@@ -120,9 +127,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       ),
       duration: 8000,
     });
-  }, [canAccessFeature, getFeatureAccessMessage, toast]);
+  };
 
-  const showSignInPrompt = useCallback((context?: string) => {
+  const showSignInPrompt = (context?: string) => {
     const contextMessage = context ? ` ${context}` : "";
 
     toast({
@@ -141,7 +148,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       ),
       duration: 8000,
     });
-  }, [toast]);
+  };
 
   const contextValue: AuthContextType = {
     user: user || null,

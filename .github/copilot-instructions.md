@@ -1,0 +1,2 @@
+- Always use PNPM instead of NPM or Yarn.
+- Avoide Createing new files unless absolutely necessary. Always make sure we don't have a similar files before creating a new one. search all files in the repo.

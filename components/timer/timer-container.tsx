@@ -50,8 +50,8 @@ export function TimerContainer({
   const breakRemindersTriggered = useRef<string | null>(null);
   const [user] = useAuthState(auth);
 
-  // Get today's stats for session counting
-  const todaysStats = useTodaysStats();
+  // Get today's stats for session counting - only when authenticated to reduce Firebase calls
+  const todaysStats = useTodaysStats(!!user);
 
   // Restore session on component mount
   useEffect(() => {

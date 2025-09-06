@@ -13,6 +13,7 @@ interface AudioPlaybackState {
 
 class AudioService {
     private static instance: AudioService;
+    private static isGloballyInitialized: boolean = false; // CRITICAL: Global flag to prevent multiple Firebase calls
     private currentAudio: HTMLAudioElement | null = null;
     private notificationAudio: HTMLAudioElement | null = null;
     private previewAudio: HTMLAudioElement | null = null;
@@ -105,13 +106,39 @@ class AudioService {
 
     private async loadAudioMetadata() {
         try {
-            console.log('🔍 Loading audio metadata from Firebase...');
-            
+            // CRITICAL FIX: Prevent multiple Firebase calls with global check
+            if (AudioService.isGloballyInitialized) {
+                console.log('✅ Audio service globally initialized, using cached data');
+                return;
+            }
+
             // EMERGENCY FIX: Add singleton check and caching
             if (Object.keys(this.audioMetadata).length > 0) {
                 console.log('✅ Audio metadata already cached, skipping Firebase call');
+                AudioService.isGloballyInitialized = true;
                 return;
             }
+
+            // NEW: Try to get data from React Query cache first (if available)
+            if (typeof window !== 'undefined') {
+                try {
+                    // Check if React Query cache has audio metadata
+                    const queryClient = (window as any).__REACT_QUERY_CLIENT__;
+                    if (queryClient) {
+                        const cachedData = queryClient.getQueryData(['audio', 'metadata']);
+                        if (cachedData && Object.keys(cachedData).length > 0) {
+                            console.log('✅ Using audio metadata from React Query cache');
+                            this.audioMetadata = cachedData;
+                            AudioService.isGloballyInitialized = true;
+                            return;
+                        }
+                    }
+                } catch (error) {
+                    // Silently continue to Firebase if React Query cache is not available
+                }
+            }
+            
+            console.log('🔍 Loading audio metadata from Firebase...');
             
             const audioCollection = collection(db, 'audio');
             const q = query(audioCollection, where('active', '==', true), orderBy('createdAt', 'desc'));
@@ -126,6 +153,9 @@ class AudioService {
                 });
                 console.log(`✅ Loaded ${Object.keys(this.audioMetadata).length} audio files from Firebase`);
             }
+            
+            // Mark as globally initialized
+            AudioService.isGloballyInitialized = true;
         } catch (error) {
             console.error('❌ Failed to load audio metadata from Firebase:', error);
         }

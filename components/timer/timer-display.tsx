@@ -62,18 +62,18 @@ export function TimerDisplay({
     setMounted(true);
   }, []);
 
-  // EMERGENCY FIX: Initialize audio service and handle volume changes
+    // EMERGENCY FIX: Initialize audio service lazily - only when timer starts
   useEffect(() => {
-    // Only initialize if not already initialized to prevent multiple Firebase calls
-    if (!audioService.isReady() && typeof window !== 'undefined') {
+    // CRITICAL: Only initialize when timer is active to prevent unnecessary Firebase calls on page load
+    if (isActive && !audioService.isReady() && typeof window !== 'undefined') {
       audioService.initialize().then(() => {
         // Check if service is truly ready with data
         const checkReady = () => {
           if (audioService.isReady()) {
             setIsAudioServiceReady(true);
           } else {
-            // Check again in a bit
-            setTimeout(checkReady, 50);
+            // Retry after a short delay if not ready
+            setTimeout(checkReady, 500);
           }
         };
         checkReady();
@@ -81,9 +81,11 @@ export function TimerDisplay({
     } else if (audioService.isReady()) {
       setIsAudioServiceReady(true);
     }
+    
+    // Set volume regardless of initialization status
     audioService.setVolume(settings.soundVolume);
     audioService.setNotificationVolume(settings.notificationVolume);
-  }, [settings.soundVolume, settings.notificationVolume]);
+  }, [settings.soundVolume, settings.notificationVolume, isActive]); // Added isActive dependency
 
   // Handle audio during timer states using user's selected audio
   useEffect(() => {

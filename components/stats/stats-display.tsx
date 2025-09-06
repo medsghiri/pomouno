@@ -57,8 +57,8 @@ export function StatsDisplay() {
   );
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // 🚀 OPTIMIZED: Use optimized hooks for data fetching with memoized computed stats
-  const todayStats = useTodaysStats();
+  // 🚀 OPTIMIZED: Use optimized hooks for data fetching with memoized computed stats - only when needed
+  const todayStats = useTodaysStats(true); // Stats panel always needs data when opened
   const weeklyStats = useWeeklyStats();
   const monthlyStats = useMonthlyStats(currentDate);
   const breakReminderStats = useBreakReminderCompletionCounts();

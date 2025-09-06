@@ -71,8 +71,8 @@ export function TimerApp({
   const router = useRouter();
   const { recordSession } = useSessionMutations();
 
-    // Use React Query hook for today's stats instead of manual Firebase calls
-  const todaysStats = useTodaysStats();
+    // Use React Query hook for today's stats only when user is authenticated to avoid unnecessary Firebase calls
+  const todaysStats = useTodaysStats(!!user);
 
   useEffect(() => {
     if (user) {

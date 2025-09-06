@@ -285,7 +285,7 @@ export function useStatistics(dateRange: DateRange) {
     });
 }
 
-// Sessions with EMERGENCY OPTIMIZATION - Much longer cache times
+// Sessions with EMERGENCY OPTIMIZATION - Better cache invalidation for stats
 export function useSessions(limit: number = 100) {
     const { user } = useAuth();
 
@@ -298,8 +298,8 @@ export function useSessions(limit: number = 100) {
             return await FirebaseService.getRecentSessions(user, limit);
         },
         enabled: true, // Always enabled - works for both authenticated and non-authenticated users
-        staleTime: 30 * 60 * 1000, // EMERGENCY FIX: 30 minutes instead of 5 minutes!
-        gcTime: 2 * 60 * 60 * 1000, // EMERGENCY FIX: 2 hours instead of 30 minutes!
+        staleTime: 5 * 60 * 1000, // CRITICAL FIX: Reduced to 5 minutes for fresher stats data
+        gcTime: 30 * 60 * 1000, // CRITICAL FIX: Reduced for more frequent updates
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
         refetchOnMount: false, // CRITICAL FIX: Don't always refetch - use cached data
@@ -309,7 +309,7 @@ export function useSessions(limit: number = 100) {
 }
 
 // EMERGENCY FIX: Convert useTodaysStats to use React Query but return data directly for compatibility
-export function useTodaysStats() {
+export function useTodaysStats(enabled: boolean = false) {
     const { user } = useAuth();
     const today = getTodayString();
 
@@ -430,9 +430,9 @@ export function useTodaysStats() {
                 breakRemindersCompleted: 0,
             };
         },
-        enabled: true,
-        staleTime: 10 * 60 * 1000, // EMERGENCY: 10 minutes cache - stats don't change that often
-        gcTime: 60 * 60 * 1000, // EMERGENCY: 1 hour garbage collection
+        enabled: enabled, // CRITICAL: Only run when explicitly enabled to prevent unnecessary Firebase calls
+        staleTime: 10 * 60 * 1000, // CRITICAL: Extended to 10 minutes for better caching
+        gcTime: 30 * 60 * 1000, // CRITICAL: Extended to 30 minutes for longer cache retention
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
         refetchOnMount: false,
@@ -474,17 +474,21 @@ export function useTodaysStatsOptimized() {
 
 // EMERGENCY FIX: Weekly and Monthly stats optimized to use React Query cached data
 export function useWeeklyStats() {
-    // Use the existing sessions query that's already cached
-    const { data: sessions = [] } = useSessions(100); // Get enough sessions to cover a week
+    // CRITICAL FIX: Get enough sessions to cover full week and invalidate cache more often
+    const { data: sessions = [] } = useSessions(1000); // Increased to cover more data
     const { data: tasks = [] } = useTasks();
+    const { user } = useAuth();
 
     return useMemo(() => {
         const today = new Date();
         const weeklyStatsArray = [];
 
+        // FIXED: Use current date from server if available
+        const currentDate = user ? new Date() : new Date();
+
         for (let i = 6; i >= 0; i--) {
-            const date = new Date(today);
-            date.setDate(today.getDate() - i);
+            const date = new Date(currentDate);
+            date.setDate(currentDate.getDate() - i);
             const dayStart = new Date(
                 date.getFullYear(),
                 date.getMonth(),
@@ -493,13 +497,8 @@ export function useWeeklyStats() {
             const dayEnd = dayStart + 24 * 60 * 60 * 1000 - 1;
 
             const daySessions = sessions.filter(s => {
-                const sessionDate = new Date(s.timestamp);
-                const sessionStart = new Date(
-                    sessionDate.getFullYear(),
-                    sessionDate.getMonth(),
-                    sessionDate.getDate()
-                ).getTime();
-                return sessionStart === dayStart;
+                const sessionTimestamp = typeof s.timestamp === 'number' ? s.timestamp : Date.now();
+                return sessionTimestamp >= dayStart && sessionTimestamp <= dayEnd;
             });
 
             const dayWorkSessions = daySessions.filter(s => s.type === 'work').length;
@@ -535,13 +534,14 @@ export function useWeeklyStats() {
         }
 
         return weeklyStatsArray;
-    }, [sessions, tasks]);
+    }, [sessions, tasks, user]); // Added user as dependency for fresh calculations
 }
 
 export function useMonthlyStats(currentDate: Date) {
-    // Use the existing sessions query that's already cached  
-    const { data: sessions = [] } = useSessions(500); // Get enough sessions to cover a month
+    // CRITICAL FIX: Get significantly more sessions to cover full month
+    const { data: sessions = [] } = useSessions(2000); // Increased to cover more data
     const { data: tasks = [] } = useTasks();
+    const { user } = useAuth();
 
     return useMemo(() => {
         const monthlyStatsArray = [];
@@ -562,13 +562,8 @@ export function useMonthlyStats(currentDate: Date) {
             const dayEnd = dayStart + 24 * 60 * 60 * 1000 - 1;
 
             const daySessions = sessions.filter(s => {
-                const sessionDate = new Date(s.timestamp);
-                const sessionStart = new Date(
-                    sessionDate.getFullYear(),
-                    sessionDate.getMonth(),
-                    sessionDate.getDate()
-                ).getTime();
-                return sessionStart === dayStart;
+                const sessionTimestamp = typeof s.timestamp === 'number' ? s.timestamp : Date.now();
+                return sessionTimestamp >= dayStart && sessionTimestamp <= dayEnd;
             });
 
             const dayWorkSessions = daySessions.filter(s => s.type === 'work').length;
@@ -604,7 +599,7 @@ export function useMonthlyStats(currentDate: Date) {
         }
 
         return monthlyStatsArray;
-    }, [sessions, tasks, currentDate]);
+    }, [sessions, tasks, currentDate, user]); // Added user dependency for fresh calculations
 }
 
 // Helper function to calculate spaced repetition intervals (simplified SM-2 algorithm)
@@ -1555,12 +1550,22 @@ export function useSessionMutations() {
                 return [recordedSession, ...withoutTemp];
             });
 
-            // CRITICAL: Invalidate optimized stats cache when new session is added
+            // CRITICAL: Invalidate stats cache immediately for real-time updates
+            queryClient.invalidateQueries({ queryKey: queryKeys.todayStats(user?.uid || '') });
             queryClient.invalidateQueries({ queryKey: ['optimized-stats'] });
             
+            // Force refresh weekly/monthly stats by invalidating sessions with higher limits
+            if (recordedSession && recordedSession.type === 'work') {
+                queryClient.invalidateQueries({ queryKey: queryKeys.sessions(user?.uid || '', 1000) });
+                queryClient.invalidateQueries({ queryKey: queryKeys.sessions(user?.uid || '', 2000) });
+            }
+            
             // Also invalidate the StatsOptimizer cache
-            const optimizer = StatsOptimizer.getInstance();
-            optimizer.invalidateCache();
+            if (typeof window !== 'undefined') {
+                const StatsOptimizer = require('@/lib/stats-optimizer').default;
+                const optimizer = StatsOptimizer.getInstance();
+                optimizer.invalidateCache();
+            }
 
             // NO OTHER INVALIDATION - rely on optimistic updates only
             // This prevents unnecessary Firebase reads

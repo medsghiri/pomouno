@@ -33,6 +33,11 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       })
   );
 
+  // CRITICAL: Make query client globally accessible for AudioService optimization
+  if (typeof window !== 'undefined') {
+    (window as any).__REACT_QUERY_CLIENT__ = queryClient;
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       {children}

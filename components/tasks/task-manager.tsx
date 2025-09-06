@@ -139,7 +139,7 @@ export function TaskManager({
     isLoading: tasksLoading,
     error: tasksError,
   } = useTasks();
-  const todaysStats = useTodaysStats();
+  const todaysStats = useTodaysStats(!!user); // Only load stats when authenticated
 
   // SIMPLIFIED: Use static categories - no Firebase calls
   // OPTIMIZED: Use cached categories with minimal Firebase reads

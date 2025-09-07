@@ -69,14 +69,14 @@ const DEFAULT_COLORS = [
 ];
 
 export function BreakReminderManager() {
-  // Use optimized hooks for data fetching
+  // Use optimized hooks for data fetching - ENABLED when component is active
   const {
     data: reminders = [],
     isLoading: remindersLoading,
     error: remindersError,
-  } = useBreakReminders();
+  } = useBreakReminders(true); // Enable break reminders loading for manager
   const { data: categories = [], isLoading: categoriesLoading } =
-    useBreakReminderCategories();
+    useBreakReminderCategories(true); // Enable categories for break reminder manager
   const { data: todaysCompletions = [] } = useTodaysBreakReminderCompletions();
 
   // Use mutation hooks for optimistic updates
@@ -307,9 +307,9 @@ export function BreakReminderManager() {
     }
   };
 
-  // SIMPLIFIED: Use static categories directly - no Firebase calls needed
+  // SIMPLIFIED: Use static categories directly - ENABLED
   // OPTIMIZED: Use cached categories with minimal Firebase reads
-  const { data: availableCategories = [] } = useBreakReminderCategories();
+  const { data: availableCategories = [] } = useBreakReminderCategories(true); // Enable categories for this component too
 
   // REMOVED: Category creation - using static categories only
 

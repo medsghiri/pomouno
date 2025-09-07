@@ -19,6 +19,7 @@ const audioQueryKeys = {
 /**
  * Hook to fetch audio metadata using React Query
  * This replaces the Firebase call in AudioService with cached data
+ * Works for both authenticated and non-authenticated users
  */
 export function useAudioMetadata() {
     return useQuery({
@@ -57,6 +58,8 @@ export function useAudioMetadata() {
         refetchInterval: false,
         retry: 1, // Retry once on failure
         retryDelay: 1000,
+        // CRITICAL: Always enabled for both authenticated and non-authenticated users
+        enabled: true,
     });
 }
 

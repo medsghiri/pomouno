@@ -39,6 +39,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import { UpgradePrompt } from "@/components/auth/upgrade-prompt";
 import { useSettings, useSettingsMutations } from "@/hooks/use-app-data";
+import { useAudioMetadata, useAvailableAudio } from "@/hooks/use-audio";
 import AudioService from "@/lib/audio-service";
 
 const DEFAULT_SETTINGS: Settings = {
@@ -75,6 +76,11 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
   const [isUserChanging, setIsUserChanging] = useState(false);
 
   const { toast } = useToast();
+  
+  // Ensure audio metadata is loaded for non-authenticated users
+  useAudioMetadata();
+  const { data: availableAudio = { focus: [], break: [], notification: [] } } = useAvailableAudio();
+  
   const audioService = AudioService.getInstance();
 
   useEffect(() => {
@@ -221,7 +227,7 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
     };
   }, []);
 
-  const availableAudio = audioService.getAvailableAudio();
+  // Use React Query hook for available audio instead of service call
 
   // Check if any audio is enabled
   const hasAudioEnabled = () => {

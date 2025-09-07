@@ -111,8 +111,8 @@ export function useBreakReminderCompletionCounts() {
     }, [breakReminders, todaysCompletions]);
 }
 
-// Tasks - EMERGENCY FIX: Use singleton storage service
-export function useTasks() {
+// Tasks - EMERGENCY FIX: Use singleton storage service, but make lazy by default
+export function useTasks(enabled: boolean = false) {
     const { user } = useAuth();
     const storageService = getStorageService(user); // FIXED: Use singleton
 
@@ -122,7 +122,7 @@ export function useTasks() {
             if (!storageService) return [];
             return await storageService.getTasks();
         },
-        enabled: !!user && !!storageService,
+        enabled: enabled && !!user && !!storageService,
         staleTime: Infinity, // OPTIMIZED: Never stale - only invalidate manually  
         gcTime: 60 * 60 * 1000, // OPTIMIZED: 1 hour cache (increased from 10 minutes)
         refetchOnWindowFocus: false,
@@ -165,8 +165,8 @@ export function useTodaysTaskSessions(taskId: string) {
     });
 }
 
-// Break Reminders - EMERGENCY FIX: Use singleton storage service
-export function useBreakReminders() {
+// Break Reminders - EMERGENCY FIX: Use singleton storage service, but make lazy by default
+export function useBreakReminders(enabled: boolean = false) {
     const { user } = useAuth();
     const storageService = getStorageService(user); // FIXED: Use singleton
 
@@ -176,7 +176,7 @@ export function useBreakReminders() {
             if (!storageService) return [];
             return await storageService.getBreakReminders();
         },
-        enabled: !!user && !!storageService,
+        enabled: enabled && !!user && !!storageService,
         staleTime: Infinity, // OPTIMIZED: Never stale - rely on manual invalidation
         gcTime: 60 * 60 * 1000, // OPTIMIZED: 1 hour cache (increased from 15 minutes)
         refetchOnWindowFocus: false,
@@ -209,8 +209,8 @@ export function useTodaysBreakReminderCompletions() {
     });
 }
 
-// Categories - EMERGENCY FIX: Use singleton storage service
-export function useTaskCategories() {
+// Categories - EMERGENCY FIX: Use singleton storage service, but make lazy by default  
+export function useTaskCategories(enabled: boolean = false) {
     const { user } = useAuth();
     const storageService = getStorageService(user); // FIXED: Use singleton
 
@@ -220,7 +220,7 @@ export function useTaskCategories() {
             if (!storageService) return [];
             return await storageService.getTaskCategories();
         },
-        enabled: !!user && !!storageService,
+        enabled: enabled && !!user && !!storageService,
         staleTime: Infinity, // OPTIMIZED: Categories rarely change - make them infinite stale
         gcTime: 2 * 60 * 60 * 1000, // OPTIMIZED: 2 hours cache - categories are very stable
         refetchOnWindowFocus: false,
@@ -231,7 +231,7 @@ export function useTaskCategories() {
     });
 }
 
-export function useBreakReminderCategories() {
+export function useBreakReminderCategories(enabled: boolean = false) {
     const { user } = useAuth();
     const storageService = getStorageService(user); // FIXED: Use singleton
 
@@ -241,7 +241,7 @@ export function useBreakReminderCategories() {
             if (!storageService) return [];
             return await storageService.getBreakReminderCategories();
         },
-        enabled: !!user && !!storageService,
+        enabled: enabled && !!user && !!storageService,
         staleTime: Infinity, // OPTIMIZED: Categories rarely change - make them infinite stale
         gcTime: 2 * 60 * 60 * 1000, // OPTIMIZED: 2 hours cache - categories are very stable
         refetchOnWindowFocus: false,
@@ -285,8 +285,8 @@ export function useStatistics(dateRange: DateRange) {
     });
 }
 
-// Sessions with EMERGENCY OPTIMIZATION - Better cache invalidation for stats
-export function useSessions(limit: number = 100) {
+// Sessions with EMERGENCY OPTIMIZATION - Better cache invalidation for stats, but lazy by default
+export function useSessions(limit: number = 100, enabled: boolean = false) {
     const { user } = useAuth();
 
     return useQuery({
@@ -297,7 +297,7 @@ export function useSessions(limit: number = 100) {
             }
             return await FirebaseService.getRecentSessions(user, limit);
         },
-        enabled: true, // Always enabled - works for both authenticated and non-authenticated users
+        enabled, // Now lazy by default
         staleTime: 5 * 60 * 1000, // CRITICAL FIX: Reduced to 5 minutes for fresher stats data
         gcTime: 30 * 60 * 1000, // CRITICAL FIX: Reduced for more frequent updates
         refetchOnWindowFocus: false,
@@ -475,8 +475,8 @@ export function useTodaysStatsOptimized() {
 // EMERGENCY FIX: Weekly and Monthly stats optimized to use React Query cached data
 export function useWeeklyStats() {
     // CRITICAL FIX: Get enough sessions to cover full week and invalidate cache more often
-    const { data: sessions = [] } = useSessions(1000); // Increased to cover more data
-    const { data: tasks = [] } = useTasks();
+    const { data: sessions = [] } = useSessions(1000, true); // Enabled for stats calculations
+    const { data: tasks = [] } = useTasks(true); // Enabled for stats calculations
     const { user } = useAuth();
 
     return useMemo(() => {
@@ -539,8 +539,8 @@ export function useWeeklyStats() {
 
 export function useMonthlyStats(currentDate: Date) {
     // CRITICAL FIX: Get significantly more sessions to cover full month
-    const { data: sessions = [] } = useSessions(2000); // Increased to cover more data
-    const { data: tasks = [] } = useTasks();
+    const { data: sessions = [] } = useSessions(2000, true); // Enabled for stats calculations
+    const { data: tasks = [] } = useTasks(true); // Enabled for stats calculations
     const { user } = useAuth();
 
     return useMemo(() => {

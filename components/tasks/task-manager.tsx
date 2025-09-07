@@ -133,17 +133,17 @@ export function TaskManager({
 }: TaskManagerProps) {
   const { user } = useAuth();
 
-  // Use optimized hooks for data fetching - SIMPLIFIED: No categories query
+  // Use optimized hooks for data fetching - ENABLED when component is active
   const {
     data: tasks = [],
     isLoading: tasksLoading,
     error: tasksError,
-  } = useTasks();
+  } = useTasks(true); // Enable tasks loading for task manager
   const todaysStats = useTodaysStats(!!user); // Only load stats when authenticated
 
   // SIMPLIFIED: Use static categories - no Firebase calls
   // OPTIMIZED: Use cached categories with minimal Firebase reads
-  const { data: availableCategories = [] } = useTaskCategories();
+  const { data: availableCategories = [] } = useTaskCategories(true); // Enable categories for task manager
   const categoriesLoading = false;
 
   // Use mutation hooks for optimistic updates

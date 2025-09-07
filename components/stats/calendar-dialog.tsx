@@ -23,9 +23,9 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
     new Date()
   );
 
-  // Use optimized hooks for data fetching - reuse cached data from stats hooks
-  const { data: tasks = [], isLoading: tasksLoading } = useTasks();
-  const { data: sessions = [], isLoading: sessionsLoading } = useSessions();
+  // Use optimized hooks for data fetching - ENABLED when dialog is open
+  const { data: tasks = [], isLoading: tasksLoading } = useTasks(open); // Only load when dialog is open
+  const { data: sessions = [], isLoading: sessionsLoading } = useSessions(100, open); // Only load when dialog is open
 
   const loading = tasksLoading || sessionsLoading;
 

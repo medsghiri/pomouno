@@ -30,6 +30,7 @@ yarn-error.log*
 
 # vercel
 .vercel
+.github
 
 # typescript
 *.tsbuildinfo
@@ -43,9 +44,9 @@ ui-debug.log
 
 # kiro
 .kiro/
-/.Kiro/
 
 # logs
 *.log
 pglite-debug.log
 .vscode/
+

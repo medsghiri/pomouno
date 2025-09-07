@@ -10,6 +10,7 @@ import { LocalStorage, PomodoroSession } from "@/lib/storage";
 import { useAuth } from "@/lib/auth-context";
 import { TimerSession } from "@/lib/auth-storage-provider";
 import { useToast } from "@/hooks/use-toast";
+import { useAudioMetadata } from "@/hooks/use-audio";
 import AudioService from "@/lib/audio-service";
 import VibrationService from "@/lib/vibration-service";
 import NotificationService from "@/lib/notification-service";
@@ -54,6 +55,10 @@ export function TimerWithTitle({
   const [currentSessionId, setCurrentSessionId] = useState<string>("");
   const { toast } = useToast();
   const { storageProvider } = useAuth();
+  
+  // Ensure audio metadata is loaded for non-authenticated users
+  useAudioMetadata();
+  
   const audioService = AudioService.getInstance();
   const vibrationService = VibrationService.getInstance();
   const notificationService = NotificationService.getInstance();

@@ -7,6 +7,7 @@ import { Slider } from '@/components/ui/slider';
 import { Volume2, VolumeX, Volume1 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LocalStorage } from '@/lib/storage';
+import { useAudioMetadata } from '@/hooks/use-audio';
 import AudioService from '@/lib/audio-service';
 
 interface SoundControlPopoverProps {
@@ -17,6 +18,10 @@ export function SoundControlPopover({ className }: SoundControlPopoverProps) {
     const [volume, setVolume] = useState(0.5);
     const [isMuted, setIsMuted] = useState(false);
     const [previousVolume, setPreviousVolume] = useState(0.5);
+    
+    // Ensure audio metadata is loaded for non-authenticated users
+    useAudioMetadata();
+    
     const audioService = AudioService.getInstance();
 
     useEffect(() => {

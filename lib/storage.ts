@@ -74,7 +74,36 @@ export interface DailyStats extends BasicDailyStats {
 
 export interface TodaysStats extends DailyStats { }
 
-export interface DateRange {
+// New aggregated daily stats for efficient Firebase reads
+export interface DailyAggregatedStats {
+  date: string;              // "2025-09-07"
+  
+  // Session counts
+  totalSessions: number;
+  workSessions: number;
+  shortBreakSessions: number;
+  longBreakSessions: number;
+  focusTimeMinutes: number;
+  
+  // Task metrics
+  tasksCompleted: number;
+  tasksCreated: number;
+  
+  // Break reminder metrics  
+  breakRemindersShown: number;
+  breakRemindersCompleted: number;
+  
+  // Timestamps (for Firebase)
+  createdAt?: any;  // Timestamp
+  updatedAt?: any;  // Timestamp
+}
+
+// Migration tracking to ensure one-time migration per user
+export interface UserMigrationStatus {
+  dailyStatsCompleted: boolean;
+  lastMigrationDate: string;
+  migratedDatesCount: number;
+}export interface DateRange {
   start: number;
   end: number;
 }

@@ -6,7 +6,7 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { AudioFile } from '@/lib/storage';
 
@@ -22,6 +22,9 @@ const audioQueryKeys = {
  * Works for both authenticated and non-authenticated users
  */
 export function useAudioMetadata() {
+    // DEBUG: Log when this hook is called
+    console.log('🔍 useAudioMetadata called');
+
     return useQuery({
         queryKey: audioQueryKeys.metadata,
         queryFn: async () => {
@@ -31,7 +34,8 @@ export function useAudioMetadata() {
             const q = query(
                 audioCollection, 
                 where('active', '==', true), 
-                orderBy('createdAt', 'desc')
+                orderBy('createdAt', 'desc'),
+                limit(10) // TEMPORARILY LIMIT to 10 docs for testing
             );
             const querySnapshot = await getDocs(q);
 
@@ -56,10 +60,10 @@ export function useAudioMetadata() {
         refetchOnReconnect: false,
         refetchOnMount: false,
         refetchInterval: false,
-        retry: 1, // Retry once on failure
+        retry: 0, // NO RETRIES - could be causing loops
         retryDelay: 1000,
-        // CRITICAL: Always enabled for both authenticated and non-authenticated users
-        enabled: true,
+        // CRITICAL: DISABLE for now to stop continuous reads
+        enabled: false,
     });
 }
 

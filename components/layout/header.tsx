@@ -111,9 +111,6 @@ export function Header({
                   >
                     <Target className="w-4 h-4 sm:mr-2" />
                     <span className="hidden sm:inline">Tasks</span>
-                    {!tasksAccess.canAccess && (
-                      <span className="ml-1 text-xs opacity-60">*</span>
-                    )}
                   </Button>
 
                   {/* Break Reminders Button */}
@@ -130,9 +127,6 @@ export function Header({
                   >
                     <Coffee className="w-4 h-4 sm:mr-2" />
                     <span className="hidden sm:inline">Breaks</span>
-                    {!breakRemindersAccess.canAccess && (
-                      <span className="ml-1 text-xs opacity-60">*</span>
-                    )}
                   </Button>
 
                   {/* Stats Button */}
@@ -149,9 +143,6 @@ export function Header({
                   >
                     <BarChart3 className="w-4 h-4 sm:mr-2" />
                     <span className="hidden sm:inline">Stats</span>
-                    {!statisticsAccess.canAccess && (
-                      <span className="ml-1 text-xs opacity-60">*</span>
-                    )}
                   </Button>
 
                   {/* Calendar Button */}
@@ -168,9 +159,6 @@ export function Header({
                   >
                     <Calendar className="w-4 h-4 sm:mr-2" />
                     <span className="hidden sm:inline">Calendar</span>
-                    {!user && (
-                      <span className="ml-1 text-xs opacity-60">*</span>
-                    )}
                   </Button>
 
                   {/* Settings Button */}

@@ -22,6 +22,7 @@ import {
 } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { db } from './firebase';
+import { FirebaseService } from './firebase-service';
 
 // Data models for advanced features
 export interface Task {
@@ -642,146 +643,100 @@ export class AdvancedStorageService {
     // Task completion with spaced repetition and recurring logic
     async completeTask(taskId: string, difficulty?: 'easy' | 'medium' | 'hard'): Promise<Task> {
         try {
-
-            const taskRef = doc(db, 'users', this.user.uid, 'tasks', taskId);
-            const taskDoc = await getDoc(taskRef);
-
-            if (!taskDoc.exists()) {
-                console.error('Task not found in Firebase:', taskId);
+            // Get the current task first to check its type and current state
+            const currentTask = await this.getTask(taskId);
+            if (!currentTask) {
                 throw new Error('Task not found');
             }
 
-            const data = taskDoc.data();
-            const task: any = {
-                ...data,
-                id: taskDoc.id  // Always use Firebase document ID
-            };
-
-            // Reconstruct spaced repetition data if needed (same logic as in getTasks)
-            if (data.spacedRepetitionEnabled) {
-                const spacedData: any = {
-                    enabled: data.spacedRepetitionEnabled,
-                    difficulty: data.spacedRepetitionDifficulty || 'medium',
-                    interval: data.spacedRepetitionInterval || 1,
-                    nextReviewDate: data.spacedRepetitionNextReviewDate || Date.now(),
-                    reviewCount: data.spacedRepetitionReviewCount || 0,
-                    easeFactor: data.spacedRepetitionEaseFactor || 2.5
-                };
-
-                // Only add lastReviewed if it has a value
-                if (data.spacedRepetitionLastReviewed) {
-                    spacedData.lastReviewed = data.spacedRepetitionLastReviewed;
-                }
-
-                task.spacedRepetition = spacedData;
-            }
-
-            // Reconstruct recurring data if needed (same logic as in getTasks)
-            if (data.recurringEnabled) {
-                const recurringData: any = {
-                    enabled: data.recurringEnabled,
-                    pattern: data.recurringPattern || 'daily',
-                    interval: data.recurringInterval || 1,
-                    nextDue: data.recurringNextDue || Date.now()
-                };
-
-                // Only add optional fields if they have values
-                if (data.recurringLastCompleted) {
-                    recurringData.lastCompleted = data.recurringLastCompleted;
-                }
-                if (data.recurringDaysOfWeek) {
-                    recurringData.daysOfWeek = data.recurringDaysOfWeek;
-                }
-                if (data.recurringDayOfMonth) {
-                    recurringData.dayOfMonth = data.recurringDayOfMonth;
-                }
-                if (data.recurringEndDate) {
-                    recurringData.endDate = data.recurringEndDate;
-                }
-
-                task.recurring = recurringData;
-            }
-
-            const now = Date.now();
-            let updates: Partial<Task> = {
-                sessionsCompleted: (task.sessionsCompleted || 0) + 1
-            };
+            let updates: Partial<Task> = { completed: true };
 
             // Handle spaced repetition tasks
-            if (task.spacedRepetition?.enabled) {
-                if (!this.canCompleteSpacedRepetitionTask(task)) {
-                    throw new Error('Spaced repetition task already completed today');
+            if (currentTask.spacedRepetition?.enabled) {
+                if (!difficulty) {
+                    throw new Error('Difficulty is required for spaced repetition tasks');
                 }
 
-                const currentDifficulty = difficulty || task.spacedRepetition.difficulty;
-                const nextReview = this.calculateNextSpacedRepetitionReview(
-                    currentDifficulty,
-                    task.spacedRepetition.interval,
-                    task.spacedRepetition.reviewCount,
-                    task.spacedRepetition.easeFactor
-                );
+                const currentInterval = currentTask.spacedRepetition.interval || 1;
+                const reviewCount = (currentTask.spacedRepetition.reviewCount || 0) + 1;
+                const easeFactor = currentTask.spacedRepetition.easeFactor || 2.5;
+
+                const { nextReviewDate, newInterval, easeFactor: newEaseFactor } = 
+                    this.calculateNextSpacedRepetitionReview(difficulty, currentInterval, reviewCount, easeFactor);
 
                 updates.spacedRepetition = {
-                    ...task.spacedRepetition,
-                    difficulty: currentDifficulty,
-                    reviewCount: (task.spacedRepetition.reviewCount || 0) + 1,
-                    lastReviewed: now,
-                    interval: nextReview.newInterval,
-                    nextReviewDate: nextReview.nextReviewDate.getTime(),
-                    easeFactor: nextReview.easeFactor
+                    ...currentTask.spacedRepetition,
+                    lastReviewed: Date.now(),
+                    nextReviewDate: nextReviewDate.getTime(),
+                    interval: newInterval,
+                    reviewCount,
+                    easeFactor: newEaseFactor,
+                    difficulty: difficulty
                 };
 
-                // Also update flattened fields for Firebase compatibility
-                updates.spacedRepetitionDifficulty = currentDifficulty;
-                updates.spacedRepetitionReviewCount = (task.spacedRepetition.reviewCount || 0) + 1;
-                updates.spacedRepetitionLastReviewed = now;
-                updates.spacedRepetitionInterval = nextReview.newInterval;
-                updates.spacedRepetitionNextReviewDate = nextReview.nextReviewDate.getTime();
-                updates.spacedRepetitionEaseFactor = nextReview.easeFactor;
-
-                // Don't mark spaced repetition tasks as completed
+                // For spaced repetition, mark as incomplete again since it's a review
                 updates.completed = false;
             }
+
             // Handle recurring tasks
-            else if (task.recurring?.enabled) {
-                if (!this.canCompleteRecurringTask(task)) {
-                    throw new Error('Recurring task already completed today');
-                }
-
-                // Calculate next due date from completion time
-                const nextDue = this.calculateNextRecurringDate(now, task.recurring, task);
-
-
-
-                // Update both nested and flattened formats
+            if (currentTask.recurring?.enabled) {
+                const nextDate = this.calculateNextRecurringDate(Date.now(), currentTask.recurring, currentTask);
+                
                 updates.recurring = {
-                    ...task.recurring,
-                    lastCompleted: now,
-                    nextDue: nextDue.getTime()
+                    ...currentTask.recurring,
+                    lastCompleted: Date.now(),
+                    nextDue: nextDate.getTime()
                 };
-                updates.recurringLastCompleted = now;
-                updates.recurringNextDue = nextDue.getTime();
 
-                // Don't mark recurring tasks as completed - they reset for next occurrence
+                // For recurring tasks, mark as incomplete again for next occurrence
                 updates.completed = false;
-
-                // Reset completion status for the next occurrence
-                updates.completedAt = undefined;
             }
-            // Handle regular tasks
-            else {
+
+            // For regular tasks, just mark as completed
+            if (!currentTask.spacedRepetition?.enabled && !currentTask.recurring?.enabled) {
                 updates.completed = true;
-                updates.completedAt = now;
             }
 
-            const cleanUpdates = removeUndefinedFields(updates);
-            await updateDoc(taskRef, cleanUpdates);
-
-            const updatedTask = { ...task, ...updates };
+            // Use FirebaseService to ensure daily stats are updated
+            await FirebaseService.updateTask(this.user, taskId, updates);
+            
+            // Invalidate cache to ensure fresh data
             this.invalidateCache('tasks');
-            return updatedTask;
+            
+            // Get the updated task
+            const tasks = await this.getTasks();
+            const completedTask = tasks.find(t => t.id === taskId);
+            
+            if (!completedTask) {
+                throw new Error('Task not found after completion');
+            }
+            
+            return completedTask;
         } catch (error) {
             console.error('Failed to complete task:', error);
+            throw error;
+        }
+    }
+
+    async uncompleteTask(taskId: string): Promise<Task> {
+        try {
+            // Use FirebaseService to ensure daily stats are updated
+            await FirebaseService.updateTask(this.user, taskId, { completed: false });
+            
+            // Invalidate cache to ensure fresh data
+            this.invalidateCache('tasks');
+            
+            // Get the updated task
+            const tasks = await this.getTasks();
+            const uncompletedTask = tasks.find(t => t.id === taskId);
+            
+            if (!uncompletedTask) {
+                throw new Error('Task not found after uncompleting');
+            }
+            
+            return uncompletedTask;
+        } catch (error) {
+            console.error('Failed to uncomplete task:', error);
             throw error;
         }
     }
@@ -1145,10 +1100,8 @@ export class AdvancedStorageService {
                 userId: this.user.uid
             });
 
-            await addDoc(
-                collection(db, 'users', this.user.uid, 'sessions'),
-                cleanSession
-            );
+            // 🚀 NEW: Use FirebaseService.saveSessions to ensure daily stats are updated
+            await FirebaseService.saveSessions(this.user, [cleanSession]);
 
             this.invalidateCache('statistics');
         } catch (error) {
@@ -1177,6 +1130,12 @@ export class AdvancedStorageService {
                     lastCompleted: completion.completedAt
                 });
             }
+
+            // 🚀 NEW: Update daily aggregated stats
+            const dateString = new Date(completion.completedAt).toISOString().split('T')[0];
+            await FirebaseService.incrementDailyAggregatedStats(this.user, dateString, {
+                breakRemindersCompleted: 1
+            });
 
             this.invalidateCache('break_reminders');
             this.invalidateCache('break_reminder_completions');
@@ -1236,6 +1195,12 @@ export class AdvancedStorageService {
                 ...currentData,
                 ...updates
             } as BreakReminder;
+
+            // 🚀 NEW: Update daily aggregated stats
+            const dateString = new Date(now).toISOString().split('T')[0];
+            await FirebaseService.incrementDailyAggregatedStats(this.user, dateString, {
+                breakRemindersCompleted: 1
+            });
 
             this.invalidateCache('break_reminders');
             this.invalidateCache('break_reminder_completions');

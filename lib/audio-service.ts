@@ -1,7 +1,7 @@
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { ref, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './firebase';
+import { storage } from './firebase';
 import { AudioFile } from './storage';
+import { getAudioMetadata } from './audio-cache';
 
 interface AudioPlaybackState {
     isPlaying: boolean;
@@ -119,45 +119,18 @@ class AudioService {
                 return;
             }
 
-            // NEW: Try to get data from React Query cache first (if available)
-            if (typeof window !== 'undefined') {
-                try {
-                    // Check if React Query cache has audio metadata
-                    const queryClient = (window as any).__REACT_QUERY_CLIENT__;
-                    if (queryClient) {
-                        const cachedData = queryClient.getQueryData(['audio', 'metadata']);
-                        if (cachedData && Object.keys(cachedData).length > 0) {
-                            console.log('✅ Using audio metadata from React Query cache');
-                            this.audioMetadata = cachedData;
-                            AudioService.isGloballyInitialized = true;
-                            return;
-                        }
-                    }
-                } catch (error) {
-                    // Silently continue to Firebase if React Query cache is not available
-                }
-            }
+            // NEW: Use server-side cached audio metadata instead of direct Firebase calls
+            console.log('🔍 Loading audio metadata from cache...');
             
-            console.log('🔍 Loading audio metadata from Firebase...');
+            const cachedMetadata = await getAudioMetadata();
+            this.audioMetadata = cachedMetadata;
             
-            const audioCollection = collection(db, 'audio');
-            const q = query(audioCollection, where('active', '==', true), orderBy('createdAt', 'desc'));
-            const querySnapshot = await getDocs(q);
-
-            if (querySnapshot.empty) {
-                console.warn('⚠️ No active audio files found in Firestore.');
-            } else {
-                querySnapshot.forEach(doc => {
-                    const data = doc.data() as AudioFile;
-                    this.audioMetadata[data.key] = { ...data, id: doc.id };
-                });
-                console.log(`✅ Loaded ${Object.keys(this.audioMetadata).length} audio files from Firebase`);
-            }
+            console.log(`✅ Loaded ${Object.keys(this.audioMetadata).length} audio files from cache`);
             
             // Mark as globally initialized
             AudioService.isGloballyInitialized = true;
         } catch (error) {
-            console.error('❌ Failed to load audio metadata from Firebase:', error);
+            console.error('❌ Failed to load audio metadata from cache:', error);
         }
     }
 

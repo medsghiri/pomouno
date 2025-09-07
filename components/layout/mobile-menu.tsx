@@ -135,9 +135,6 @@ export function MobileMenu({
                 >
                   <Target className="w-5 h-5 mr-4" />
                   <span className="font-medium">Tasks</span>
-                  {!tasksAccess.canAccess && (
-                    <span className="ml-auto text-xs opacity-60">*</span>
-                  )}
                 </Button>
 
                 <Button
@@ -148,9 +145,6 @@ export function MobileMenu({
                 >
                   <Coffee className="w-5 h-5 mr-4" />
                   <span className="font-medium">Break Reminders</span>
-                  {!breakRemindersAccess.canAccess && (
-                    <span className="ml-auto text-xs opacity-60">*</span>
-                  )}
                 </Button>
 
                 <Button
@@ -161,9 +155,6 @@ export function MobileMenu({
                 >
                   <BarChart3 className="w-5 h-5 mr-4" />
                   <span className="font-medium">Report</span>
-                  {!statisticsAccess.canAccess && (
-                    <span className="ml-auto text-xs opacity-60">*</span>
-                  )}
                 </Button>
 
                 <Button
@@ -174,9 +165,6 @@ export function MobileMenu({
                 >
                   <Calendar className="w-5 h-5 mr-4" />
                   <span className="font-medium">Calendar</span>
-                  {!user && (
-                    <span className="ml-auto text-xs opacity-60">*</span>
-                  )}
                 </Button>
 
                 <Button

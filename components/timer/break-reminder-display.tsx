@@ -52,7 +52,7 @@ export function BreakReminderDisplay({
 
   // Use optimized hooks for data fetching - ENABLED when component is active
   const { data: allReminders = [], isLoading: remindersLoading } =
-    useBreakReminders(true); // Enable break reminders loading for display
+    useBreakReminders(!!user); // Only enable break reminders loading when user is authenticated
   const { data: todaysCompletions = [] } = useTodaysBreakReminderCompletions();
 
   // Use mutation hooks for optimistic updates

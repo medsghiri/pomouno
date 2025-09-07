@@ -68,15 +68,21 @@ const DEFAULT_COLORS = [
   "#CA8A04", // Dark Yellow
 ];
 
-export function BreakReminderManager() {
+interface BreakReminderManagerProps {
+  isVisible?: boolean; // Only load data when visible to prevent unnecessary Firebase calls
+}
+
+export function BreakReminderManager({ isVisible = true }: BreakReminderManagerProps = {}) {
+  const { user } = useAuth();
+
   // Use optimized hooks for data fetching - ENABLED when component is active
   const {
     data: reminders = [],
     isLoading: remindersLoading,
     error: remindersError,
-  } = useBreakReminders(true); // Enable break reminders loading for manager
+  } = useBreakReminders(isVisible && !!user); // Only enable break reminders loading when visible and authenticated
   const { data: categories = [], isLoading: categoriesLoading } =
-    useBreakReminderCategories(true); // Enable categories for break reminder manager
+    useBreakReminderCategories(isVisible && !!user); // Only enable categories when visible and authenticated
   const { data: todaysCompletions = [] } = useTodaysBreakReminderCompletions();
 
   // Use mutation hooks for optimistic updates
@@ -109,7 +115,6 @@ export function BreakReminderManager() {
   const [showIconSelector, setShowIconSelector] = useState(false);
 
   const { toast } = useToast();
-  const { user } = useAuth();
 
   // Memoize today's completions count for each reminder
   const todaysCompletionsMap = useMemo(() => {
@@ -307,15 +312,14 @@ export function BreakReminderManager() {
     }
   };
 
-  // SIMPLIFIED: Use static categories directly - ENABLED
-  // OPTIMIZED: Use cached categories with minimal Firebase reads
-  const { data: availableCategories = [] } = useBreakReminderCategories(true); // Enable categories for this component too
+  // SIMPLIFIED: Use static categories directly - use the categories already loaded above
+  // REMOVED: Duplicate useBreakReminderCategories call - categories are already loaded above
 
   // REMOVED: Category creation - using static categories only
 
-  // SIMPLIFIED: Get category info from static defaults
+  // SIMPLIFIED: Get category info from static defaults (using categories loaded above)
   const getCategoryInfo = (categoryId: string) => {
-    const category = availableCategories.find(
+    const category = categories.find(
       (cat) => cat.id === categoryId || cat.name.toLowerCase() === categoryId.toLowerCase()
     );
     if (category) return category;
@@ -326,11 +330,11 @@ export function BreakReminderManager() {
 
   const getCategoryId = (categoryValue: string) => {
     // Try to find by ID in available categories
-    const categoryById = availableCategories.find((cat) => cat.id === categoryValue);
+    const categoryById = categories.find((cat) => cat.id === categoryValue);
     if (categoryById) return categoryById.id;
 
     // Try to find by name (case insensitive) in available categories
-    const categoryByName = availableCategories.find(
+    const categoryByName = categories.find(
       (cat) => cat.name.toLowerCase() === categoryValue.toLowerCase()
     );
     if (categoryByName) return categoryByName.id;
@@ -722,20 +726,20 @@ export function BreakReminderManager() {
                 >
                   <SelectTrigger className="mt-2">
                     <SelectValue placeholder="Select a category">
-                      {availableCategories.find((cat) => cat.id === category) && (
+                      {categories.find((cat) => cat.id === category) && (
                         <div className="flex items-center gap-2">
                           <span>
-                            {availableCategories.find((cat) => cat.id === category)?.icon}
+                            {categories.find((cat) => cat.id === category)?.icon}
                           </span>
                           <span>
-                            {availableCategories.find((cat) => cat.id === category)?.name}
+                            {categories.find((cat) => cat.id === category)?.name}
                           </span>
                         </div>
                       )}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {availableCategories.map((cat) => (
+                    {categories.map((cat) => (
                       <SelectItem key={cat.id} value={cat.id}>
                         <div className="flex items-center gap-2">
                           <span>{cat.icon}</span>

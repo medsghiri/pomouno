@@ -85,7 +85,7 @@ import {
   useTodaysTaskSessions,
   useTaskMutations,
   useCategoryMutations,
-  useTodaysStats,
+  useTodayAggregatedStats,
   getStorageService,
 } from "@/hooks/use-app-data";
 
@@ -124,12 +124,14 @@ interface TaskManagerProps {
   onStartFocusSession?: (taskId: string) => void;
   isTimerActive?: boolean;
   selectedTaskId?: string | null;
+  isVisible?: boolean; // Only load data when visible to prevent unnecessary Firebase calls
 }
 
 export function TaskManager({
   onStartFocusSession,
   isTimerActive,
   selectedTaskId,
+  isVisible = true, // Default to true for backward compatibility
 }: TaskManagerProps) {
   const { user } = useAuth();
 
@@ -138,16 +140,16 @@ export function TaskManager({
     data: tasks = [],
     isLoading: tasksLoading,
     error: tasksError,
-  } = useTasks(true); // Enable tasks loading for task manager
-  const todaysStats = useTodaysStats(!!user); // Only load stats when authenticated
+  } = useTasks(isVisible && !!user); // Only enable tasks loading when visible and user is authenticated
+  const todaysStats = useTodayAggregatedStats(isVisible && !!user); // Only load aggregated stats when visible and authenticated
 
   // SIMPLIFIED: Use static categories - no Firebase calls
   // OPTIMIZED: Use cached categories with minimal Firebase reads
-  const { data: availableCategories = [] } = useTaskCategories(true); // Enable categories for task manager
+  const { data: availableCategories = [] } = useTaskCategories(isVisible && !!user); // Only enable categories when visible and authenticated
   const categoriesLoading = false;
 
   // Use mutation hooks for optimistic updates
-  const { createTask, updateTask, deleteTask, completeTask } =
+  const { createTask, updateTask, deleteTask, completeTask, uncompleteTask } =
     useTaskMutations();
 
   // Category mutations for creating new categories
@@ -291,6 +293,27 @@ export function TaskManager({
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
 
+    // Prevent double clicks during mutations
+    if (completeTask.isPending || uncompleteTask.isPending) return;
+
+    // If task is already completed, uncomplete it
+    if (task.completed) {
+      try {
+        await uncompleteTask.mutateAsync(taskId);
+        toast({
+          title: "Task uncompleted",
+          description: `"${task.title}" has been marked as incomplete.`,
+        });
+      } catch (error: any) {
+        toast({
+          title: "Failed to uncomplete task",
+          description: error.message || "Please try again.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
     // Check if task can be completed
     const canComplete = task.spacedRepetition?.enabled
       ? canCompleteSpacedRepetitionTask(task)
@@ -308,11 +331,17 @@ export function TaskManager({
 
       // Complete the task using mutation hook
       try {
-        const updatedTask = await completeTask.mutateAsync({ taskId });
-
-        // Show completion animation
-        setCompletedTask(updatedTask);
+        await completeTask.mutateAsync({ taskId });
+        
+        // Show animation for task completion
+        setCompletedTask(task);
         setShowCompletionAnimation(true);
+        
+        // Show success toast
+        toast({
+          title: "Task completed",
+          description: `"${task.title}" has been completed.`,
+        });
       } catch (error: any) {
         toast({
           title: "Failed to complete task",
@@ -351,14 +380,20 @@ export function TaskManager({
     if (!pendingSpacedRepetitionTask) return;
 
     try {
-      const updatedTask = await completeTask.mutateAsync({
+      await completeTask.mutateAsync({
         taskId: pendingSpacedRepetitionTask.id,
         difficulty,
       });
 
-      // Show completion animation
-      setCompletedTask(updatedTask);
+      // Show animation for task completion
+      setCompletedTask(pendingSpacedRepetitionTask);
       setShowCompletionAnimation(true);
+
+      // Show success toast
+      toast({
+        title: "Task reviewed",
+        description: `"${pendingSpacedRepetitionTask.title}" has been reviewed.`,
+      });
     } catch (error: any) {
       toast({
         title: "Failed to complete task",
@@ -839,8 +874,30 @@ export function TaskManager({
     let filtered;
 
     if (showCompleted) {
-      // When showing completed, show ALL tasks but don't filter by completion status
-      filtered = tasks;
+      // When showing completed, show tasks completed today (including recurring and spaced repetition)
+      const today = new Date().toDateString();
+      
+      filtered = tasks.filter((task) => {
+        // Regular tasks completed today
+        if (task.completed && task.completedAt) {
+          const completedDate = new Date(task.completedAt).toDateString();
+          return completedDate === today;
+        }
+
+        // Recurring tasks completed today
+        if (task.recurring?.enabled && task.recurring.lastCompleted) {
+          const completedDate = new Date(task.recurring.lastCompleted).toDateString();
+          return completedDate === today;
+        }
+
+        // Spaced repetition tasks reviewed today
+        if (task.spacedRepetition?.enabled && task.spacedRepetition.lastReviewed) {
+          const reviewedDate = new Date(task.spacedRepetition.lastReviewed).toDateString();
+          return reviewedDate === today;
+        }
+
+        return false;
+      });
     } else {
       // Filter tasks based on their current state - only show tasks that are actionable today
       filtered = tasks.filter((task) => {
@@ -1129,9 +1186,9 @@ export function TaskManager({
     return filters.join(", ");
   };
 
-  // Use optimized stats
-  const completedCount = todaysStats.tasksCompleted;
-  const totalSessions = todaysStats.sessions;
+  // Use optimized aggregated stats
+  const completedCount = todaysStats?.data?.tasksCompleted || 0;
+  const totalSessions = todaysStats?.data?.totalSessions || 0;
 
   // Show active tasks count (tasks that are currently available to work on)
   const activeTasks = showCompleted ? tasks : getFilteredTasks();
@@ -1472,7 +1529,7 @@ export function TaskManager({
                     </Button>
                     {tasks.length > 0 && (
                       <p className="text-xs text-muted-foreground self-center">
-                        You have {tasks.length} total task
+                        You have {tasks.length} task
                         {tasks.length !== 1 ? "s" : ""}
                       </p>
                     )}
@@ -1544,7 +1601,7 @@ export function TaskManager({
                           !canCompleteRecurringTask(task));
 
                       const isActionable = showCompleted
-                        ? // In show completed mode, only allow if task is actually due/actionable today
+                        ? // In show completed mode, allow uncompleting regular completed tasks
                           task.recurring?.enabled
                           ? isRecurringTaskDueAndAvailable(task)
                           : task.spacedRepetition?.enabled
@@ -1554,7 +1611,7 @@ export function TaskManager({
                               task.spacedRepetition.nextReviewDate
                             ).setHours(0, 0, 0, 0) <=
                               new Date().setHours(0, 0, 0, 0)
-                          : !task.completed
+                          : task.completed // Allow uncompleting regular completed tasks
                         : // In normal mode, all visible tasks are actionable
                           true;
 
@@ -1598,7 +1655,7 @@ export function TaskManager({
                               task.spacedRepetition.nextReviewDate
                             ).setHours(0, 0, 0, 0) <=
                               new Date().setHours(0, 0, 0, 0)
-                          : !task.completed
+                          : task.completed // Allow uncompleting regular completed tasks
                         : true;
 
                       return (
@@ -1790,7 +1847,7 @@ export function TaskManager({
                               task.spacedRepetition.nextReviewDate
                             ).setHours(0, 0, 0, 0) <=
                               new Date().setHours(0, 0, 0, 0)
-                          : !task.completed
+                          : task.completed // Allow uncompleting regular completed tasks
                         : true;
 
                       return (

@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { db } from './firebase';
-import { PomodoroSession, Task, Settings, TodaysStats } from './storage';
+import { PomodoroSession, Task, Settings } from './storage';
 
 // Helper function to remove undefined values from objects
 function removeUndefinedFields(obj: any): any {
@@ -102,6 +102,45 @@ export class FirebaseService {
       });
 
       await batch.commit();
+
+      // 🚀 NEW: Update daily aggregated stats for each new session
+      const statsUpdates: Record<string, Partial<Record<string, number>>> = {};
+      
+      newSessions.forEach(session => {
+        const dateString = new Date(session.timestamp).toISOString().split('T')[0];
+        
+        if (!statsUpdates[dateString]) {
+          statsUpdates[dateString] = {};
+        }
+        
+        const stats = statsUpdates[dateString];
+        stats.totalSessions = (stats.totalSessions || 0) + 1;
+        
+        // Increment session type counts
+        if (session.type === 'work') {
+          stats.workSessions = (stats.workSessions || 0) + 1;
+          stats.focusTimeMinutes = (stats.focusTimeMinutes || 0) + session.duration;
+        } else if (session.type === 'short-break') {
+          stats.shortBreakSessions = (stats.shortBreakSessions || 0) + 1;
+        } else if (session.type === 'long-break') {
+          stats.longBreakSessions = (stats.longBreakSessions || 0) + 1;
+        }
+        
+        // Count break reminders
+        if (session.breakRemindersShown) {
+          stats.breakRemindersShown = (stats.breakRemindersShown || 0) + session.breakRemindersShown.length;
+        }
+        if (session.breakRemindersCompleted) {
+          stats.breakRemindersCompleted = (stats.breakRemindersCompleted || 0) + session.breakRemindersCompleted.length;
+        }
+      });
+      
+      // Update daily stats for each date
+      const statsPromises = Object.entries(statsUpdates).map(([dateString, increments]) =>
+        this.incrementDailyAggregatedStats(user, dateString, increments)
+      );
+      
+      await Promise.all(statsPromises);
 
     } catch (error) {
       throw error;
@@ -242,6 +281,14 @@ export class FirebaseService {
       });
 
       await batch.commit();
+
+      // 🚀 NEW: Update daily aggregated stats for new tasks created
+      if (newTasks.length > 0) {
+        const today = new Date().toISOString().split('T')[0];
+        await this.incrementDailyAggregatedStats(user, today, {
+          tasksCreated: newTasks.length
+        });
+      }
     } catch (error) {
       throw error;
     }
@@ -267,12 +314,41 @@ export class FirebaseService {
   // Update single task efficiently
   static async updateTask(user: User, taskId: string, updates: Partial<Task>) {
     const taskRef = doc(db, 'users', user.uid, 'tasks', taskId);
+    
+    // Get current task state to understand the transition
+    const currentTaskSnap = await getDoc(taskRef);
+    let wasAlreadyCompleted = false;
+    
+    if (currentTaskSnap.exists()) {
+      wasAlreadyCompleted = currentTaskSnap.data().completed === true;
+    }
+    
+    const isBeingCompleted = updates.completed === true;
+    const isBeingUncompleted = updates.completed === false;
+    
     const cleanUpdates = removeUndefinedFields({
       ...updates,
       updatedAt: serverTimestamp(),
-      status: updates.completed ? 'completed' : 'active'
+      status: updates.completed ? 'completed' : 'active',
+      completedAt: isBeingCompleted && !wasAlreadyCompleted ? serverTimestamp() : undefined
     });
+    
     await updateDoc(taskRef, cleanUpdates);
+    
+    // 🚀 Update daily stats based on task state changes
+    const today = new Date().toISOString().split('T')[0];
+    
+    if (isBeingCompleted && !wasAlreadyCompleted) {
+      // Task is being completed (increment)
+      await this.incrementDailyAggregatedStats(user, today, {
+        tasksCompleted: 1
+      });
+    } else if (isBeingUncompleted && wasAlreadyCompleted) {
+      // Task is being uncompleted (decrement)
+      await this.incrementDailyAggregatedStats(user, today, {
+        tasksCompleted: -1
+      });
+    }
   }
 
   // Settings management with versioning
@@ -295,59 +371,6 @@ export class FirebaseService {
     const data = docSnap.data();
     const { updatedAt, version, ...settings } = data;
     return settings as Settings;
-  }
-
-  // Optimized stats management with proper indexing
-  static async saveStats(user: User, stats: TodaysStats) {
-    const statsRef = doc(db, 'users', user.uid, 'statistics', stats.date);
-    const cleanStats = removeUndefinedFields({
-      ...stats,
-      updatedAt: serverTimestamp(),
-      // Add parsed date for better querying
-      dateObject: new Date(stats.date),
-      // Add week/month/year for analytics
-      weekOfYear: this.getWeekOfYear(new Date(stats.date)),
-      month: new Date(stats.date).getMonth() + 1,
-      year: new Date(stats.date).getFullYear()
-    });
-    await setDoc(statsRef, cleanStats);
-  }
-
-  static async getWeeklyStats(user: User): Promise<TodaysStats[]> {
-    const statsRef = collection(db, 'users', user.uid, 'statistics');
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-
-    const q = query(
-      statsRef,
-      where('dateObject', '>=', oneWeekAgo),
-      orderBy('dateObject', 'desc')
-    );
-
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      const { updatedAt, dateObject, weekOfYear, month, year, ...statsData } = data;
-      return statsData as TodaysStats;
-    });
-  }
-
-  // Get monthly stats for analytics
-  static async getMonthlyStats(user: User, year: number, month: number): Promise<TodaysStats[]> {
-    const statsRef = collection(db, 'users', user.uid, 'statistics');
-    const q = query(
-      statsRef,
-      where('year', '==', year),
-      where('month', '==', month),
-      orderBy('dateObject', 'desc')
-    );
-
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      const { updatedAt, dateObject, weekOfYear, month, year, ...statsData } = data;
-      return statsData as TodaysStats;
-    });
   }
 
   // Helper function for week calculation
@@ -389,11 +412,6 @@ export class FirebaseService {
       // Validate and migrate settings
       if (localData.settings && typeof localData.settings === 'object') {
         await this.saveSettings(user, localData.settings);
-      }
-
-      // Validate and migrate stats
-      if (localData.stats && typeof localData.stats === 'object' && localData.stats.date) {
-        await this.saveStats(user, localData.stats);
       }
 
       // Validate and migrate break reminders
@@ -578,8 +596,6 @@ export class FirebaseService {
         sessions,
         tasks,
         settings,
-        weeklyStats,
-        monthlyStats,
         breakReminders,
         breakReminderCompletions,
         userProfile
@@ -587,8 +603,6 @@ export class FirebaseService {
         this.getRecentSessions(user, 1000), // Get more sessions for export
         this.getTasks(user),
         this.getSettings(user),
-        this.getWeeklyStats(user),
-        this.getMonthlyStats(user, new Date().getFullYear(), new Date().getMonth() + 1),
         this.getBreakReminders(user),
         this.getBreakReminderCompletions(user),
         this.getUserProfile(user)
@@ -606,8 +620,6 @@ export class FirebaseService {
           sessions,
           tasks,
           settings,
-          weeklyStats,
-          monthlyStats,
           breakReminders,
           breakReminderCompletions
         },
@@ -705,6 +717,244 @@ export class FirebaseService {
       const settingsRef = doc(db, 'settings', user.uid);
       await deleteDoc(settingsRef);
     } catch (error) {
+      throw error;
+    }
+  }
+
+  // 🚀 NEW: Daily Aggregated Stats Methods for Efficient Reads
+  static async getDailyAggregatedStats(user: User, dateString: string): Promise<any> {
+    try {
+      const dailyStatsRef = doc(db, 'users', user.uid, 'dailyStats', dateString);
+      const docSnap = await getDoc(dailyStatsRef);
+      
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() };
+      }
+      
+      // If document doesn't exist, try to backfill from existing data for today only
+      if (dateString === new Date().toISOString().split('T')[0]) {
+        console.log('Backfilling today\'s stats from existing data...');
+        const backfilledStats = await this.backfillDailyStats(user, dateString);
+        if (backfilledStats) {
+          return backfilledStats;
+        }
+      }
+      
+      // Return default stats if no data exists
+      return {
+        id: dateString,
+        date: dateString,
+        totalSessions: 0,
+        workSessions: 0,
+        shortBreakSessions: 0,
+        longBreakSessions: 0,
+        focusTimeMinutes: 0,
+        tasksCompleted: 0,
+        tasksCreated: 0,
+        breakRemindersShown: 0,
+        breakRemindersCompleted: 0,
+      };
+    } catch (error) {
+      console.error('Error getting daily aggregated stats:', error);
+      throw error;
+    }
+  }
+
+  // Backfill daily stats from existing sessions and tasks for a specific date
+  static async backfillDailyStats(user: User, dateString: string): Promise<any | null> {
+    try {
+      const startOfDay = new Date(dateString + 'T00:00:00.000Z').getTime();
+      const endOfDay = new Date(dateString + 'T23:59:59.999Z').getTime();
+
+      // Get sessions for this date
+      const sessionsRef = collection(db, 'users', user.uid, 'sessions');
+      const sessionsQuery = query(
+        sessionsRef,
+        where('timestamp', '>=', startOfDay),
+        where('timestamp', '<=', endOfDay)
+      );
+      const sessionsSnapshot = await getDocs(sessionsQuery);
+
+      // Get tasks completed on this date
+      const tasksRef = collection(db, 'users', user.uid, 'tasks');
+      const tasksQuery = query(
+        tasksRef,
+        where('completed', '==', true),
+        where('completedAt', '>=', startOfDay),
+        where('completedAt', '<=', endOfDay)
+      );
+      const tasksSnapshot = await getDocs(tasksQuery);
+
+      // Calculate stats from existing data
+      let totalSessions = 0;
+      let workSessions = 0;
+      let shortBreakSessions = 0;
+      let longBreakSessions = 0;
+      let focusTimeMinutes = 0;
+      let breakRemindersShown = 0;
+      let breakRemindersCompleted = 0;
+
+      sessionsSnapshot.docs.forEach(doc => {
+        const session = doc.data();
+        totalSessions++;
+        
+        if (session.type === 'work') {
+          workSessions++;
+          focusTimeMinutes += session.duration || 0;
+        } else if (session.type === 'short-break') {
+          shortBreakSessions++;
+        } else if (session.type === 'long-break') {
+          longBreakSessions++;
+        }
+        
+        if (session.breakRemindersShown) {
+          breakRemindersShown += session.breakRemindersShown.length;
+        }
+        if (session.breakRemindersCompleted) {
+          breakRemindersCompleted += session.breakRemindersCompleted.length;
+        }
+      });
+
+      const tasksCompleted = tasksSnapshot.docs.length;
+
+      // If there's any data, create the daily stats document
+      if (totalSessions > 0 || tasksCompleted > 0) {
+        const stats = {
+          date: dateString,
+          totalSessions,
+          workSessions,
+          shortBreakSessions,
+          longBreakSessions,
+          focusTimeMinutes,
+          tasksCompleted,
+          tasksCreated: 0, // Can't backfill this easily
+          breakRemindersShown,
+          breakRemindersCompleted,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
+
+        // Save the backfilled stats
+        const dailyStatsRef = doc(db, 'users', user.uid, 'dailyStats', dateString);
+        await setDoc(dailyStatsRef, stats);
+        
+        console.log('Backfilled daily stats:', stats);
+        return { id: dateString, ...stats };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error backfilling daily stats:', error);
+      return null;
+    }
+  }
+
+  static async getMultipleDailyAggregatedStats(user: User, dateStrings: string[]): Promise<any[]> {
+    try {
+      const dailyStatsPromises = dateStrings.map(dateString => 
+        this.getDailyAggregatedStats(user, dateString)
+      );
+      
+      const results = await Promise.all(dailyStatsPromises);
+      return results.filter(stat => stat !== null);
+    } catch (error) {
+      console.error('Error getting multiple daily aggregated stats:', error);
+      throw error;
+    }
+  }
+
+  static async updateDailyAggregatedStats(
+    user: User, 
+    dateString: string, 
+    updates: Partial<any>
+  ): Promise<void> {
+    try {
+      const dailyStatsRef = doc(db, 'users', user.uid, 'dailyStats', dateString);
+      const docSnap = await getDoc(dailyStatsRef);
+      
+      if (docSnap.exists()) {
+        // Update existing document
+        await updateDoc(dailyStatsRef, {
+          ...updates,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        // Create new document with default values
+        const defaultStats = {
+          date: dateString,
+          totalSessions: 0,
+          workSessions: 0,
+          shortBreakSessions: 0,
+          longBreakSessions: 0,
+          focusTimeMinutes: 0,
+          tasksCompleted: 0,
+          tasksCreated: 0,
+          breakRemindersShown: 0,
+          breakRemindersCompleted: 0,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
+        
+        await setDoc(dailyStatsRef, {
+          ...defaultStats,
+          ...updates
+        });
+      }
+    } catch (error) {
+      console.error('Error updating daily aggregated stats:', error);
+      throw error;
+    }
+  }
+
+  static async incrementDailyAggregatedStats(
+    user: User, 
+    dateString: string, 
+    increments: Partial<Record<string, number>>
+  ): Promise<void> {
+    try {
+      const dailyStatsRef = doc(db, 'users', user.uid, 'dailyStats', dateString);
+      const docSnap = await getDoc(dailyStatsRef);
+      
+      if (docSnap.exists()) {
+        const currentData = docSnap.data();
+        const updates: any = { updatedAt: serverTimestamp() };
+        
+        // Apply increments to existing values
+        Object.entries(increments).forEach(([key, value]) => {
+          if (typeof value === 'number') {
+            updates[key] = (currentData[key] || 0) + value;
+          }
+        });
+        
+        await updateDoc(dailyStatsRef, updates);
+      } else {
+        // Create new document with incremented values
+        const defaultStats = {
+          date: dateString,
+          totalSessions: 0,
+          workSessions: 0,
+          shortBreakSessions: 0,
+          longBreakSessions: 0,
+          focusTimeMinutes: 0,
+          tasksCompleted: 0,
+          tasksCreated: 0,
+          breakRemindersShown: 0,
+          breakRemindersCompleted: 0,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
+        
+        // Apply increments to default values
+        Object.entries(increments).forEach(([key, value]) => {
+          if (typeof value === 'number' && key in defaultStats) {
+            (defaultStats as any)[key] = (defaultStats as any)[key] + value;
+          }
+        });
+        
+        await setDoc(dailyStatsRef, defaultStats);
+      }
+    } catch (error) {
+      console.error('Error incrementing daily aggregated stats:', error);
       throw error;
     }
   }

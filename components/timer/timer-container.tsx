@@ -9,8 +9,7 @@ import { LocalStorage, PomodoroSession } from "@/lib/storage";
 import { useAuth } from "@/lib/auth-context";
 import { TimerSession } from "@/lib/auth-storage-provider";
 import { useToast } from "@/hooks/use-toast";
-import { useTodaysStats } from "@/hooks/use-app-data";
-import { useAudioMetadata } from "@/hooks/use-audio";
+import { useTodayAggregatedStats } from "@/hooks/use-app-data";
 import AudioService from "@/lib/audio-service";
 import VibrationService from "@/lib/vibration-service";
 import NotificationService from "@/lib/notification-service";
@@ -46,17 +45,14 @@ export function TimerContainer({
   const { toast } = useToast();
   const { storageProvider } = useAuth();
   
-  // Ensure audio metadata is loaded for non-authenticated users
-  useAudioMetadata();
-  
   const audioService = AudioService.getInstance();
   const vibrationService = VibrationService.getInstance();
   const notificationService = NotificationService.getInstance();
   const breakRemindersTriggered = useRef<string | null>(null);
   const [user] = useAuthState(auth);
 
-  // Get today's stats for session counting - only when authenticated to reduce Firebase calls
-  const todaysStats = useTodaysStats(!!user);
+  // Get today's aggregated stats for session counting - only when authenticated to reduce Firebase calls
+  const todaysStats = useTodayAggregatedStats(!!user);
 
   // Restore session on component mount
   useEffect(() => {
@@ -569,7 +565,7 @@ export function TimerContainer({
         totalSessions={totalSessions}
         settings={settings}
         currentTask={currentTask}
-        todaysWorkSessions={todaysStats?.sessions || 0}
+        todaysWorkSessions={todaysStats?.data?.totalSessions || 0}
       />
 
       {/* Break Reminders Dialog */}

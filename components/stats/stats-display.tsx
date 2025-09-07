@@ -25,6 +25,7 @@ import {
   CheckCircle,
   Flame,
   TrendingUp,
+  Calendar,
   ChevronLeft,
   ChevronRight,
   BarChart3,
@@ -35,12 +36,13 @@ import { LocalStorage, Task, TodaysStats } from "@/lib/storage";
 import { FeatureGate } from "@/components/auth/feature-gate";
 import { useAuth } from "@/lib/auth-context";
 import {
-  useTodaysStats,
-  useWeeklyStats,
-  useMonthlyStats,
+  useTodayAggregatedStats,
+  useWeeklyAggregatedStats,
+  useMonthlyAggregatedStats,
   useBreakReminders,
   useTodaysBreakReminderCompletions,
   useBreakReminderCompletionCounts,
+  useBreakReminderCategories,
 } from "@/hooks/use-app-data";
 
 interface BreakReminderStats {
@@ -48,6 +50,9 @@ interface BreakReminderStats {
   title: string;
   completionCount: number;
   todayCount: number;
+  category?: string;
+  color?: string;
+  icon?: string;
 }
 
 export function StatsDisplay() {
@@ -57,11 +62,12 @@ export function StatsDisplay() {
   );
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // 🚀 OPTIMIZED: Use optimized hooks for data fetching with memoized computed stats - only when needed
-  const todayStats = useTodaysStats(true); // Stats panel always needs data when opened
-  const weeklyStats = useWeeklyStats();
-  const monthlyStats = useMonthlyStats(currentDate);
-  const breakReminderStats = useBreakReminderCompletionCounts();
+  // 🔥 NEW: Use ultra-efficient aggregated stats hooks - Only load data for active tab!
+  const { data: todayStats } = useTodayAggregatedStats(activeTab === "today"); 
+  const { data: weeklyStats } = useWeeklyAggregatedStats(activeTab === "week"); 
+  const { data: monthlyStats } = useMonthlyAggregatedStats(currentDate, activeTab === "month"); 
+  const breakReminderStats = useBreakReminderCompletionCounts(activeTab === "today"); // Only load for today tab
+  const { data: breakReminders = [] } = useBreakReminders(activeTab === "today"); // Get full reminder data for colors/categories
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,33 +93,63 @@ export function StatsDisplay() {
     setCurrentDate(newDate);
   };
 
-  // Use memoized break reminder stats from optimized hook
+  // Use memoized break reminder stats from optimized hook with categories
+  const { data: breakReminderCategories = [] } = useBreakReminderCategories(activeTab === "today");
+  
   const getBreakReminderStats = (): BreakReminderStats[] => {
     if (!user) return [];
 
-    return breakReminderStats.map((stat) => ({
-      id: stat.reminderId,
-      title: stat.title,
-      completionCount: stat.totalCompletions,
-      todayCount: stat.todaysCompletions,
-    }));
+    return breakReminderStats.map((stat) => {
+      // Find the full reminder data to get category and other info
+      const fullReminder = breakReminders.find(r => r.id === stat.reminderId);
+      
+      if (!fullReminder) {
+        return {
+          id: stat.reminderId,
+          title: stat.title,
+          completionCount: stat.totalCompletions,
+          todayCount: stat.todaysCompletions,
+          category: 'General',
+          color: '#6B7280',
+          icon: '☕',
+        };
+      }
+      
+      // Find category data for color and icon
+      const categoryData = breakReminderCategories.find(cat => 
+        cat.name === fullReminder.category || 
+        cat.id === fullReminder.category ||
+        cat.name.toLowerCase() === fullReminder.category.toLowerCase()
+      );
+      
+      return {
+        id: stat.reminderId,
+        title: stat.title,
+        completionCount: stat.totalCompletions,
+        todayCount: stat.todaysCompletions,
+        category: fullReminder.category || 'General',
+        color: categoryData?.color || '#6B7280',
+        icon: categoryData?.icon || '☕',
+      };
+    });
   };
 
   // Memoized stats calculation to prevent recalculation on every render
   const getStatsForPeriod = useMemo(() => {
     return (period: "week" | "month") => {
       const stats = period === "week" ? weeklyStats : monthlyStats;
+      if (!stats || !Array.isArray(stats)) return { totalSessions: 0, totalFocusTime: 0, totalTasksCompleted: 0, activeDays: 0, averageSessionsPerDay: 0 };
 
-      const totalSessions = stats.reduce((sum, stat) => sum + stat.sessions, 0);
+      const totalSessions = stats.reduce((sum: number, stat: any) => sum + (stat.totalSessions || 0), 0);
       const totalFocusTime = stats.reduce(
-        (sum, stat) => sum + stat.focusTime,
+        (sum: number, stat: any) => sum + (stat.focusTimeMinutes || 0),
         0
       );
       const totalTasksCompleted = stats.reduce(
-        (sum, stat) => sum + stat.tasksCompleted,
+        (sum: number, stat: any) => sum + (stat.tasksCompleted || 0),
         0
       );
-      const activeDays = stats.filter((stat) => stat.sessions > 0).length;
+      const activeDays = stats.filter((stat: any) => (stat.totalSessions || 0) > 0).length;
 
       return {
         totalSessions,
@@ -151,246 +187,10 @@ export function StatsDisplay() {
     </div>
   );
 
-  const DailyActivityChart = ({
-    stats,
-    title,
-  }: {
-    stats: TodaysStats[];
-    title: string;
-  }) => {
-    const maxSessions = Math.max(...stats.map((s) => s.sessions), 1);
-    const isWeekly = title.includes("Weekly");
-    const displayStats = isWeekly ? stats.slice(-7) : stats; // Show all days for monthly, last 7 for weekly
-
-    return (
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-          <BarChart3 className="w-5 h-5" />
-          {title}
-        </h3>
-        <div
-          className={`grid gap-1 ${
-            isWeekly
-              ? "grid-cols-7"
-              : "grid-cols-7 md:grid-cols-14 lg:grid-cols-21"
-          } overflow-x-auto pb-16`}
-        >
-          {displayStats.map((stat) => {
-            const date = new Date(stat.date);
-            const height = (stat.sessions / maxSessions) * 100;
-
-            return (
-              <div
-                key={stat.date}
-                className="flex flex-col items-center gap-1 min-w-[2rem]"
-              >
-                <div className="text-xs text-muted-foreground">
-                  {isWeekly
-                    ? date.toLocaleDateString("en-US", { weekday: "short" })
-                    : date.getDate()}
-                </div>
-                <div className="w-6 h-12 bg-accent/20 rounded flex items-end relative group">
-                  <div
-                    className={`w-full rounded transition-all duration-300 ${
-                      stat.sessions > 0
-                        ? "bg-gradient-to-t from-red-500 to-orange-500"
-                        : "bg-accent/40"
-                    }`}
-                    style={{
-                      height: `${Math.max(
-                        height,
-                        stat.sessions > 0 ? 10 : 0
-                      )}%`,
-                    }}
-                  />
-                  {/* Tooltip */}
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-background border rounded shadow-lg text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
-                    <div className="font-medium">
-                      {date.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </div>
-                    <div>{stat.sessions} work sessions</div>
-                    <div>
-                      {Math.floor(stat.focusTime / 60)}h {stat.focusTime % 60}m
-                      focus
-                    </div>
-                    <div>{stat.tasksCompleted} tasks completed</div>
-                  </div>
-                </div>
-                <div className="text-xs font-medium text-foreground">
-                  {stat.sessions}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="text-xs text-muted-foreground text-center">
-          Hover over bars for detailed information
-        </div>
-      </div>
-    );
-  };
-
-  const BreakReminderStatsCard = () => {
-    const breakStats = getBreakReminderStats();
-
-    if (!user || breakStats.length === 0) {
-      return (
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
-            <Coffee className="w-5 h-5" />
-            Break Reminders
-          </h3>
-          <p className="text-muted-foreground">
-            No break reminders created yet.
-          </p>
-        </Card>
-      );
-    }
-
-    return (
-      <Card className="p-6">
-        <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
-          <Coffee className="w-5 h-5" />
-          Break Reminders
-        </h3>
-        <div className="space-y-3">
-          {breakStats
-            .filter((stat) => stat.todayCount > 0)
-            .map((stat) => {
-              // Use cached completion data instead of filtering raw completions
-              const weeklyCount = stat.todayCount; // For now, just show today's count as weekly data is already optimized
-              const getCategoryIcon = (categoryName: string) => {
-                const categoryMap: { [key: string]: string } = {
-                  hydration: "💧",
-                  movement: "🏃",
-                  rest: "💜",
-                  nutrition: "🍎",
-                  mindfulness: "🧘",
-                };
-                return categoryMap[categoryName] || "📝";
-              };
-
-              return (
-                <div key={stat.id} className="p-3 rounded-lg bg-accent/20">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{getCategoryIcon("")}</span>
-                      <span className="font-medium text-foreground">
-                        {stat.title}
-                      </span>
-                    </div>
-                    <Badge variant="secondary" className="text-xs">
-                      Today: {stat.todayCount}
-                    </Badge>
-                  </div>
-                </div>
-              );
-            })}
-        </div>
-      </Card>
-    );
-  };
-
-  if (loading) {
-    return (
-      <FeatureGate feature="statistics">
-        <div className="space-y-6">
-          {/* <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-2xl font-bold flex items-center gap-2 text-foreground">
-                            <TrendingUp className="w-6 h-6" />
-                            Statistics
-                        </h2>
-                    </div> */}
-
-          <Tabs value="today" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="today">Today</TabsTrigger>
-              <TabsTrigger value="week" disabled>
-                This Week
-              </TabsTrigger>
-              <TabsTrigger value="month" disabled>
-                This Month
-              </TabsTrigger>
-            </TabsList>
-
-            <div className="space-y-6 mt-6">
-              <div className="flex items-center justify-center">
-                <Badge variant="secondary" className="animate-pulse">
-                  Loading...
-                </Badge>
-              </div>
-
-              {/* Loading skeleton for stats cards */}
-              <div className="grid grid-cols-2 gap-4">
-                {[1, 2, 3, 4].map((i) => (
-                  <div
-                    key={i}
-                    className="p-4 rounded-xl border bg-background animate-pulse"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-full bg-accent/20">
-                        <div className="w-5 h-5 bg-accent/40 rounded"></div>
-                      </div>
-                      <div className="flex-1 space-y-2">
-                        <div className="h-3 bg-accent/40 rounded w-20"></div>
-                        <div className="h-6 bg-accent/40 rounded w-16"></div>
-                        <div className="h-2 bg-accent/40 rounded w-24"></div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Loading skeleton for progress bar */}
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <div className="h-3 bg-accent/40 rounded w-24 animate-pulse"></div>
-                  <div className="h-3 bg-accent/40 rounded w-32 animate-pulse"></div>
-                </div>
-                <div className="w-full bg-accent rounded-full h-2 animate-pulse"></div>
-                <div className="text-center">
-                  <div className="h-4 bg-accent/40 rounded w-48 mx-auto animate-pulse"></div>
-                </div>
-              </div>
-            </div>
-          </Tabs>
-        </div>
-      </FeatureGate>
-    );
-  }
-
-  if (error) {
-    return (
-      <FeatureGate feature="statistics">
-        <div className="space-y-6">
-          <Card className="p-6">
-            <div className="text-center py-8">
-              <div className="text-red-500 mb-2">⚠️</div>
-              <h3 className="text-lg font-semibold text-foreground mb-2">
-                Error Loading Statistics
-              </h3>
-              <p className="text-muted-foreground mb-4">{error}</p>
-              <Button
-                onClick={() => window.location.reload()}
-                variant="outline"
-              >
-                Try Again
-              </Button>
-            </div>
-          </Card>
-        </div>
-      </FeatureGate>
-    );
-  }
-
   // Show empty state for unauthenticated users
   if (!user) {
     return (
       <div className="h-full flex flex-col">
-        {/* Empty state content */}
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="text-center max-w-md">
             <BarChart3 className="w-16 h-16 mx-auto mb-6 text-muted-foreground opacity-50" />
@@ -401,35 +201,6 @@ export function StatsDisplay() {
               Track your focus sessions, monitor productivity trends, and gain
               insights into your work patterns with detailed statistics.
             </p>
-            <div className="space-y-3 mb-6">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <Clock className="w-4 h-4 text-blue-500" />
-                <span>Daily, weekly, and monthly reports</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <TrendingUp className="w-4 h-4 text-green-500" />
-                <span>Productivity trends and streaks</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <Activity className="w-4 h-4 text-purple-500" />
-                <span>Task completion analytics</span>
-              </div>
-            </div>
-            <div className="space-y-3">
-              <Button
-                onClick={() => (window.location.href = "/auth/signup")}
-                className="w-full bg-red-600 hover:bg-red-700 text-white"
-              >
-                Sign Up to View Analytics
-              </Button>
-              <Button
-                onClick={() => (window.location.href = "/auth/signin")}
-                variant="outline"
-                className="w-full"
-              >
-                Already have an account? Sign In
-              </Button>
-            </div>
           </div>
         </div>
       </div>
@@ -439,8 +210,6 @@ export function StatsDisplay() {
   return (
     <FeatureGate feature="statistics">
       <div className="space-y-6">
-        <div className="flex items-center justify-between mb-6" />
-
         <Tabs
           value={activeTab}
           onValueChange={(value) => setActiveTab(value as any)}
@@ -456,267 +225,427 @@ export function StatsDisplay() {
           </TabsList>
 
           <TabsContent value="today" className="space-y-6 mt-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-foreground">
-                Today's Progress
-              </h3>
-              <Badge variant="secondary">
-                {new Date().toLocaleDateString("en-US", {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                })}
-              </Badge>
-            </div>
-
             <div className="grid grid-cols-2 gap-4">
               <StatCard
                 title="Work Sessions"
-                value={todayStats.workSessions}
+                value={todayStats?.workSessions || 0}
                 icon={Target}
                 color="text-red-500"
                 description="Focus sessions completed"
               />
               <StatCard
                 title="Focus Time"
-                value={formatTime(todayStats.focusTime)}
+                value={formatTime((todayStats?.focusTimeMinutes || 0))}
                 icon={Clock}
                 color="text-orange-500"
                 description="Deep work time"
               />
               <StatCard
                 title="Tasks Done"
-                value={todayStats.tasksCompleted}
+                value={todayStats?.tasksCompleted || 0}
                 icon={CheckCircle}
                 color="text-green-500"
                 description="Completed today"
               />
               <StatCard
                 title="Current Streak"
-                value={todayStats.streak}
+                value={0}
                 icon={Flame}
                 color="text-orange-500"
                 description="Consecutive active days"
               />
             </div>
 
-            {/* Session breakdown */}
-            {user &&
-              (todayStats.shortBreakSessions > 0 ||
-                todayStats.longBreakSessions > 0) && (
-                <Card className="p-4">
-                  <h4 className="text-sm font-semibold text-foreground mb-3">
-                    Session Breakdown
-                  </h4>
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div>
-                      <div className="text-lg font-bold text-red-500">
-                        {todayStats.workSessions}
+            {/* Break Reminder Stats for Today */}
+            {user && getBreakReminderStats().length > 0 && (
+              <Card className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Coffee className="w-5 h-5 text-blue-500" />
+                  <h3 className="text-lg font-semibold">Break Reminders Today</h3>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  {getBreakReminderStats().map((stat) => (
+                    <div
+                      key={stat.id}
+                      className="flex items-center justify-between p-4 rounded-xl border hover:shadow-md transition-all duration-200"
+                      style={{ borderLeft: `4px solid ${stat.color}` }}
+                    >
+                      <div className="flex items-center gap-3 flex-1">
+                        <div 
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
+                          style={{ backgroundColor: `${stat.color}20`, color: stat.color }}
+                        >
+                          {stat.icon || '☕'}
+                        </div>
+                        <div className="flex-1">
+                          <span className="font-medium text-foreground">{stat.title}</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div 
+                              className="px-2 py-1 rounded text-xs font-medium"
+                              style={{ backgroundColor: `${stat.color}15`, color: stat.color }}
+                            >
+                              {stat.category}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">Work</div>
+                      <div className="flex items-center gap-3">
+                        <Badge 
+                          variant="secondary" 
+                          className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                        >
+                          {stat.todayCount} completed
+                        </Badge>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-lg font-bold text-blue-500">
-                        {todayStats.shortBreakSessions}
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Today's Focus Time Chart */}
+            {user && todayStats && (todayStats.workSessions > 0 || todayStats.focusTimeMinutes > 0) && (
+              <Card className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Activity className="w-5 h-5 text-green-500" />
+                  <h3 className="text-lg font-semibold">Today's Productivity</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Session Distribution</p>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Work Sessions</span>
+                        <span className="font-semibold">{todayStats.workSessions}</span>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Short Break
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-lg font-bold text-green-500">
-                        {todayStats.longBreakSessions}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Long Break
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Sessions</span>
+                        <span className="font-semibold">{todayStats.totalSessions}</span>
                       </div>
                     </div>
                   </div>
-                </Card>
-              )}
-
-            {/* Progress Bar */}
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Work Session Progress</span>
-                <span>
-                  {todayStats.workSessions} /{" "}
-                  {user ? 8 : LocalStorage.getSettings().dailySessionGoal || 4}{" "}
-                  work sessions completed
-                </span>
-              </div>
-              <div className="w-full bg-accent rounded-full h-2">
-                <div
-                  className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-500"
-                  style={{
-                    width: `${Math.min(
-                      (todayStats.workSessions /
-                        (user
-                          ? 8
-                          : LocalStorage.getSettings().dailySessionGoal || 4)) *
-                        100,
-                      100
-                    )}%`,
-                  }}
-                ></div>
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-medium text-foreground">
-                  {todayStats.workSessions >=
-                  (user ? 8 : LocalStorage.getSettings().dailySessionGoal || 4)
-                    ? "🎯 Daily goal achieved! Outstanding work! 🏆"
-                    : todayStats.workSessions === 0
-                    ? "Ready to start your first work session?"
-                    : `${
-                        (user
-                          ? 8
-                          : LocalStorage.getSettings().dailySessionGoal || 4) -
-                        todayStats.workSessions
-                      } more work sessions to reach your daily goal! 🚀`}
-                </p>
-              </div>
-            </div>
-
-            {user && <BreakReminderStatsCard />}
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Time Breakdown</p>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Focus Time</span>
+                        <span className="font-semibold">{formatTime(todayStats.focusTimeMinutes)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Avg/Session</span>
+                        <span className="font-semibold">
+                          {todayStats.workSessions > 0 
+                            ? formatTime(Math.round(todayStats.focusTimeMinutes / todayStats.workSessions))
+                            : '0m'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="week" className="space-y-6 mt-6">
-            {user && (
+            {user && weeklyStats && (
               <>
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-foreground">
-                    This Week's Summary
-                  </h3>
-                  <Badge variant="secondary">Last 7 days</Badge>
+                <div className="grid grid-cols-2 gap-4">
+                  <StatCard
+                    title="Sessions"
+                    value={getStatsForPeriod("week").totalSessions}
+                    icon={Target}
+                    color="text-red-500"
+                    description="This week"
+                  />
+                  <StatCard
+                    title="Focus Time"
+                    value={formatTime(getStatsForPeriod("week").totalFocusTime)}
+                    icon={Clock}
+                    color="text-orange-500"
+                    description="This week"
+                  />
+                  <StatCard
+                    title="Tasks Completed"
+                    value={getStatsForPeriod("week").totalTasksCompleted}
+                    icon={CheckCircle}
+                    color="text-green-500"
+                    description="This week"
+                  />
+                  <StatCard
+                    title="Active Days"
+                    value={getStatsForPeriod("week").activeDays}
+                    icon={Calendar}
+                    color="text-blue-500"
+                    description="Days with activity"
+                  />
                 </div>
 
-                {(() => {
-                  const weekStats = getStatsForPeriod("week");
-                  return (
-                    <div className="grid grid-cols-2 gap-4">
-                      <StatCard
-                        title="Total Sessions"
-                        value={weekStats.totalSessions}
-                        icon={Target}
-                        color="text-red-500"
-                        description="This week"
-                        trend={`Avg: ${weekStats.averageSessionsPerDay}/day`}
-                      />
-                      <StatCard
-                        title="Total Focus Time"
-                        value={formatTime(weekStats.totalFocusTime)}
-                        icon={Clock}
-                        color="text-orange-500"
-                        description="Deep work time"
-                      />
-                      <StatCard
-                        title="Tasks Completed"
-                        value={weekStats.totalTasksCompleted}
-                        icon={CheckCircle}
-                        color="text-green-500"
-                        description="This week"
-                      />
-                      <StatCard
-                        title="Active Days"
-                        value={weekStats.activeDays}
-                        icon={Activity}
-                        color="text-blue-500"
-                        description="Days with sessions"
-                      />
+                {/* Weekly Chart */}
+                {weeklyStats.length > 0 && (
+                  <Card className="p-6">
+                    <div className="flex items-center gap-3 mb-6">
+                      <BarChart3 className="w-5 h-5 text-purple-500" />
+                      <h3 className="text-lg font-semibold">Weekly Progress</h3>
                     </div>
-                  );
-                })()}
-
-                <DailyActivityChart
-                  stats={weeklyStats}
-                  title="Weekly Activity"
-                />
+                    <ChartContainer
+                      config={{
+                        sessions: {
+                          label: "Sessions",
+                          color: "hsl(var(--chart-1))",
+                        },
+                        focusTime: {
+                          label: "Focus Hours",
+                          color: "hsl(var(--chart-2))",
+                        },
+                        tasks: {
+                          label: "Tasks",
+                          color: "hsl(var(--chart-3))",
+                        },
+                      }}
+                      className="h-[300px]"
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart 
+                          data={weeklyStats.map((stat: any) => ({
+                            day: new Date(stat.date).toLocaleDateString('en-US', { weekday: 'short' }),
+                            date: stat.date,
+                            sessions: stat.totalSessions || 0,
+                            focusHours: Math.round((stat.focusTimeMinutes || 0) / 60 * 10) / 10,
+                            tasks: stat.tasksCompleted || 0,
+                          }))}
+                          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                        >
+                          <XAxis 
+                            dataKey="day" 
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                          />
+                          <YAxis 
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                          />
+                          <ChartTooltip 
+                            content={<ChartTooltipContent 
+                              formatter={(value, name) => {
+                                if (name === 'sessions') return [`${value} sessions`, 'Sessions'];
+                                if (name === 'focusHours') return [`${value}h focus`, 'Focus Time'];
+                                if (name === 'tasks') return [`${value} tasks`, 'Tasks Completed'];
+                                return [value, name];
+                              }}
+                              labelFormatter={(label, payload) => {
+                                const data = payload?.[0]?.payload;
+                                return data?.date ? new Date(data.date).toLocaleDateString() : label;
+                              }}
+                            />} 
+                          />
+                          <Bar 
+                            dataKey="sessions" 
+                            fill="var(--color-sessions)" 
+                            radius={[4, 4, 0, 0]}
+                            maxBarSize={60}
+                          />
+                          <Bar 
+                            dataKey="tasks" 
+                            fill="var(--color-tasks)" 
+                            radius={[4, 4, 0, 0]}
+                            maxBarSize={60}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                    
+                    {/* Weekly Summary Cards */}
+                    <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t">
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-chart-1">{getStatsForPeriod("week").totalSessions}</p>
+                        <p className="text-sm text-muted-foreground">Total Sessions</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-chart-2">{formatTime(getStatsForPeriod("week").totalFocusTime)}</p>
+                        <p className="text-sm text-muted-foreground">Focus Time</p>
+                      </div>
+                    </div>
+                  </Card>
+                )}
               </>
             )}
           </TabsContent>
 
           <TabsContent value="month" className="space-y-6 mt-6">
-            {user && (
+            {user && monthlyStats && (
               <>
+                {/* Month Navigation */}
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-foreground">
-                    Monthly Summary
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigateMonth("prev")}
+                    className="flex items-center gap-2"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Previous
+                  </Button>
+                  <h3 className="text-lg font-semibold">
+                    {currentDate.toLocaleDateString("en-US", {
+                      month: "long",
+                      year: "numeric",
+                    })}
                   </h3>
-                  {/* Show month switcher in place of the label when month tab is active */}
-                  {activeTab === "month" ? (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigateMonth("prev")}
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                      <span className="text-sm font-medium px-3">
-                        {currentDate.toLocaleDateString("en-US", {
-                          month: "long",
-                          year: "numeric",
-                        })}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigateMonth("next")}
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <Badge variant="secondary">
-                      {currentDate.toLocaleDateString("en-US", {
-                        month: "long",
-                        year: "numeric",
-                      })}
-                    </Badge>
-                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigateMonth("next")}
+                    className="flex items-center gap-2"
+                    disabled={currentDate >= new Date()}
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
                 </div>
 
-                {(() => {
-                  const monthStats = getStatsForPeriod("month");
-                  return (
-                    <div className="grid grid-cols-2 gap-4">
-                      <StatCard
-                        title="Total Sessions"
-                        value={monthStats.totalSessions}
-                        icon={Target}
-                        color="text-red-500"
-                        description="This month"
-                        trend={`Avg: ${monthStats.averageSessionsPerDay}/day`}
-                      />
-                      <StatCard
-                        title="Total Focus Time"
-                        value={formatTime(monthStats.totalFocusTime)}
-                        icon={Clock}
-                        color="text-orange-500"
-                        description="Deep work time"
-                      />
-                      <StatCard
-                        title="Tasks Completed"
-                        value={monthStats.totalTasksCompleted}
-                        icon={CheckCircle}
-                        color="text-green-500"
-                        description="This month"
-                      />
-                      <StatCard
-                        title="Active Days"
-                        value={monthStats.activeDays}
-                        icon={Activity}
-                        color="text-blue-500"
-                        description="Days with sessions"
-                      />
-                    </div>
-                  );
-                })()}
+                <div className="grid grid-cols-2 gap-4">
+                  <StatCard
+                    title="Sessions"
+                    value={getStatsForPeriod("month").totalSessions}
+                    icon={Target}
+                    color="text-red-500"
+                    description="This month"
+                  />
+                  <StatCard
+                    title="Focus Time"
+                    value={formatTime(getStatsForPeriod("month").totalFocusTime)}
+                    icon={Clock}
+                    color="text-orange-500"
+                    description="This month"
+                  />
+                  <StatCard
+                    title="Tasks Completed"
+                    value={getStatsForPeriod("month").totalTasksCompleted}
+                    icon={CheckCircle}
+                    color="text-green-500"
+                    description="This month"
+                  />
+                  <StatCard
+                    title="Active Days"
+                    value={getStatsForPeriod("month").activeDays}
+                    icon={Calendar}
+                    color="text-blue-500"
+                    description="Days with activity"
+                  />
+                </div>
 
-                <DailyActivityChart
-                  stats={monthlyStats}
-                  title="Monthly Activity"
-                />
+                {/* Monthly Chart */}
+                {monthlyStats.length > 0 && (
+                  <Card className="p-6">
+                    <div className="flex items-center gap-3 mb-6">
+                      <TrendingUp className="w-5 h-5 text-blue-500" />
+                      <h3 className="text-lg font-semibold">Monthly Trends</h3>
+                    </div>
+                    <ChartContainer
+                      config={{
+                        sessions: {
+                          label: "Daily Sessions",
+                          color: "hsl(var(--chart-1))",
+                        },
+                        focusHours: {
+                          label: "Focus Hours",
+                          color: "hsl(var(--chart-2))",
+                        },
+                        tasks: {
+                          label: "Tasks Completed",
+                          color: "hsl(var(--chart-3))",
+                        },
+                      }}
+                      className="h-[360px]"
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart 
+                          data={monthlyStats.map((stat: any) => ({
+                            day: new Date(stat.date).getDate(),
+                            date: stat.date,
+                            sessions: stat.totalSessions || 0,
+                            focusHours: Math.round((stat.focusTimeMinutes || 0) / 60 * 10) / 10,
+                            tasks: stat.tasksCompleted || 0,
+                          }))}
+                          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                        >
+                          <XAxis 
+                            dataKey="day" 
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                          />
+                          <YAxis 
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                          />
+                          <ChartTooltip 
+                            content={<ChartTooltipContent 
+                              formatter={(value, name) => {
+                                if (name === 'sessions') return [`${value} sessions`, 'Sessions'];
+                                if (name === 'focusHours') return [`${value}h focus`, 'Focus Hours'];
+                                if (name === 'tasks') return [`${value} tasks`, 'Tasks Completed'];
+                                return [value, name];
+                              }}
+                              labelFormatter={(label, payload) => {
+                                const data = payload?.[0]?.payload;
+                                return data?.date ? new Date(data.date).toLocaleDateString() : `Day ${label}`;
+                              }}
+                            />} 
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="sessions" 
+                            stroke="var(--color-sessions)" 
+                            strokeWidth={3}
+                            dot={{ fill: "var(--color-sessions)", strokeWidth: 0, r: 4 }}
+                            activeDot={{ r: 6, strokeWidth: 0 }}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="focusHours" 
+                            stroke="var(--color-focusHours)" 
+                            strokeWidth={3}
+                            dot={{ fill: "var(--color-focusHours)", strokeWidth: 0, r: 4 }}
+                            activeDot={{ r: 6, strokeWidth: 0 }}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="tasks" 
+                            stroke="var(--color-tasks)" 
+                            strokeWidth={2}
+                            dot={{ fill: "var(--color-tasks)", strokeWidth: 0, r: 3 }}
+                            activeDot={{ r: 5, strokeWidth: 0 }}
+                            strokeDasharray="5 5"
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                    
+                    {/* Monthly Summary Grid */}
+                    <div className="grid grid-cols-4 gap-4 mt-6 pt-6 border-t">
+                      <div className="text-center">
+                        <p className="text-xl font-bold text-chart-1">{getStatsForPeriod("month").totalSessions}</p>
+                        <p className="text-xs text-muted-foreground">Sessions</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xl font-bold text-chart-2">{formatTime(getStatsForPeriod("month").totalFocusTime)}</p>
+                        <p className="text-xs text-muted-foreground">Focus Time</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xl font-bold text-chart-3">{getStatsForPeriod("month").totalTasksCompleted}</p>
+                        <p className="text-xs text-muted-foreground">Tasks</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xl font-bold text-orange-500">{getStatsForPeriod("month").activeDays}</p>
+                        <p className="text-xs text-muted-foreground">Active Days</p>
+                      </div>
+                    </div>
+                  </Card>
+                )}
               </>
             )}
           </TabsContent>

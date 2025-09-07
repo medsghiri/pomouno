@@ -15,7 +15,7 @@ import { LocalStorage, PomodoroSession } from "@/lib/storage";
 import { useAuth, useFeatureAccess } from "@/lib/auth-context";
 import type { Task, AdvancedStorageService } from "@/lib/advanced-storage-service";
 import { useToast } from "@/hooks/use-toast";
-import { useSessionMutations, useTodaysStats, getStorageService } from "@/hooks/use-app-data";
+import { useSessionMutations, useTodayAggregatedStats, getStorageService } from "@/hooks/use-app-data";
 import { Settings, BarChart3, X, Target, Coffee } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useRouter } from "next/navigation";
@@ -71,8 +71,10 @@ export function TimerApp({
   const router = useRouter();
   const { recordSession } = useSessionMutations();
 
-    // Use React Query hook for today's stats only when user is authenticated to avoid unnecessary Firebase calls
-  const todaysStats = useTodaysStats(!!user);
+  // Audio metadata is now loaded server-side, no need for client-side React Query
+
+  // Use React Query hook for today's aggregated stats only when user is authenticated
+  const todaysStats = useTodayAggregatedStats(!!user);
 
   useEffect(() => {
     if (user) {
@@ -180,7 +182,7 @@ export function TimerApp({
       }
 
       // Check if daily goal will be achieved with this session
-      const currentSessions = todaysStats?.sessions || 0;
+      const currentSessions = todaysStats?.data?.totalSessions || 0;
       const newSessionCount =
         session.type === "work" ? currentSessions + 1 : currentSessions;
 
@@ -364,7 +366,7 @@ export function TimerApp({
         <div className="mb-6">
           <AuthPrompt
             trigger={authPromptTrigger}
-            sessionsCompleted={todaysStats?.sessions || 0}
+            sessionsCompleted={todaysStats?.data?.totalSessions || 0}
             onDismiss={() => setShowAuthPrompt(false)}
             onSignUp={handleSignUp}
           />
@@ -382,6 +384,7 @@ export function TimerApp({
                 onStartFocusSession={handleStartFocusSession}
                 isTimerActive={isTimerActive}
                 selectedTaskId={selectedTaskId}
+                isVisible={showTasks}
               />
             </ScrollArea>
           </SheetContent>
@@ -392,7 +395,7 @@ export function TimerApp({
           <SheetContent side="left" className="w-full sm:w-[600px] p-0">
             <SheetTitle className="sr-only">Break Reminders</SheetTitle>
             <ScrollArea className="h-full">
-              <BreakReminderManager />
+              <BreakReminderManager isVisible={showBreakReminders} />
             </ScrollArea>
           </SheetContent>
         </Sheet>
@@ -411,7 +414,7 @@ export function TimerApp({
               shouldAutoStart={shouldAutoStartTimer}
               onAutoStartComplete={() => setShouldAutoStartTimer(false)}
               todaysTaskSessions={todaysTaskSessions}
-              todaysWorkSessions={todaysStats?.sessions || 0}
+              todaysWorkSessions={todaysStats?.data?.totalSessions || 0}
             />
 
             {/* Productivity Tools */}
@@ -467,7 +470,7 @@ export function TimerApp({
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-foreground">
-                        {todaysStats?.sessions || 0} / {dailyGoal}
+                        {todaysStats?.data?.totalSessions || 0} / {dailyGoal}
                       </h3>
                       <p className="text-xs text-muted-foreground">
                         sessions today
@@ -477,7 +480,7 @@ export function TimerApp({
                   <div className="text-right">
                     <div className="text-2xl font-bold text-red-600 dark:text-red-400">
                       {Math.round(
-                        ((todaysStats?.sessions || 0) / dailyGoal) * 100
+                        ((todaysStats?.data?.totalSessions || 0) / dailyGoal) * 100
                       )}
                       %
                     </div>
@@ -490,24 +493,24 @@ export function TimerApp({
                     className="bg-gradient-to-r from-red-500 to-orange-500 h-3 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
                     style={{
                       width: `${Math.min(
-                        ((todaysStats?.sessions || 0) / dailyGoal) * 100,
+                        ((todaysStats?.data?.totalSessions || 0) / dailyGoal) * 100,
                         100
                       )}%`,
                     }}
                   >
-                    {(todaysStats?.sessions || 0) > 0 && (
+                    {(todaysStats?.data?.totalSessions || 0) > 0 && (
                       <div className="w-2 h-2 bg-white rounded-full shadow-sm"></div>
                     )}
                   </div>
                 </div>
 
                 <p className="text-sm text-center text-muted-foreground">
-                  {(todaysStats?.sessions || 0) >= dailyGoal
+                  {(todaysStats?.data?.totalSessions || 0) >= dailyGoal
                     ? "🎯 Daily goal achieved! Outstanding work!"
-                    : (todaysStats?.sessions || 0) === 0
+                    : (todaysStats?.data?.totalSessions || 0) === 0
                     ? "Ready to start your productive day?"
                     : `${
-                        dailyGoal - (todaysStats?.sessions || 0)
+                        dailyGoal - (todaysStats?.data?.totalSessions || 0)
                       } more to reach your goal`}
                 </p>
               </div>

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Moon, Sun } from 'lucide-react';
 import { LocalStorage } from '@/lib/storage';
 import { useAuth } from '@/lib/auth-context';
-import { useSettingsMutations } from '@/hooks/use-app-data';
+import { useSettingsMutation } from '@/hooks/use-app-data';
 
 interface ThemeToggleProps {
     variant?: 'default' | 'ghost' | 'outline';
@@ -21,7 +21,7 @@ export function ThemeToggle({
     showLabel = false
 }: ThemeToggleProps) {
     const { user } = useAuth();
-    const { updateSettings } = useSettingsMutations();
+    const updateSettings = useSettingsMutation();
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [mounted, setMounted] = useState(false);
 

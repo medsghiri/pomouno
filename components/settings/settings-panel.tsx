@@ -38,8 +38,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import { UpgradePrompt } from "@/components/auth/upgrade-prompt";
-import { useSettings, useSettingsMutations } from "@/hooks/use-app-data";
-import { useAudioMetadata, useAvailableAudio } from "@/hooks/use-audio";
+import { useSettings, useSettingsMutation } from "@/hooks/use-app-data";
+import { useAvailableAudio } from "@/hooks/use-audio-client";
 import AudioService from "@/lib/audio-service";
 
 const DEFAULT_SETTINGS: Settings = {
@@ -70,15 +70,14 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
   const { user, storageProvider } = useAuth();
   const { data: settingsData } = useSettings();
   const settings = settingsData || DEFAULT_SETTINGS;
-  const { updateSettings } = useSettingsMutations();
+  const updateSettings = useSettingsMutation();
   const [previewingAudio, setPreviewingAudio] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUserChanging, setIsUserChanging] = useState(false);
 
   const { toast } = useToast();
   
-  // Ensure audio metadata is loaded for non-authenticated users
-  useAudioMetadata();
+  // Use server-side cached audio data
   const { data: availableAudio = { focus: [], break: [], notification: [] } } = useAvailableAudio();
   
   const audioService = AudioService.getInstance();

@@ -13,7 +13,7 @@ import {
 import { SoundControlPopover } from "./sound-control-popover";
 import { cn } from "@/lib/utils";
 import { Settings } from "@/lib/storage";
-import { useAudioMetadata, useAvailableAudio } from "@/hooks/use-audio";
+import { useAvailableAudio } from "@/hooks/use-audio-client";
 import AudioService from "@/lib/audio-service";
 import VibrationService from "@/lib/vibration-service";
 
@@ -57,8 +57,7 @@ export function TimerDisplay({
   const [mounted, setMounted] = useState(false);
   const [isAudioServiceReady, setIsAudioServiceReady] = useState(false);
   
-  // Ensure audio metadata is loaded for non-authenticated users
-  useAudioMetadata();
+  // Use server-side cached audio data
   const { data: availableAudio = { focus: [], break: [], notification: [] } } = useAvailableAudio();
   
   const audioService = AudioService.getInstance();

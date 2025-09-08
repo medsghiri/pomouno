@@ -16,13 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { LocalStorage, Settings } from "@/lib/storage";
 import { CategoryManagement } from "./category-management";
 import {
@@ -55,7 +48,7 @@ const DEFAULT_SETTINGS: Settings = {
   darkMode: false,
   showTaskEstimation: true,
   showDailyGoal: true,
-  focusAudio: "clock-ticking",
+  focusAudio: "none",
   shortBreakAudio: "none",
   longBreakAudio: "none",
   notificationAudio: "notification-ping",
@@ -77,15 +70,16 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
   const [isUserChanging, setIsUserChanging] = useState(false);
 
   const { toast } = useToast();
-  
+
   // Use server-side cached audio data
-  const { data: availableAudio = { focus: [], break: [], notification: [] } } = useAvailableAudio();
-  
+  const { data: availableAudio = { focus: [], break: [], notification: [] } } =
+    useAvailableAudio();
+
   const audioService = AudioService.getInstance();
 
   useEffect(() => {
     // EMERGENCY FIX: Initialize audio service immediately for settings panel
-    if (!audioService.isReady() && typeof window !== 'undefined') {
+    if (!audioService.isReady() && typeof window !== "undefined") {
       audioService.initialize();
     }
 

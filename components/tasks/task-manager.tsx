@@ -872,11 +872,9 @@ export function TaskManager({
       tomorrow.setDate(tomorrow.getDate() + 1);
 
       filtered = tasks.filter((task) => {
-        // Regular tasks that are completed today
-        if (task.completed && task.completedAt) {
-          const completedDate = new Date(task.completedAt);
-          completedDate.setHours(0, 0, 0, 0);
-          return completedDate.getTime() === today.getTime();
+        // Regular tasks that are completed
+        if (task.completed) {
+          return true;
         }
 
         // Recurring tasks that have been completed today
@@ -948,40 +946,96 @@ export function TaskManager({
       });
     }
 
-    if (priorityFilter !== "all") {
-      if (priorityFilter === "none") {
-        filtered = filtered.filter((task) => !task.priority);
-      } else {
-        filtered = filtered.filter((task) => task.priority === priorityFilter);
-      }
-    }
-
-    if (typeFilter !== "all") {
-      switch (typeFilter) {
-        case "regular":
+    // FIXED: When showing completed tasks, apply filters more carefully
+    // Only apply additional filters if we're not showing completed tasks
+    // or if the user explicitly wants to filter completed tasks
+    if (!showCompleted) {
+      if (priorityFilter !== "all") {
+        if (priorityFilter === "none") {
+          filtered = filtered.filter((task) => !task.priority);
+        } else {
           filtered = filtered.filter(
-            (task) =>
-              !task.recurring?.enabled && !task.spacedRepetition?.enabled
+            (task) => task.priority === priorityFilter
           );
-          break;
-        case "recurring":
-          filtered = filtered.filter((task) => task.recurring?.enabled);
-          break;
-        case "spaced":
-          filtered = filtered.filter((task) => task.spacedRepetition?.enabled);
-          break;
+        }
+      }
+
+      if (typeFilter !== "all") {
+        switch (typeFilter) {
+          case "regular":
+            filtered = filtered.filter(
+              (task) =>
+                !task.recurring?.enabled && !task.spacedRepetition?.enabled
+            );
+            break;
+          case "recurring":
+            filtered = filtered.filter((task) => task.recurring?.enabled);
+            break;
+          case "spaced":
+            filtered = filtered.filter(
+              (task) => task.spacedRepetition?.enabled
+            );
+            break;
+        }
+      }
+
+      if (categoryFilter !== "all") {
+        if (categoryFilter === "none") {
+          filtered = filtered.filter((task) => !task.category);
+        } else {
+          filtered = filtered.filter(
+            (task) => task.category === categoryFilter
+          );
+        }
+      }
+    } else {
+      // When showing completed tasks, only apply filters if they make sense for completed tasks
+      // Apply priority filter
+      if (priorityFilter !== "all") {
+        if (priorityFilter === "none") {
+          filtered = filtered.filter((task) => !task.priority);
+        } else {
+          filtered = filtered.filter(
+            (task) => task.priority === priorityFilter
+          );
+        }
+      }
+
+      // Apply type filter
+      if (typeFilter !== "all") {
+        switch (typeFilter) {
+          case "regular":
+            filtered = filtered.filter(
+              (task) =>
+                !task.recurring?.enabled && !task.spacedRepetition?.enabled
+            );
+            break;
+          case "recurring":
+            filtered = filtered.filter((task) => task.recurring?.enabled);
+            break;
+          case "spaced":
+            filtered = filtered.filter(
+              (task) => task.spacedRepetition?.enabled
+            );
+            break;
+        }
+      }
+
+      // Apply category filter
+      if (categoryFilter !== "all") {
+        if (categoryFilter === "none") {
+          filtered = filtered.filter((task) => !task.category);
+        } else {
+          filtered = filtered.filter(
+            (task) => task.category === categoryFilter
+          );
+        }
       }
     }
 
-    if (categoryFilter !== "all") {
-      if (categoryFilter === "none") {
-        filtered = filtered.filter((task) => !task.category);
-      } else {
-        filtered = filtered.filter((task) => task.category === categoryFilter);
-      }
-    }
-
-    if (dueDateFilter !== "all") {
+    // FIXED: Don't apply due date filters when showing completed tasks
+    // Completed tasks are already filtered by completion date (today)
+    if (dueDateFilter !== "all" && !showCompleted) {
       switch (dueDateFilter) {
         case "overdue":
           filtered = filtered.filter((task) => {
@@ -1129,7 +1183,7 @@ export function TaskManager({
       priorityFilter !== "all" ||
       typeFilter !== "all" ||
       categoryFilter !== "all" ||
-      dueDateFilter !== "all" ||
+      (dueDateFilter !== "all" && !showCompleted) ||
       showCompleted
     );
   };
@@ -1165,7 +1219,8 @@ export function TaskManager({
         }`
       );
     }
-    if (dueDateFilter !== "all") {
+    // Only show due date filter if not showing completed tasks
+    if (dueDateFilter !== "all" && !showCompleted) {
       const dueDateLabels = {
         overdue: "Overdue",
         today: "Due Today",
@@ -1180,7 +1235,7 @@ export function TaskManager({
       );
     }
     if (showCompleted) {
-      filters.push("Showing today's completed tasks");
+      filters.push("Showing completed tasks");
     }
 
     return filters.join(", ");
@@ -1191,7 +1246,7 @@ export function TaskManager({
   const totalSessions = todaysStats?.data?.totalSessions || 0;
 
   // Show active tasks count (tasks that are currently available to work on)
-  const activeTasks = showCompleted ? tasks : getFilteredTasks();
+  const activeTasks = getFilteredTasks();
   const totalTasks = activeTasks.length;
 
   // Show loading state

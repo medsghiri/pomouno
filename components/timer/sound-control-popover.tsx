@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Slider } from '@/components/ui/slider';
 import { Volume2, VolumeX, Volume1 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { LocalStorage } from '@/lib/storage';
+import { useSettings, useSettingsMutation } from '@/hooks/use-app-data';
 import AudioService from '@/lib/audio-service';
 
 interface SoundControlPopoverProps {
@@ -18,49 +18,26 @@ export function SoundControlPopover({ className }: SoundControlPopoverProps) {
     const [isMuted, setIsMuted] = useState(false);
     const [previousVolume, setPreviousVolume] = useState(0.5);
     
+    // Use React Query hooks for settings
+    const { data: settings } = useSettings();
+    const updateSettings = useSettingsMutation();
+    
     const audioService = AudioService.getInstance();
 
     useEffect(() => {
-        // Load initial volume from settings
-        const settings = LocalStorage.getSettings();
-        setVolume(settings.soundVolume);
-        setIsMuted(settings.soundVolume === 0);
+        // Load initial volume from React Query settings
+        if (settings) {
+            setVolume(settings.soundVolume);
+            setIsMuted(settings.soundVolume === 0);
 
-        if (settings.soundVolume > 0) {
-            setPreviousVolume(settings.soundVolume);
+            if (settings.soundVolume > 0) {
+                setPreviousVolume(settings.soundVolume);
+            }
+
+            // Sync with audio service
+            audioService.setVolume(settings.soundVolume);
         }
-
-        // Listen for settings updates from other components
-        const handleSettingsUpdate = (event: CustomEvent) => {
-            const updatedSettings = event.detail;
-            if (updatedSettings.soundVolume !== undefined) {
-                setVolume(updatedSettings.soundVolume);
-                setIsMuted(updatedSettings.soundVolume === 0);
-
-                if (updatedSettings.soundVolume > 0) {
-                    setPreviousVolume(updatedSettings.soundVolume);
-                }
-            }
-        };
-
-        // Listen for volume changes from AudioService
-        const handleVolumeChange = (newVolume: number) => {
-            setVolume(newVolume);
-            setIsMuted(newVolume === 0);
-
-            if (newVolume > 0) {
-                setPreviousVolume(newVolume);
-            }
-        };
-
-        window.addEventListener('settingsUpdated', handleSettingsUpdate as EventListener);
-        audioService.onVolumeChange(handleVolumeChange);
-
-        return () => {
-            window.removeEventListener('settingsUpdated', handleSettingsUpdate as EventListener);
-            audioService.removeVolumeChangeCallback(handleVolumeChange);
-        };
-    }, []);
+    }, [settings]);
 
     const handleVolumeChange = (newVolume: number[]) => {
         const volumeValue = newVolume[0];
@@ -71,18 +48,14 @@ export function SoundControlPopover({ className }: SoundControlPopoverProps) {
             setPreviousVolume(volumeValue);
         }
 
-        // Update audio service volume
+        // Update audio service volume immediately
         audioService.setVolume(volumeValue);
 
-        // Save to settings
-        const settings = LocalStorage.getSettings();
-        const updatedSettings = { ...settings, soundVolume: volumeValue };
-        LocalStorage.saveSettings(updatedSettings);
-
-        // Dispatch settings update event
-        window.dispatchEvent(new CustomEvent('settingsUpdated', {
-            detail: updatedSettings
-        }));
+        // Update settings using React Query mutation instead of localStorage
+        if (settings) {
+            const updatedSettings = { ...settings, soundVolume: volumeValue };
+            updateSettings.mutate(updatedSettings);
+        }
     };
 
     const toggleMute = () => {

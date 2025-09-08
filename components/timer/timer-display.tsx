@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Play, Pause, Square, Music, ChevronDown, Check } from "lucide-react";
+import { Play, Pause, Square, Music, ChevronDown, Check, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -16,7 +16,7 @@ import {
 import { SoundControlPopover } from "./sound-control-popover";
 import { cn } from "@/lib/utils";
 import { Settings } from "@/lib/storage";
-import { useAvailableAudio } from "@/hooks/use-audio-client";
+
 import { useSettingsMutation } from "@/hooks/use-app-data";
 import AudioService from "@/lib/audio-service";
 import VibrationService from "@/lib/vibration-service";
@@ -30,10 +30,7 @@ interface TimerDisplayProps {
   onStart: () => void;
   onPause: () => void;
   onStop: () => void;
-  onReset: () => void;
   onSessionTypeChange: (type: "work" | "shortBreak" | "longBreak") => void;
-  currentSession: number;
-  totalSessions: number;
   settings: Settings;
   currentTask?: any | null;
   todaysTaskSessions?: number;
@@ -49,10 +46,7 @@ export function TimerDisplay({
   onStart,
   onPause,
   onStop,
-  onReset,
   onSessionTypeChange,
-  currentSession,
-  totalSessions,
   settings,
   currentTask,
   todaysTaskSessions,
@@ -60,9 +54,6 @@ export function TimerDisplay({
 }: TimerDisplayProps) {
   const [mounted, setMounted] = useState(false);
   const [isAudioServiceReady, setIsAudioServiceReady] = useState(false);
-  
-  // Use server-side cached audio data
-  const { data: availableAudio = { focus: [], break: [], notification: [] } } = useAvailableAudio();
   
   // Add settings mutation hook for direct updates
   const updateSettings = useSettingsMutation();
@@ -110,13 +101,18 @@ export function TimerDisplay({
         // Resume paused audio
         audioService.resumeAudio();
       } else if (!playbackState.isPlaying) {
-        // Start new audio
-        if (sessionType === "work" && settings.focusAudio !== "none") {
-          audioService.playAudio(settings.focusAudio, false);
-        } else if (sessionType === "shortBreak" && settings.shortBreakAudio !== "none") {
-          audioService.playAudio(settings.shortBreakAudio, false);
-        } else if (sessionType === "longBreak" && settings.longBreakAudio !== "none") {
-          audioService.playAudio(settings.longBreakAudio, false);
+        // Start new audio based on current session type
+        let audioKey = "none";
+        if (sessionType === "work") {
+          audioKey = settings.focusAudio;
+        } else if (sessionType === "shortBreak") {
+          audioKey = settings.shortBreakAudio;
+        } else if (sessionType === "longBreak") {
+          audioKey = settings.longBreakAudio;
+        }
+        
+        if (audioKey !== "none") {
+          audioService.playAudio(audioKey, false);
         }
       }
     } else if (isPaused) {
@@ -136,10 +132,9 @@ export function TimerDisplay({
     isActive,
     isPaused,
     sessionType,
-    settings.focusAudio,
-    settings.shortBreakAudio,
-    settings.longBreakAudio,
     settings.soundVolume,
+    // REMOVED: Individual audio settings to prevent timer restart when changing audio
+    // The audio selection will be handled by handleAudioChange function
   ]);
 
   const formatTime = (seconds: number) => {
@@ -308,11 +303,17 @@ export function TimerDisplay({
     const newSettings = { ...settings, [settingKey]: newAudioKey };
     updateSettings.mutate(newSettings);
 
-    // If timer is active, restart with new audio
+    // If timer is active, smoothly transition audio without restarting timer
     if (isActive && settings.soundVolume > 0) {
-      audioService.stopAll();
+      // Stop current audio only (not all audio including notifications)
+      audioService.stopCurrentAudio();
+      
+      // Start new audio immediately if not paused and audio is selected
       if (newAudioKey !== "none" && !isPaused) {
-        audioService.playAudio(newAudioKey, false);
+        // Small delay for smooth transition
+        setTimeout(() => {
+          audioService.playAudio(newAudioKey, false);
+        }, 100);
       }
     }
   };
@@ -521,6 +522,14 @@ export function TimerDisplay({
           {/* Sound Control Popover - always show for audio selection and volume control */}
           <SoundControlPopover />
         </div>
+
+        {/* Volume Warning - Show when volume is 0 and audio is selected */}
+        {settings.soundVolume === 0 && getCurrentAudioKey() !== "none" && (
+          <div className="flex items-center justify-center gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2 mx-4">
+            <VolumeX className="w-4 h-4" />
+            <span>Audio is muted. Adjust volume in the sound controls above.</span>
+          </div>
+        )}
       </div>
 
       {/* Session Type Selection - Improved with clear active state */}

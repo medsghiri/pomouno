@@ -49,11 +49,9 @@ export function TimerWithTitle({
   const settings = settingsData || LocalStorage.getSettings();
   const [currentTask, setCurrentTask] = useState<any | null>(null);
   const [showBreakReminders, setShowBreakReminders] = useState(false);
-  const [breakRemindersCompleted, setBreakRemindersCompleted] = useState<
-    string[]
-  >([]);
-  const [breakRemindersShown, setBreakRemindersShown] = useState<string[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string>("");
+  const [isSessionRestored, setIsSessionRestored] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false); // Track if component has been initialized
   const { toast } = useToast();
   const { storageProvider } = useAuth();
   
@@ -63,9 +61,10 @@ export function TimerWithTitle({
   const breakRemindersTriggered = useRef<string | null>(null);
   const [user] = useAuthState(auth);
 
-  // Restore session on component mount
+  // Restore session on component mount - MUST RUN FIRST
   useEffect(() => {
     const savedSession = storageProvider.basic.getCurrentSession();
+    
     if (savedSession) {
       // Calculate elapsed time since last update
       const now = Date.now();
@@ -78,9 +77,9 @@ export function TimerWithTitle({
         // If time has run out, complete the session
         if (newTimeLeft <= 0) {
           newTimeLeft = 0;
-          // Session completed while away - we'll handle this in the timer effect
         }
 
+        // Restore all session state
         setTimeLeft(newTimeLeft);
         setTotalTime(savedSession.totalTime);
         setIsActive(savedSession.isActive);
@@ -89,31 +88,17 @@ export function TimerWithTitle({
         setCurrentSession(savedSession.currentSession);
         setTotalSessions(savedSession.totalSessions);
         setCurrentSessionId(savedSession.id);
-
-        // Show confirmation dialog if session was active
-        if (
-          savedSession.isActive &&
-          !savedSession.isPaused &&
-          newTimeLeft > 0
-        ) {
-          const shouldContinue = window.confirm(
-            `You have an active ${
-              savedSession.sessionType === "work" ? "focus" : "break"
-            } session with ${Math.ceil(
-              newTimeLeft / 60
-            )} minutes remaining. Would you like to continue?`
-          );
-
-          if (!shouldContinue) {
-            setIsActive(false);
-            setIsPaused(false);
-            storageProvider.basic.clearCurrentSession();
-          }
-        }
+        setIsSessionRestored(true);
+        setHasInitialized(true);
       } else {
         // Clear old or inactive session
         storageProvider.basic.clearCurrentSession();
+        setIsSessionRestored(false);
+        setHasInitialized(true);
       }
+    } else {
+      setIsSessionRestored(false);
+      setHasInitialized(true);
     }
   }, [storageProvider]);
 
@@ -161,28 +146,13 @@ export function TimerWithTitle({
     storageProvider,
   ]);
 
-  // Add beforeunload event listener for confirmation dialog
+  // Update timer when settings change - ONLY after initialization
   useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (isActive && !isPaused) {
-        const message = `You have an active ${
-          sessionType === "work" ? "focus" : "break"
-        } session running. Are you sure you want to leave?`;
-        event.preventDefault();
-        event.returnValue = message;
-        return message;
-      }
-    };
+    // Don't run until component is initialized (session restoration is complete)
+    if (!hasInitialized) {
+      return;
+    }
 
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [isActive, isPaused, sessionType]);
-
-  // Update timer when settings change
-  useEffect(() => {
     let duration: number;
     switch (sessionType) {
       case "work":
@@ -198,10 +168,22 @@ export function TimerWithTitle({
         duration = settings.workDuration * 60;
     }
 
-    setTotalTime(duration);
-    setTimeLeft(duration);
+    // Only update timer duration if timer is not active AND session wasn't restored
+    if (!isActive && !isSessionRestored) {
+      setTotalTime(duration);
+      setTimeLeft(duration);
+    }
     setTotalSessions(settings.sessionsUntilLongBreak);
-  }, [settings, sessionType]);
+  }, [
+    sessionType,
+    settings.workDuration,
+    settings.shortBreakDuration,
+    settings.longBreakDuration,
+    settings.sessionsUntilLongBreak,
+    isActive,
+    isSessionRestored,
+    hasInitialized, // Add this to wait for initialization
+  ]);
 
   // Update current task when selectedTask changes
   useEffect(() => {
@@ -224,15 +206,11 @@ export function TimerWithTitle({
       isActive &&
       (sessionType === "shortBreak" || sessionType === "longBreak")
     ) {
-      console.log(
-        `🔔 Break session is active (${sessionType}) - showing break reminders`
-      );
       setShowBreakReminders(true);
       breakRemindersTriggered.current =
         sessionType === "longBreak" ? "longBreak" : "shortBreak";
     } else if (sessionType === "work") {
       // Hide break reminders when work session starts
-      console.log(`💼 Work session - hiding break reminders`);
       setShowBreakReminders(false);
       breakRemindersTriggered.current = null;
     }
@@ -444,8 +422,7 @@ export function TimerWithTitle({
             breakType={sessionType === "longBreak" ? "long" : "short"}
             isVisible={showBreakReminders}
             onRemindersCompleted={(completedIds, shownIds) => {
-              setBreakRemindersCompleted(completedIds);
-              setBreakRemindersShown(shownIds);
+              // These are handled internally by the component
             }}
           />
         </div>
@@ -457,12 +434,9 @@ export function TimerWithTitle({
         isActive={isActive}
         isPaused={isPaused}
         sessionType={sessionType}
-        currentSession={currentSession}
-        totalSessions={totalSessions}
         onStart={handleStart}
         onPause={handlePause}
         onStop={handleReset}
-        onReset={handleReset}
         onSessionTypeChange={(type) => {
           // Only allow session type changes when timer is not active
           if (!isActive) {

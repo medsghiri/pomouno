@@ -143,7 +143,6 @@ export function TimerApp({
         const localData = LocalStorage.getAllData();
         // Migration is now handled by the AdvancedStorageService through proper hooks
         // This prevents direct Firebase calls that bypass React Query caching
-        console.log("User authenticated, storage service ready");
       }
     } catch (error) {
       console.error("❌ Storage service setup error:", error);

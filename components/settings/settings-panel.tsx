@@ -12,7 +12,9 @@ import { NumberPicker } from "@/components/ui/number-picker";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -55,8 +57,9 @@ const DEFAULT_SETTINGS: Settings = {
   darkMode: false,
   showTaskEstimation: true,
   showDailyGoal: true,
-  focusAudio: "none",
-  breakAudio: "none",
+  focusAudio: "clock-ticking",
+  shortBreakAudio: "none",
+  longBreakAudio: "none",
   notificationAudio: "notification-ping",
   usePlaylistForLofi: true,
   dailySessionGoal: 8,
@@ -83,7 +86,7 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
   const audioService = AudioService.getInstance();
 
   useEffect(() => {
-    // EMERGENCY FIX: Only initialize once globally
+    // EMERGENCY FIX: Initialize audio service immediately for settings panel
     if (!audioService.isReady() && typeof window !== 'undefined') {
       audioService.initialize();
     }
@@ -232,7 +235,8 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
   const hasAudioEnabled = () => {
     return (
       settings.focusAudio !== "none" ||
-      settings.breakAudio !== "none" ||
+      settings.shortBreakAudio !== "none" ||
+      settings.longBreakAudio !== "none" ||
       settings.notificationAudio !== "none"
     );
   };
@@ -543,15 +547,23 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                   </SelectTrigger>
                   <SelectContent className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
                     <SelectItem value="none">No Sound</SelectItem>
-                    {availableAudio.focus.map((audioKey) => (
-                      <SelectItem
-                        key={audioKey}
-                        value={audioKey}
-                        className="text-gray-900 dark:text-white"
-                      >
-                        {audioService.getAudioDisplayName(audioKey)}
-                      </SelectItem>
-                    ))}
+                    {(() => {
+                      const groupedAudio = audioService.getAudioByCategory('focus');
+                      return Object.entries(groupedAudio).map(([groupName, audioItems]) => (
+                        <SelectGroup key={groupName}>
+                          <SelectLabel className="text-gray-600 dark:text-gray-400">{groupName}</SelectLabel>
+                          {audioItems.map(({ key }) => (
+                            <SelectItem
+                              key={key}
+                              value={key}
+                              className="text-gray-900 dark:text-white"
+                            >
+                              {audioService.getAudioDisplayName(key)}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ));
+                    })()}
                   </SelectContent>
                 </Select>
                 {settings.focusAudio !== "none" && (
@@ -581,20 +593,20 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
             </div>
           </Card>
 
-          {/* Break Audio Selection */}
+          {/* Short Break Audio Selection */}
           <Card className="p-4 bg-white/10 backdrop-blur-sm text-gray-900 dark:text-white dark:bg-gray-800/50">
             <div className="space-y-3">
               <Label
-                htmlFor="break-audio"
+                htmlFor="short-break-audio"
                 className="text-gray-900 dark:text-white font-medium"
               >
-                Break session audio
+                Short break audio
               </Label>
               <div className="flex gap-2">
                 <Select
-                  value={settings.breakAudio}
+                  value={settings.shortBreakAudio}
                   onValueChange={(value) =>
-                    handleSettingChange("breakAudio", value)
+                    handleSettingChange("shortBreakAudio", value)
                   }
                 >
                   <SelectTrigger className="flex-1 bg-white/20 dark:bg-gray-700/50 text-gray-900 dark:text-white backdrop-blur-sm">
@@ -602,31 +614,39 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                   </SelectTrigger>
                   <SelectContent className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
                     <SelectItem value="none">No Sound</SelectItem>
-                    {availableAudio.break.map((audioKey) => (
-                      <SelectItem
-                        key={audioKey}
-                        value={audioKey}
-                        className="text-gray-900 dark:text-white"
-                      >
-                        {audioService.getAudioDisplayName(audioKey)}
-                      </SelectItem>
-                    ))}
+                    {(() => {
+                      const groupedAudio = audioService.getAudioByCategory('break');
+                      return Object.entries(groupedAudio).map(([groupName, audioItems]) => (
+                        <SelectGroup key={groupName}>
+                          <SelectLabel className="text-gray-600 dark:text-gray-400">{groupName}</SelectLabel>
+                          {audioItems.map(({ key }) => (
+                            <SelectItem
+                              key={key}
+                              value={key}
+                              className="text-gray-900 dark:text-white"
+                            >
+                              {audioService.getAudioDisplayName(key)}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ));
+                    })()}
                   </SelectContent>
                 </Select>
-                {settings.breakAudio !== "none" && (
+                {settings.shortBreakAudio !== "none" && (
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => togglePreview(settings.breakAudio)}
+                    onClick={() => togglePreview(settings.shortBreakAudio)}
                     className={`bg-white/10 hover:bg-white/20 transition-all duration-200 backdrop-blur-sm dark:bg-gray-800/30 dark:hover:bg-gray-700/40 ${
-                      previewingAudio === settings.breakAudio
+                      previewingAudio === settings.shortBreakAudio
                         ? "bg-white/30! dark:bg-gray-700/60!"
                         : ""
                     }`}
                   >
-                    {previewingAudio === settings.breakAudio &&
-                    audioService.isPreviewPlaying(settings.breakAudio) ? (
+                    {previewingAudio === settings.shortBreakAudio &&
+                    audioService.isPreviewPlaying(settings.shortBreakAudio) ? (
                       <Pause className="w-4 h-4" />
                     ) : (
                       <Play className="w-4 h-4" />
@@ -635,7 +655,74 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                 )}
               </div>
               <p className="text-xs text-gray-700 dark:text-gray-400">
-                Audio to play during break sessions
+                Audio to play during short break sessions (5 minutes)
+              </p>
+            </div>
+          </Card>
+
+          {/* Long Break Audio Selection */}
+          <Card className="p-4 bg-white/10 backdrop-blur-sm text-gray-900 dark:text-white dark:bg-gray-800/50">
+            <div className="space-y-3">
+              <Label
+                htmlFor="long-break-audio"
+                className="text-gray-900 dark:text-white font-medium"
+              >
+                Long break audio
+              </Label>
+              <div className="flex gap-2">
+                <Select
+                  value={settings.longBreakAudio}
+                  onValueChange={(value) =>
+                    handleSettingChange("longBreakAudio", value)
+                  }
+                >
+                  <SelectTrigger className="flex-1 bg-white/20 dark:bg-gray-700/50 text-gray-900 dark:text-white backdrop-blur-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
+                    <SelectItem value="none">No Sound</SelectItem>
+                    {(() => {
+                      const groupedAudio = audioService.getAudioByCategory('break');
+                      return Object.entries(groupedAudio).map(([groupName, audioItems]) => (
+                        <SelectGroup key={groupName}>
+                          <SelectLabel className="text-gray-600 dark:text-gray-400">{groupName}</SelectLabel>
+                          {audioItems.map(({ key }) => (
+                            <SelectItem
+                              key={key}
+                              value={key}
+                              className="text-gray-900 dark:text-white"
+                            >
+                              {audioService.getAudioDisplayName(key)}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ));
+                    })()}
+                  </SelectContent>
+                </Select>
+                {settings.longBreakAudio !== "none" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => togglePreview(settings.longBreakAudio)}
+                    className={`bg-white/10 hover:bg-white/20 transition-all duration-200 backdrop-blur-sm dark:bg-gray-800/30 dark:hover:bg-gray-700/40 ${
+                      previewingAudio === settings.longBreakAudio
+                        ? "bg-white/30! dark:bg-gray-700/60!"
+                        : ""
+                    }`}
+                  >
+                    {previewingAudio === settings.longBreakAudio &&
+                    audioService.isPreviewPlaying(settings.longBreakAudio) ? (
+                      <Pause className="w-4 h-4" />
+                    ) : (
+                      <Play className="w-4 h-4" />
+                    )}
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-gray-700 dark:text-gray-400">
+                Audio to play during long break sessions (15 minutes)
               </p>
             </div>
           </Card>
@@ -661,15 +748,23 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                   </SelectTrigger>
                   <SelectContent className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
                     <SelectItem value="none">No Sound</SelectItem>
-                    {availableAudio.notification.map((audioKey) => (
-                      <SelectItem
-                        key={audioKey}
-                        value={audioKey}
-                        className="text-gray-900 dark:text-white"
-                      >
-                        {audioService.getAudioDisplayName(audioKey)}
-                      </SelectItem>
-                    ))}
+                    {(() => {
+                      const groupedAudio = audioService.getAudioByCategory('notification');
+                      return Object.entries(groupedAudio).map(([groupName, audioItems]) => (
+                        <SelectGroup key={groupName}>
+                          <SelectLabel className="text-gray-600 dark:text-gray-400">{groupName}</SelectLabel>
+                          {audioItems.map(({ key }) => (
+                            <SelectItem
+                              key={key}
+                              value={key}
+                              className="text-gray-900 dark:text-white"
+                            >
+                              {audioService.getAudioDisplayName(key)}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ));
+                    })()}
                   </SelectContent>
                 </Select>
                 {settings.notificationAudio !== "none" && (
@@ -729,7 +824,8 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
 
           {/* Audio Volume Controls */}
           {(settings.focusAudio !== "none" ||
-            settings.breakAudio !== "none") && (
+            settings.shortBreakAudio !== "none" ||
+            settings.longBreakAudio !== "none") && (
             <Card className="p-4 bg-white/10 backdrop-blur-sm text-gray-900 dark:text-white dark:bg-gray-800/50">
               <div className="space-y-3">
                 <Label className="text-gray-900 dark:text-white font-medium py-1">

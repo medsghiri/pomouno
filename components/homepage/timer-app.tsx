@@ -15,7 +15,7 @@ import { LocalStorage, PomodoroSession } from "@/lib/storage";
 import { useAuth, useFeatureAccess } from "@/lib/auth-context";
 import type { Task, AdvancedStorageService } from "@/lib/advanced-storage-service";
 import { useToast } from "@/hooks/use-toast";
-import { useSessionMutations, useTodayAggregatedStats, getStorageService } from "@/hooks/use-app-data";
+import { useSessionMutations, useTodayAggregatedStats, getStorageService, useSettings } from "@/hooks/use-app-data";
 import { Settings, BarChart3, X, Target, Coffee } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useRouter } from "next/navigation";
@@ -70,6 +70,29 @@ export function TimerApp({
   const { toast } = useToast();
   const router = useRouter();
   const { recordSession } = useSessionMutations();
+
+  // Use React Query hook for settings
+  const { data: settingsData } = useSettings();
+  const settings = settingsData || {
+    darkMode: false,
+    dailySessionGoal: 8,
+    showDailyGoal: true,
+    workDuration: 25,
+    shortBreakDuration: 5,
+    longBreakDuration: 15,
+    sessionsUntilLongBreak: 4,
+    autoStartBreaks: false,
+    autoStartWork: false,
+    notifications: true,
+    soundVolume: 0.5,
+    notificationVolume: 0.7,
+    showTaskEstimation: true,
+    focusAudio: "none",
+    shortBreakAudio: "none",
+    longBreakAudio: "none",
+    notificationAudio: "notification-ping",
+    usePlaylistForLofi: true,
+  };
 
   // Audio metadata is now loaded server-side, no need for client-side React Query
 

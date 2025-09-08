@@ -292,101 +292,123 @@ export function useTodayAggregatedStats(enabled: boolean = true) {
     });
 }
 
-export function useWeeklyAggregatedStats(enabled: boolean = false) {
+// 🔥 NEW: Individual daily stats with infinite caching for historical days
+export function useDailyAggregatedStats(date: string, enabled: boolean = true) {
     const { user } = useAuth();
+    const today = getTodayString();
+    const isToday = date === today;
+    const isPast = date < today;
 
     return useQuery({
-        queryKey: queryKeys.weeklyAggregatedStats(user?.uid || ''),
+        queryKey: queryKeys.dailyAggregatedStats(user?.uid || '', date),
         queryFn: async () => {
-            if (!user) return [];
+            if (!user) throw new Error('User not authenticated');
             
-            // Generate last 7 days date strings
-            const dateStrings = [];
-            for (let i = 6; i >= 0; i--) {
-                const date = new Date();
-                date.setDate(date.getDate() - i);
-                dateStrings.push(date.toISOString().split('T')[0]);
-            }
-            
-            // Fetch only 7 documents instead of 1000+ sessions!
-            const dailyStats = await FirebaseService.getMultipleDailyAggregatedStats(user, dateStrings);
-            
-            // Fill in missing days with zero stats
-            return dateStrings.map(dateString => {
-                const stat = dailyStats.find(s => s.date === dateString);
-                return stat || {
-                    date: dateString,
-                    totalSessions: 0,
-                    workSessions: 0,
-                    shortBreakSessions: 0,
-                    longBreakSessions: 0,
-                    focusTimeMinutes: 0,
-                    tasksCompleted: 0,
-                    tasksCreated: 0,
-                    breakRemindersShown: 0,
-                    breakRemindersCompleted: 0
-                };
-            });
+            return await FirebaseService.getDailyAggregatedStats(user, date);
         },
         enabled: enabled && !!user,
-        staleTime: 10 * 60 * 1000, // 10 minutes - weekly stats don't change often
-        gcTime: 60 * 60 * 1000, // 1 hour
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
-        refetchOnMount: false,
+        // 🚀 INFINITE CACHING: Past days never change, today updates frequently
+        staleTime: isPast ? Infinity : 5 * 60 * 1000, // Past: never stale, Today: 5 minutes
+        gcTime: isPast ? Infinity : 30 * 60 * 1000, // Past: never garbage collect, Today: 30 minutes
+        refetchOnWindowFocus: isPast ? false : false, // Past days never refetch
+        refetchOnReconnect: isPast ? false : false,
+        refetchOnMount: isPast ? false : false,
+        refetchInterval: isPast ? false : false, // Past days never auto-refetch
     });
+}
+
+// 🚀 ADVANCED: Multiple daily stats with optimal caching strategy
+export function useMultipleDailyStats(dates: string[], enabled: boolean = true) {
+    const { user } = useAuth();
+    const today = getTodayString();
+    
+    // Use React Query's ability to run multiple queries in parallel
+    const queries = dates.map(date => {
+        const isPast = date < today;
+        return useQuery({
+            queryKey: queryKeys.dailyAggregatedStats(user?.uid || '', date),
+            queryFn: async () => {
+                if (!user) throw new Error('User not authenticated');
+                return await FirebaseService.getDailyAggregatedStats(user, date);
+            },
+            enabled: enabled && !!user,
+            // 🚀 INFINITE CACHING: Past days cached forever, today updates frequently
+            staleTime: isPast ? Infinity : 5 * 60 * 1000,
+            gcTime: isPast ? Infinity : 30 * 60 * 1000,
+            refetchOnWindowFocus: isPast ? false : false,
+            refetchOnReconnect: isPast ? false : false,
+            refetchOnMount: isPast ? false : false,
+            refetchInterval: isPast ? false : false,
+        });
+    });
+
+    // Combine results with loading and error states
+    const isLoading = queries.some(q => q.isLoading);
+    const isError = queries.some(q => q.isError);
+    const errors = queries.filter(q => q.isError).map(q => q.error);
+    
+    const data = queries.map((query, index) => {
+        return query.data || {
+            date: dates[index],
+            totalSessions: 0,
+            workSessions: 0,
+            shortBreakSessions: 0,
+            longBreakSessions: 0,
+            focusTimeMinutes: 0,
+            tasksCompleted: 0,
+            tasksCreated: 0,
+            breakRemindersShown: 0,
+            breakRemindersCompleted: 0
+        };
+    });
+
+    return {
+        data,
+        isLoading,
+        isError,
+        errors,
+        queries // Allow access to individual query states if needed
+    };
+}
+
+export function useWeeklyAggregatedStats(enabled: boolean = false) {
+    const { user } = useAuth();
+    
+    // Generate last 7 days date strings
+    const dateStrings = useMemo(() => {
+        const dates = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            dates.push(date.toISOString().split('T')[0]);
+        }
+        return dates;
+    }, []); // Memoize so dates don't change on every render
+
+    // 🚀 USE INDIVIDUAL DAILY QUERIES: Better caching per day
+    return useMultipleDailyStats(dateStrings, enabled && !!user);
 }
 
 export function useMonthlyAggregatedStats(currentDate: Date, enabled: boolean = false) {
     const { user } = useAuth();
     const monthKey = currentDate.getFullYear() + '-' + (currentDate.getMonth() + 1).toString().padStart(2, '0');
-    const isCurrentMonth = monthKey === new Date().getFullYear() + '-' + (new Date().getMonth() + 1).toString().padStart(2, '0');
+    
+    // Generate month's date strings - memoized based on month/year
+    const dateStrings = useMemo(() => {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        
+        const dates = [];
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(year, month, day);
+            dates.push(date.toISOString().split('T')[0]);
+        }
+        return dates;
+    }, [currentDate.getFullYear(), currentDate.getMonth()]);
 
-    return useQuery({
-        queryKey: queryKeys.monthlyAggregatedStats(user?.uid || '', monthKey),
-        queryFn: async () => {
-            if (!user) return [];
-            
-            // Generate month's date strings
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth();
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
-            
-            const dateStrings = [];
-            for (let day = 1; day <= daysInMonth; day++) {
-                const date = new Date(year, month, day);
-                dateStrings.push(date.toISOString().split('T')[0]);
-            }
-            
-            // Fetch only ~30 documents instead of 2000+ sessions!
-            const dailyStats = await FirebaseService.getMultipleDailyAggregatedStats(user, dateStrings);
-            
-            // Fill in missing days with zero stats
-            return dateStrings.map(dateString => {
-                const stat = dailyStats.find(s => s.date === dateString);
-                return stat || {
-                    date: dateString,
-                    totalSessions: 0,
-                    workSessions: 0,
-                    shortBreakSessions: 0,
-                    longBreakSessions: 0,
-                    focusTimeMinutes: 0,
-                    tasksCompleted: 0,
-                    tasksCreated: 0,
-                    breakRemindersShown: 0,
-                    breakRemindersCompleted: 0
-                };
-            });
-        },
-        enabled: enabled && !!user,
-        staleTime: isCurrentMonth ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000, // Current month: 15 min, Past months: 24 hours
-        gcTime: isCurrentMonth ? 2 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000, // Current month: 2 hours, Past months: 7 days
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
-        refetchOnMount: false,
-        // Past months should never refetch automatically
-        refetchInterval: isCurrentMonth ? false : false,
-    });
+    // 🚀 USE INDIVIDUAL DAILY QUERIES: Infinite caching per day
+    return useMultipleDailyStats(dateStrings, enabled && !!user);
 }
 
 // Settings hooks for React Query integration
@@ -506,11 +528,43 @@ export function useTaskMutations() {
             // Optimistically update tasks
             queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), (old: any) => {
                 if (!old) return old;
-                return old.map((task: any) => 
-                    task.id === taskId 
-                        ? { ...task, completed: true, completedAt: Date.now() }
-                        : task
-                );
+                return old.map((task: any) => {
+                    if (task.id === taskId) {
+                        const now = Date.now();
+                        
+                        // Handle different task types
+                        if (task.spacedRepetition?.enabled) {
+                            // Spaced repetition tasks: update lastReviewed but keep as incomplete
+                            return {
+                                ...task,
+                                spacedRepetition: {
+                                    ...task.spacedRepetition,
+                                    lastReviewed: now,
+                                    reviewCount: (task.spacedRepetition.reviewCount || 0) + 1
+                                },
+                                completed: false // Spaced repetition tasks remain incomplete
+                            };
+                        } else if (task.recurring?.enabled) {
+                            // Recurring tasks: update lastCompleted but keep as incomplete
+                            return {
+                                ...task,
+                                recurring: {
+                                    ...task.recurring,
+                                    lastCompleted: now
+                                },
+                                completed: false // Recurring tasks remain incomplete
+                            };
+                        } else {
+                            // Regular tasks: mark as completed
+                            return {
+                                ...task,
+                                completed: true,
+                                completedAt: now
+                            };
+                        }
+                    }
+                    return task;
+                });
             });
 
             // Optimistically update stats
@@ -535,14 +589,16 @@ export function useTaskMutations() {
             }
         },
         onSettled: () => {
-            // Invalidate tasks and stats for immediate updates
+            // Always invalidate and refetch to ensure consistency with server state
             queryClient.invalidateQueries({ 
-                queryKey: queryKeys.tasks(user?.uid || '')
+                queryKey: queryKeys.tasks(user?.uid || ''),
+                refetchType: 'active' // Only refetch active queries
             });
             // Invalidate stats to update counts immediately
             if (user?.uid) {
                 queryClient.invalidateQueries({ 
-                    queryKey: queryKeys.dailyAggregatedStats(user.uid, getTodayString())
+                    queryKey: queryKeys.dailyAggregatedStats(user.uid, getTodayString()),
+                    refetchType: 'active' // Only refetch active queries
                 });
             }
         },
@@ -629,16 +685,59 @@ export function useSessionMutations() {
             }
             return await storageService.recordSession(session);
         },
+        onMutate: async (session: PomodoroSession) => {
+            // Cancel any outgoing refetches
+            await queryClient.cancelQueries({ queryKey: queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString()) });
+
+            // Snapshot the previous value
+            const previousStats = queryClient.getQueryData(queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString()));
+
+            // Optimistically update the stats
+            queryClient.setQueryData(queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString()), (old: any) => {
+                if (!old) {
+                    // Create initial stats object if it doesn't exist
+                    return {
+                        date: getTodayString(),
+                        totalSessions: 1,
+                        workSessions: session.type === 'work' ? 1 : 0,
+                        shortBreakSessions: session.type === 'short-break' ? 1 : 0,
+                        longBreakSessions: session.type === 'long-break' ? 1 : 0,
+                        focusTimeMinutes: session.type === 'work' ? session.duration : 0,
+                        tasksCompleted: 0,
+                        tasksCreated: 0,
+                        breakRemindersShown: (session as any).breakRemindersShown?.length || 0,
+                        breakRemindersCompleted: (session as any).breakRemindersCompleted?.length || 0,
+                    };
+                }
+                
+                return {
+                    ...old,
+                    totalSessions: (old.totalSessions || 0) + 1,
+                    workSessions: (old.workSessions || 0) + (session.type === 'work' ? 1 : 0),
+                    shortBreakSessions: (old.shortBreakSessions || 0) + (session.type === 'short-break' ? 1 : 0),
+                    longBreakSessions: (old.longBreakSessions || 0) + (session.type === 'long-break' ? 1 : 0),
+                    focusTimeMinutes: (old.focusTimeMinutes || 0) + (session.type === 'work' ? session.duration : 0),
+                    breakRemindersShown: (old.breakRemindersShown || 0) + ((session as any).breakRemindersShown?.length || 0),
+                    breakRemindersCompleted: (old.breakRemindersCompleted || 0) + ((session as any).breakRemindersCompleted?.length || 0),
+                };
+            });
+
+            return { previousStats };
+        },
+        onError: (err, session, context) => {
+            // If the mutation fails, rollback
+            if (context?.previousStats) {
+                queryClient.setQueryData(queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString()), context.previousStats);
+            }
+        },
         onSuccess: () => {
-            // OPTIMIZED: Reduce Firebase reads by using selective invalidation
+            // Invalidate queries to ensure consistency
             if (user?.uid) {
                 queryClient.invalidateQueries({ 
-                    queryKey: queryKeys.sessions(user.uid),
-                    refetchType: 'none' // Don't refetch immediately
+                    queryKey: queryKeys.sessions(user.uid)
                 });
                 queryClient.invalidateQueries({ 
-                    queryKey: queryKeys.dailyAggregatedStats(user.uid, getTodayString()),
-                    refetchType: 'none'
+                    queryKey: queryKeys.dailyAggregatedStats(user.uid, getTodayString())
                 });
             }
         },

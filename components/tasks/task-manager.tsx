@@ -874,26 +874,21 @@ export function TaskManager({
     let filtered;
 
     if (showCompleted) {
-      // When showing completed, show tasks completed today (including recurring and spaced repetition)
-      const today = new Date().toDateString();
-      
+      // When showing completed, show all completed tasks (not just today)
       filtered = tasks.filter((task) => {
-        // Regular tasks completed today
-        if (task.completed && task.completedAt) {
-          const completedDate = new Date(task.completedAt).toDateString();
-          return completedDate === today;
+        // Regular tasks that are completed
+        if (task.completed) {
+          return true;
         }
 
-        // Recurring tasks completed today
+        // Recurring tasks that have been completed at least once
         if (task.recurring?.enabled && task.recurring.lastCompleted) {
-          const completedDate = new Date(task.recurring.lastCompleted).toDateString();
-          return completedDate === today;
+          return true;
         }
 
-        // Spaced repetition tasks reviewed today
+        // Spaced repetition tasks that have been reviewed at least once
         if (task.spacedRepetition?.enabled && task.spacedRepetition.lastReviewed) {
-          const reviewedDate = new Date(task.spacedRepetition.lastReviewed).toDateString();
-          return reviewedDate === today;
+          return true;
         }
 
         return false;

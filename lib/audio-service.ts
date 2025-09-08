@@ -208,6 +208,37 @@ class AudioService {
         return this.audioMetadata[key];
     }
 
+    // Get audio organized by category and subcategory for UI dropdowns
+    getAudioByCategory(categoryType: 'focus' | 'break' | 'notification') {
+        const audioItems = Object.entries(this.audioMetadata)
+            .filter(([key, metadata]) => {
+                if (categoryType === 'focus') {
+                    return metadata.category === 'focus';
+                } else if (categoryType === 'break') {
+                    // Break can use both focus sounds and dedicated break sounds
+                    return metadata.category === 'focus' || metadata.category === 'break';
+                } else {
+                    return metadata.category === 'notification';
+                }
+            })
+            .map(([key, metadata]) => ({ key, metadata }));
+
+        // Group by category for better organization
+        const grouped: { [category: string]: Array<{ key: string; metadata: AudioFile }> } = {};
+        
+        audioItems.forEach(({ key, metadata }) => {
+            const groupName = metadata.category === 'focus' ? 'Focus Sounds' : 
+                             metadata.category === 'break' ? 'Break Sounds' : 
+                             'Notification Sounds';
+            if (!grouped[groupName]) {
+                grouped[groupName] = [];
+            }
+            grouped[groupName].push({ key, metadata });
+        });
+
+        return grouped;
+    }
+
     setVolume(volume: number) {
         // Support 1% increments (0.01 precision)
         const normalizedVolume = Math.max(0, Math.min(1, Math.round(volume * 100) / 100));

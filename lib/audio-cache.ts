@@ -86,23 +86,14 @@ export async function getAvailableAudio() {
         const category = metadata.category as string;
         if (category === 'focus') {
             categories.focus.push(key);
+            // Focus sounds can also be used for breaks
+            categories.break.push(key);
         } else if (category === 'break') {
             categories.break.push(key);
         } else if (category === 'notification') {
             categories.notification.push(key);
         }
     });
-
-    // Ensure 'none' option is always available
-    if (!categories.notification.includes('none')) {
-        categories.notification.unshift('none');
-    }
-    if (!categories.focus.includes('none')) {
-        categories.focus.unshift('none');
-    }
-    if (!categories.break.includes('none')) {
-        categories.break.unshift('none');
-    }
 
     return categories;
 }

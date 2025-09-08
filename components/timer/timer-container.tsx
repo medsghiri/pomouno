@@ -340,16 +340,7 @@ export function TimerContainer({
     // Save session to localStorage for immediate use
     LocalStorage.addSession(session);
 
-    // Save to Firebase if user is authenticated
-    if (user && storageProvider.advanced) {
-      try {
-        await storageProvider.advanced.recordSession(session);
-        console.log("Session saved to Firebase:", session);
-      } catch (error) {
-        console.error("Failed to save session to Firebase:", error);
-      }
-    }
-
+    // The parent component (timer-app) will handle Firebase recording through React Query
     onSessionComplete(session);
 
     // Handle task session completion

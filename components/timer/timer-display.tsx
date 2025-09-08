@@ -8,12 +8,16 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SoundControlPopover } from "./sound-control-popover";
 import { cn } from "@/lib/utils";
 import { Settings } from "@/lib/storage";
 import { useAvailableAudio } from "@/hooks/use-audio-client";
+import { useSettingsMutation } from "@/hooks/use-app-data";
 import AudioService from "@/lib/audio-service";
 import VibrationService from "@/lib/vibration-service";
 
@@ -60,6 +64,9 @@ export function TimerDisplay({
   // Use server-side cached audio data
   const { data: availableAudio = { focus: [], break: [], notification: [] } } = useAvailableAudio();
   
+  // Add settings mutation hook for direct updates
+  const updateSettings = useSettingsMutation();
+  
   const audioService = AudioService.getInstance();
   const vibrationService = VibrationService.getInstance();
 
@@ -67,10 +74,10 @@ export function TimerDisplay({
     setMounted(true);
   }, []);
 
-    // EMERGENCY FIX: Initialize audio service lazily - only when timer starts
+    // EMERGENCY FIX: Initialize audio service immediately so dropdowns work
   useEffect(() => {
-    // CRITICAL: Only initialize when timer is active to prevent unnecessary Firebase calls on page load
-    if (isActive && !audioService.isReady() && typeof window !== 'undefined') {
+    // Initialize audio service immediately for dropdown functionality
+    if (!audioService.isReady() && typeof window !== 'undefined') {
       audioService.initialize().then(() => {
         // Check if service is truly ready with data
         const checkReady = () => {
@@ -90,7 +97,7 @@ export function TimerDisplay({
     // Set volume regardless of initialization status
     audioService.setVolume(settings.soundVolume);
     audioService.setNotificationVolume(settings.notificationVolume);
-  }, [settings.soundVolume, settings.notificationVolume, isActive]); // Added isActive dependency
+  }, [settings.soundVolume, settings.notificationVolume]); // Removed isActive dependency
 
   // Handle audio during timer states using user's selected audio
   useEffect(() => {
@@ -106,8 +113,10 @@ export function TimerDisplay({
         // Start new audio
         if (sessionType === "work" && settings.focusAudio !== "none") {
           audioService.playAudio(settings.focusAudio, false);
-        } else if (sessionType !== "work" && settings.breakAudio !== "none") {
-          audioService.playAudio(settings.breakAudio, false);
+        } else if (sessionType === "shortBreak" && settings.shortBreakAudio !== "none") {
+          audioService.playAudio(settings.shortBreakAudio, false);
+        } else if (sessionType === "longBreak" && settings.longBreakAudio !== "none") {
+          audioService.playAudio(settings.longBreakAudio, false);
         }
       }
     } else if (isPaused) {
@@ -128,7 +137,8 @@ export function TimerDisplay({
     isPaused,
     sessionType,
     settings.focusAudio,
-    settings.breakAudio,
+    settings.shortBreakAudio,
+    settings.longBreakAudio,
     settings.soundVolume,
   ]);
 
@@ -251,29 +261,52 @@ export function TimerDisplay({
   const hasAudioSelected = () => {
     if (sessionType === "work") {
       return settings.focusAudio !== "none";
-    } else {
-      return settings.breakAudio !== "none";
+    } else if (sessionType === "shortBreak") {
+      return settings.shortBreakAudio !== "none";
+    } else if (sessionType === "longBreak") {
+      return settings.longBreakAudio !== "none";
     }
+    return false;
   };
 
   // Get current track info for display
   const currentTrackInfo = audioService.getCurrentTrackInfo();
 
-  // Get available audio for current session type
-  const currentAudioOptions =
-    sessionType === "work" ? availableAudio.focus : availableAudio.break;
+  // Get available audio for current session type using the audio service
+  const getCurrentAudioOptions = () => {
+    if (!isAudioServiceReady) return [];
+    
+    const categoryType = sessionType === "work" ? "focus" : "break";
+    const groupedAudio = audioService.getAudioByCategory(categoryType);
+    
+    // Flatten the grouped audio into a simple array
+    const audioOptions: string[] = [];
+    Object.values(groupedAudio).forEach(audioItems => {
+      audioItems.forEach(({ key }) => audioOptions.push(key));
+    });
+    
+    return audioOptions;
+  };
+
+  const currentAudioOptions = getCurrentAudioOptions();
 
   // Handle audio change
   const handleAudioChange = (newAudioKey: string) => {
     // Update settings based on session type
-    const settingKey = sessionType === "work" ? "focusAudio" : "breakAudio";
+    let settingKey: string;
+    if (sessionType === "work") {
+      settingKey = "focusAudio";
+    } else if (sessionType === "shortBreak") {
+      settingKey = "shortBreakAudio";
+    } else if (sessionType === "longBreak") {
+      settingKey = "longBreakAudio";
+    } else {
+      return; // Unknown session type
+    }
 
-    // Trigger settings update
-    window.dispatchEvent(
-      new CustomEvent("audioChanged", {
-        detail: { [settingKey]: newAudioKey },
-      })
-    );
+    // Update settings directly using React Query
+    const newSettings = { ...settings, [settingKey]: newAudioKey };
+    updateSettings.mutate(newSettings);
 
     // If timer is active, restart with new audio
     if (isActive && settings.soundVolume > 0) {
@@ -285,7 +318,14 @@ export function TimerDisplay({
   };
 
   const getCurrentAudioKey = () => {
-    return sessionType === "work" ? settings.focusAudio : settings.breakAudio;
+    if (sessionType === "work") {
+      return settings.focusAudio;
+    } else if (sessionType === "shortBreak") {
+      return settings.shortBreakAudio;
+    } else if (sessionType === "longBreak") {
+      return settings.longBreakAudio;
+    }
+    return "none";
   };
 
   const getCurrentAudioName = () => {
@@ -453,18 +493,28 @@ export function TimerDisplay({
                   <Check className="w-4 h-4" />
                 )}
               </DropdownMenuItem>
-              {currentAudioOptions.map((audioKey) => (
-                <DropdownMenuItem
-                  key={audioKey}
-                  onClick={() => handleAudioChange(audioKey)}
-                  className="flex items-center justify-between text-gray-900 dark:text-white"
-                >
-                  <span>{audioService.getAudioDisplayName(audioKey)}</span>
-                  {getCurrentAudioKey() === audioKey && (
-                    <Check className="w-4 h-4" />
-                  )}
-                </DropdownMenuItem>
-              ))}
+              {(() => {
+                const categoryType = sessionType === "work" ? "focus" : "break";
+                const groupedAudio = audioService.getAudioByCategory(categoryType);
+                return Object.entries(groupedAudio).map(([groupName, audioItems]) => (
+                  <DropdownMenuGroup key={groupName}>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-gray-600 dark:text-gray-400">{groupName}</DropdownMenuLabel>
+                    {audioItems.map(({ key }) => (
+                      <DropdownMenuItem
+                        key={key}
+                        onClick={() => handleAudioChange(key)}
+                        className="flex items-center justify-between text-gray-900 dark:text-white"
+                      >
+                        <span>{audioService.getAudioDisplayName(key)}</span>
+                        {getCurrentAudioKey() === key && (
+                          <Check className="w-4 h-4" />
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
+                ));
+              })()}
             </DropdownMenuContent>
           </DropdownMenu>
 

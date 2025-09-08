@@ -15,7 +15,7 @@ export interface AudioFile {
   id: string;
   key: string;
   name: string;
-  category: 'focus' | 'notification';
+  category: 'focus' | 'break' | 'notification';
   type: string;
   volume: number;
   loop?: boolean;
@@ -40,7 +40,8 @@ export interface BasicSettings {
   darkMode: boolean;
   // Enhanced audio selection settings
   focusAudio: string;
-  breakAudio: string;
+  shortBreakAudio: string;
+  longBreakAudio: string;
   notificationAudio: string;
   // New playlist settings
   usePlaylistForLofi: boolean;
@@ -121,7 +122,8 @@ const DEFAULT_BASIC_SETTINGS: BasicSettings = {
   darkMode: false,
   // Enhanced audio defaults - notification sound enabled by default
   focusAudio: 'none',
-  breakAudio: 'none',
+  shortBreakAudio: 'none',
+  longBreakAudio: 'none',
   notificationAudio: 'notification-ping',
   // New playlist defaults
   usePlaylistForLofi: true,
@@ -240,7 +242,22 @@ export class LocalStorage {
     if (typeof window === 'undefined') return DEFAULT_SETTINGS;
     const settings = localStorage.getItem('pomouono_settings');
     const parsedSettings = safeJsonParse(settings, {});
-    return { ...DEFAULT_SETTINGS, ...parsedSettings };
+    const mergedSettings = { ...DEFAULT_SETTINGS, ...parsedSettings };
+    
+    // Migration: If old breakAudio exists but new separate break audios don't exist, migrate them
+    const anyParsed = parsedSettings as any;
+    if (anyParsed.breakAudio && 
+        !anyParsed.shortBreakAudio && 
+        !anyParsed.longBreakAudio) {
+      mergedSettings.shortBreakAudio = anyParsed.breakAudio;
+      mergedSettings.longBreakAudio = anyParsed.breakAudio;
+      // Remove the old breakAudio property
+      delete (mergedSettings as any).breakAudio;
+      // Save the migrated settings
+      this.saveSettings(mergedSettings);
+    }
+    
+    return mergedSettings;
   }
 
   static saveSettings(settings: Settings): void {

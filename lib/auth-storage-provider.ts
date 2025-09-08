@@ -76,7 +76,8 @@ export interface BasicSettings {
 
 export interface AudioPreferences {
     focusAudio: string;
-    breakAudio: string;
+    shortBreakAudio: string;
+    longBreakAudio: string;
     notificationAudio: string;
     soundVolume: number;
     notificationVolume: number;
@@ -196,7 +197,8 @@ class BasicStorageServiceImpl implements BasicStorageService {
         if (typeof window === 'undefined') {
             return {
                 focusAudio: 'none',
-                breakAudio: 'none',
+                shortBreakAudio: 'none',
+                longBreakAudio: 'none',
                 notificationAudio: 'notification-ping',
                 soundVolume: 0.5,
                 notificationVolume: 0.7,
@@ -206,7 +208,8 @@ class BasicStorageServiceImpl implements BasicStorageService {
         const settings = LocalStorage.getSettings();
         return {
             focusAudio: settings.focusAudio,
-            breakAudio: settings.breakAudio,
+            shortBreakAudio: settings.shortBreakAudio,
+            longBreakAudio: settings.longBreakAudio,
             notificationAudio: settings.notificationAudio,
             soundVolume: settings.soundVolume,
             notificationVolume: settings.notificationVolume,

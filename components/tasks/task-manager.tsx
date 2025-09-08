@@ -1717,7 +1717,7 @@ export function TaskManager({
                       return (
                         <span
                           className={cn(
-                            "cursor-pointer flex transition-colors items-center gap-1 text-sm font-medium",
+                            "cursor-text flex transition-colors items-center gap-1 text-sm font-medium",
                             isCompleted
                               ? "line-through text-muted-foreground"
                               : showCompleted && !isActionable

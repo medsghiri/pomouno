@@ -16,6 +16,7 @@ export function TaskCompletionEstimation({
   className,
   settings: propSettings,
 }: TaskCompletionEstimationProps) {
+  // Always use the passed settings to ensure reactivity
   const settings = propSettings || LocalStorage.getSettings();
 
   // Only show if the setting is enabled
@@ -135,24 +136,12 @@ export function TaskCompletionEstimation({
   const completionData = calculateCompletionTime();
   const isLongTerm = completionData.totalTimeWithBreaks / 60 > 8; // More than a full work day
 
-  // Format completion time - more compact
+  // Format completion time - show actual times instead of work days
   const formatCompletionTime = (
     date: Date,
     isLongTerm: boolean,
     includeTime: boolean = true
   ) => {
-    if (isLongTerm) {
-      const days = Math.ceil(completionData.totalTimeWithBreaks / (8 * 60)); // 8 hours work day
-      if (days === 1) {
-        return "~1 work day";
-      } else if (days < 7) {
-        return `~${days} work days`;
-      } else {
-        const weeks = Math.ceil(days / 5);
-        return `~${weeks} work week${weeks > 1 ? "s" : ""}`;
-      }
-    }
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -162,10 +151,10 @@ export function TaskCompletionEstimation({
     completionDate.setHours(0, 0, 0, 0);
 
     const timeString = includeTime
-      ? ` ${date.toLocaleTimeString([], {
+      ? ` at ${date.toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
-          hour12: false,
+          hour12: true,
         })}`
       : "";
 
@@ -174,7 +163,13 @@ export function TaskCompletionEstimation({
     } else if (completionDate.getTime() === tomorrow.getTime()) {
       return `Tomorrow${timeString}`;
     } else {
-      return `${date.toLocaleDateString()}${timeString}`;
+      // For dates beyond tomorrow, show the date and time
+      const dateString = date.toLocaleDateString([], {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      });
+      return `${dateString}${timeString}`;
     }
   };
 
@@ -220,19 +215,41 @@ export function TaskCompletionEstimation({
             </div>
           )}
 
-          {/* Completion estimate with breaks */}
-          <div className="flex items-center justify-between border-t border-accent pt-2">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-3 h-3 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Finish:</span>
+          {/* Completion estimates - both with and without breaks */}
+          <div className="space-y-1 border-t border-accent pt-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-3 h-3 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">
+                  {completionData.breakTime > 0 ? "With breaks:" : "Finish:"}
+                </span>
+              </div>
+              <span className="text-sm font-medium text-foreground">
+                {formatCompletionTime(
+                  completionData.withBreaks,
+                  isLongTerm,
+                  true
+                )}
+              </span>
             </div>
-            <span className="text-sm font-medium text-foreground">
-              {formatCompletionTime(
-                completionData.withBreaks,
-                isLongTerm,
-                !isLongTerm
-              )}
-            </span>
+
+            {completionData.breakTime > 0 && (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-3 h-3 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">
+                    Work only:
+                  </span>
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  {formatCompletionTime(
+                    completionData.withoutBreaks,
+                    false,
+                    true
+                  )}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

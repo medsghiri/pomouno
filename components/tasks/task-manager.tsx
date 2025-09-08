@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Plus,
   Trash2,
@@ -86,6 +86,7 @@ import {
   useTaskMutations,
   useCategoryMutations,
   useTodayAggregatedStats,
+  useSettings,
   getStorageService,
 } from "@/hooks/use-app-data";
 
@@ -145,7 +146,9 @@ export function TaskManager({
 
   // SIMPLIFIED: Use static categories - no Firebase calls
   // OPTIMIZED: Use cached categories with minimal Firebase reads
-  const { data: availableCategories = [] } = useTaskCategories(isVisible && !!user); // Only enable categories when visible and authenticated
+  const { data: availableCategories = [] } = useTaskCategories(
+    isVisible && !!user
+  ); // Only enable categories when visible and authenticated
   const categoriesLoading = false;
 
   // Use mutation hooks for optimistic updates
@@ -215,7 +218,10 @@ export function TaskManager({
 
   // REMOVED: Category creation - using static categories only
   const { toast } = useToast();
-  const [settings, setSettings] = useState(LocalStorage.getSettings());
+
+  // FIXED: Use React Query for settings to ensure reactivity
+  const { data: settings } = useSettings();
+  const currentSettings = settings || LocalStorage.getSettings();
 
   // Memoize today's task sessions for better performance
   const todaysTaskSessions = useMemo(() => {
@@ -226,21 +232,6 @@ export function TaskManager({
     });
     return sessionsMap;
   }, [tasks]);
-
-  useEffect(() => {
-    // Listen for settings updates to refresh UI
-    const handleSettingsUpdated = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const updatedSettings = customEvent.detail;
-      setSettings(updatedSettings);
-    };
-
-    window.addEventListener("settingsUpdated", handleSettingsUpdated);
-
-    return () => {
-      window.removeEventListener("settingsUpdated", handleSettingsUpdated);
-    };
-  }, []);
 
   // Category creation functions
   const createCategory = async () => {
@@ -332,11 +323,11 @@ export function TaskManager({
       // Complete the task using mutation hook
       try {
         await completeTask.mutateAsync({ taskId });
-        
+
         // Show animation for task completion
         setCompletedTask(task);
         setShowCompletionAnimation(true);
-        
+
         // Show success toast
         toast({
           title: "Task completed",
@@ -874,21 +865,35 @@ export function TaskManager({
     let filtered;
 
     if (showCompleted) {
-      // When showing completed, show all completed tasks (not just today)
+      // FIXED: When showing completed, show only TODAY's completed tasks
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
       filtered = tasks.filter((task) => {
-        // Regular tasks that are completed
-        if (task.completed) {
-          return true;
+        // Regular tasks that are completed today
+        if (task.completed && task.completedAt) {
+          const completedDate = new Date(task.completedAt);
+          completedDate.setHours(0, 0, 0, 0);
+          return completedDate.getTime() === today.getTime();
         }
 
-        // Recurring tasks that have been completed at least once
+        // Recurring tasks that have been completed today
         if (task.recurring?.enabled && task.recurring.lastCompleted) {
-          return true;
+          const lastCompletedDate = new Date(task.recurring.lastCompleted);
+          lastCompletedDate.setHours(0, 0, 0, 0);
+          return lastCompletedDate.getTime() === today.getTime();
         }
 
-        // Spaced repetition tasks that have been reviewed at least once
-        if (task.spacedRepetition?.enabled && task.spacedRepetition.lastReviewed) {
-          return true;
+        // Spaced repetition tasks that have been reviewed today
+        if (
+          task.spacedRepetition?.enabled &&
+          task.spacedRepetition.lastReviewed
+        ) {
+          const lastReviewedDate = new Date(task.spacedRepetition.lastReviewed);
+          lastReviewedDate.setHours(0, 0, 0, 0);
+          return lastReviewedDate.getTime() === today.getTime();
         }
 
         return false;
@@ -1175,7 +1180,7 @@ export function TaskManager({
       );
     }
     if (showCompleted) {
-      filters.push("Showing completed tasks");
+      filters.push("Showing today's completed tasks");
     }
 
     return filters.join(", ");
@@ -1721,7 +1726,7 @@ export function TaskManager({
                     </Badge>
                   )}
                   {/* Line 4: Progress (if exists) */}
-                  {settings.showTaskEstimation &&
+                  {currentSettings.showTaskEstimation &&
                     !(
                       task.completed ||
                       (task.spacedRepetition?.enabled &&
@@ -1949,7 +1954,10 @@ export function TaskManager({
         </Card>
 
         {/* Task Completion Estimation - positioned at bottom */}
-        <TaskCompletionEstimation tasks={filteredTasks} settings={settings} />
+        <TaskCompletionEstimation
+          tasks={filteredTasks}
+          settings={currentSettings}
+        />
 
         {/* Completed tasks summary */}
         {!showCompleted && completedCount > 0 && (
@@ -2614,10 +2622,14 @@ export function TaskManager({
               <Button
                 type="button"
                 onClick={createCategory}
-                disabled={!newCategoryName.trim() || createTaskCategory.isPending}
+                disabled={
+                  !newCategoryName.trim() || createTaskCategory.isPending
+                }
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white"
               >
-                {createTaskCategory.isPending ? "Creating..." : "Create Category"}
+                {createTaskCategory.isPending
+                  ? "Creating..."
+                  : "Create Category"}
               </Button>
             </div>
           </div>

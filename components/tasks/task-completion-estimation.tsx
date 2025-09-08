@@ -2,7 +2,6 @@
 
 import { Clock, Calendar, CheckCircle, Target, Coffee } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import type { Task } from "@/lib/advanced-storage-service";
 import { LocalStorage } from "@/lib/storage";
 

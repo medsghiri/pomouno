@@ -17,7 +17,8 @@ import {
 } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { db } from './firebase';
-import { PomodoroSession, Task, Settings } from './storage';
+import { PomodoroSession, Settings } from './storage';
+import { Task } from './advanced-storage-service';
 
 // Helper function to remove undefined values from objects
 function removeUndefinedFields(obj: any): any {
@@ -105,17 +106,17 @@ export class FirebaseService {
 
       // 🚀 NEW: Update daily aggregated stats for each new session
       const statsUpdates: Record<string, Partial<Record<string, number>>> = {};
-      
+
       newSessions.forEach(session => {
         const dateString = new Date(session.timestamp).toISOString().split('T')[0];
-        
+
         if (!statsUpdates[dateString]) {
           statsUpdates[dateString] = {};
         }
-        
+
         const stats = statsUpdates[dateString];
         stats.totalSessions = (stats.totalSessions || 0) + 1;
-        
+
         // Increment session type counts
         if (session.type === 'work') {
           stats.workSessions = (stats.workSessions || 0) + 1;
@@ -125,7 +126,7 @@ export class FirebaseService {
         } else if (session.type === 'long-break') {
           stats.longBreakSessions = (stats.longBreakSessions || 0) + 1;
         }
-        
+
         // Count break reminders
         if (session.breakRemindersShown) {
           stats.breakRemindersShown = (stats.breakRemindersShown || 0) + session.breakRemindersShown.length;
@@ -134,12 +135,12 @@ export class FirebaseService {
           stats.breakRemindersCompleted = (stats.breakRemindersCompleted || 0) + session.breakRemindersCompleted.length;
         }
       });
-      
+
       // Update daily stats for each date
       const statsPromises = Object.entries(statsUpdates).map(([dateString, increments]) =>
         this.incrementDailyAggregatedStats(user, dateString, increments)
       );
-      
+
       await Promise.all(statsPromises);
 
     } catch (error) {
@@ -314,37 +315,49 @@ export class FirebaseService {
   // Update single task efficiently
   static async updateTask(user: User, taskId: string, updates: Partial<Task>) {
     const taskRef = doc(db, 'users', user.uid, 'tasks', taskId);
-    
+
     // Get current task state to understand the transition
     const currentTaskSnap = await getDoc(taskRef);
     let wasAlreadyCompleted = false;
-    
+    let currentTask: any = null;
+
     if (currentTaskSnap.exists()) {
-      wasAlreadyCompleted = currentTaskSnap.data().completed === true;
+      currentTask = currentTaskSnap.data();
+      wasAlreadyCompleted = currentTask.completed === true;
     }
-    
+
     const isBeingCompleted = updates.completed === true;
     const isBeingUncompleted = updates.completed === false;
-    
+
+    // FIXED: Detect recurring task completion by checking if lastCompleted is being updated
+    const isRecurringTaskCompleted = updates.recurringLastCompleted &&
+      (!currentTask?.recurringLastCompleted ||
+        updates.recurringLastCompleted !== currentTask.recurringLastCompleted);
+
+    // FIXED: Detect spaced repetition task completion by checking if lastReviewed is being updated
+    const isSpacedRepetitionTaskCompleted = updates.spacedRepetitionLastReviewed &&
+      (!currentTask?.spacedRepetitionLastReviewed ||
+        updates.spacedRepetitionLastReviewed !== currentTask.spacedRepetitionLastReviewed);
+
     const cleanUpdates = removeUndefinedFields({
       ...updates,
       updatedAt: serverTimestamp(),
       status: updates.completed ? 'completed' : 'active',
       completedAt: isBeingCompleted && !wasAlreadyCompleted ? serverTimestamp() : undefined
     });
-    
+
     await updateDoc(taskRef, cleanUpdates);
-    
+
     // 🚀 Update daily stats based on task state changes
     const today = new Date().toISOString().split('T')[0];
-    
-    if (isBeingCompleted && !wasAlreadyCompleted) {
-      // Task is being completed (increment)
+
+    if ((isBeingCompleted && !wasAlreadyCompleted) || isRecurringTaskCompleted || isSpacedRepetitionTaskCompleted) {
+      // Task is being completed (increment) - includes regular, recurring, and spaced repetition tasks
       await this.incrementDailyAggregatedStats(user, today, {
         tasksCompleted: 1
       });
     } else if (isBeingUncompleted && wasAlreadyCompleted) {
-      // Task is being uncompleted (decrement)
+      // Task is being uncompleted (decrement) - only for regular tasks
       await this.incrementDailyAggregatedStats(user, today, {
         tasksCompleted: -1
       });
@@ -726,11 +739,11 @@ export class FirebaseService {
     try {
       const dailyStatsRef = doc(db, 'users', user.uid, 'dailyStats', dateString);
       const docSnap = await getDoc(dailyStatsRef);
-      
+
       if (docSnap.exists()) {
         return { id: docSnap.id, ...docSnap.data() };
       }
-      
+
       // If document doesn't exist, try to backfill from existing data for today only
       if (dateString === new Date().toISOString().split('T')[0]) {
         console.log('Backfilling today\'s stats from existing data...');
@@ -739,7 +752,7 @@ export class FirebaseService {
           return backfilledStats;
         }
       }
-      
+
       // Return default stats if no data exists
       return {
         id: dateString,
@@ -797,7 +810,7 @@ export class FirebaseService {
       sessionsSnapshot.docs.forEach(doc => {
         const session = doc.data();
         totalSessions++;
-        
+
         if (session.type === 'work') {
           workSessions++;
           focusTimeMinutes += session.duration || 0;
@@ -806,7 +819,7 @@ export class FirebaseService {
         } else if (session.type === 'long-break') {
           longBreakSessions++;
         }
-        
+
         if (session.breakRemindersShown) {
           breakRemindersShown += session.breakRemindersShown.length;
         }
@@ -837,7 +850,7 @@ export class FirebaseService {
         // Save the backfilled stats
         const dailyStatsRef = doc(db, 'users', user.uid, 'dailyStats', dateString);
         await setDoc(dailyStatsRef, stats);
-        
+
         console.log('Backfilled daily stats:', stats);
         return { id: dateString, ...stats };
       }
@@ -851,10 +864,10 @@ export class FirebaseService {
 
   static async getMultipleDailyAggregatedStats(user: User, dateStrings: string[]): Promise<any[]> {
     try {
-      const dailyStatsPromises = dateStrings.map(dateString => 
+      const dailyStatsPromises = dateStrings.map(dateString =>
         this.getDailyAggregatedStats(user, dateString)
       );
-      
+
       const results = await Promise.all(dailyStatsPromises);
       return results.filter(stat => stat !== null);
     } catch (error) {
@@ -864,14 +877,14 @@ export class FirebaseService {
   }
 
   static async updateDailyAggregatedStats(
-    user: User, 
-    dateString: string, 
+    user: User,
+    dateString: string,
     updates: Partial<any>
   ): Promise<void> {
     try {
       const dailyStatsRef = doc(db, 'users', user.uid, 'dailyStats', dateString);
       const docSnap = await getDoc(dailyStatsRef);
-      
+
       if (docSnap.exists()) {
         // Update existing document
         await updateDoc(dailyStatsRef, {
@@ -894,7 +907,7 @@ export class FirebaseService {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         };
-        
+
         await setDoc(dailyStatsRef, {
           ...defaultStats,
           ...updates
@@ -907,25 +920,25 @@ export class FirebaseService {
   }
 
   static async incrementDailyAggregatedStats(
-    user: User, 
-    dateString: string, 
+    user: User,
+    dateString: string,
     increments: Partial<Record<string, number>>
   ): Promise<void> {
     try {
       const dailyStatsRef = doc(db, 'users', user.uid, 'dailyStats', dateString);
       const docSnap = await getDoc(dailyStatsRef);
-      
+
       if (docSnap.exists()) {
         const currentData = docSnap.data();
         const updates: any = { updatedAt: serverTimestamp() };
-        
+
         // Apply increments to existing values
         Object.entries(increments).forEach(([key, value]) => {
           if (typeof value === 'number') {
             updates[key] = (currentData[key] || 0) + value;
           }
         });
-        
+
         await updateDoc(dailyStatsRef, updates);
       } else {
         // Create new document with incremented values
@@ -943,14 +956,14 @@ export class FirebaseService {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         };
-        
+
         // Apply increments to default values
         Object.entries(increments).forEach(([key, value]) => {
           if (typeof value === 'number' && key in defaultStats) {
             (defaultStats as any)[key] = (defaultStats as any)[key] + value;
           }
         });
-        
+
         await setDoc(dailyStatsRef, defaultStats);
       }
     } catch (error) {

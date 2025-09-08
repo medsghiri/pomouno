@@ -661,18 +661,28 @@ export class AdvancedStorageService {
                 const reviewCount = (currentTask.spacedRepetition.reviewCount || 0) + 1;
                 const easeFactor = currentTask.spacedRepetition.easeFactor || 2.5;
 
-                const { nextReviewDate, newInterval, easeFactor: newEaseFactor } = 
+                const { nextReviewDate, newInterval, easeFactor: newEaseFactor } =
                     this.calculateNextSpacedRepetitionReview(difficulty, currentInterval, reviewCount, easeFactor);
+
+                const now = Date.now();
 
                 updates.spacedRepetition = {
                     ...currentTask.spacedRepetition,
-                    lastReviewed: Date.now(),
+                    lastReviewed: now,
                     nextReviewDate: nextReviewDate.getTime(),
                     interval: newInterval,
                     reviewCount,
                     easeFactor: newEaseFactor,
                     difficulty: difficulty
                 };
+
+                // FIXED: Also update flattened fields for Firebase compatibility
+                updates.spacedRepetitionLastReviewed = now;
+                updates.spacedRepetitionNextReviewDate = nextReviewDate.getTime();
+                updates.spacedRepetitionInterval = newInterval;
+                updates.spacedRepetitionReviewCount = reviewCount;
+                updates.spacedRepetitionEaseFactor = newEaseFactor;
+                updates.spacedRepetitionDifficulty = difficulty;
 
                 // For spaced repetition, mark as incomplete again since it's a review
                 updates.completed = false;
@@ -681,12 +691,17 @@ export class AdvancedStorageService {
             // Handle recurring tasks
             if (currentTask.recurring?.enabled) {
                 const nextDate = this.calculateNextRecurringDate(Date.now(), currentTask.recurring, currentTask);
-                
+                const now = Date.now();
+
                 updates.recurring = {
                     ...currentTask.recurring,
-                    lastCompleted: Date.now(),
+                    lastCompleted: now,
                     nextDue: nextDate.getTime()
                 };
+
+                // FIXED: Also update flattened fields for Firebase compatibility
+                updates.recurringLastCompleted = now;
+                updates.recurringNextDue = nextDate.getTime();
 
                 // For recurring tasks, mark as incomplete again for next occurrence
                 updates.completed = false;
@@ -699,18 +714,18 @@ export class AdvancedStorageService {
 
             // Use FirebaseService to ensure daily stats are updated
             await FirebaseService.updateTask(this.user, taskId, updates);
-            
+
             // Invalidate cache to ensure fresh data
             this.invalidateCache('tasks');
-            
+
             // Get the updated task
             const tasks = await this.getTasks();
             const completedTask = tasks.find(t => t.id === taskId);
-            
+
             if (!completedTask) {
                 throw new Error('Task not found after completion');
             }
-            
+
             return completedTask;
         } catch (error) {
             console.error('Failed to complete task:', error);
@@ -722,18 +737,18 @@ export class AdvancedStorageService {
         try {
             // Use FirebaseService to ensure daily stats are updated
             await FirebaseService.updateTask(this.user, taskId, { completed: false });
-            
+
             // Invalidate cache to ensure fresh data
             this.invalidateCache('tasks');
-            
+
             // Get the updated task
             const tasks = await this.getTasks();
             const uncompletedTask = tasks.find(t => t.id === taskId);
-            
+
             if (!uncompletedTask) {
                 throw new Error('Task not found after uncompleting');
             }
-            
+
             return uncompletedTask;
         } catch (error) {
             console.error('Failed to uncomplete task:', error);

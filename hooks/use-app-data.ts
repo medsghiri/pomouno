@@ -57,11 +57,11 @@ const storageServiceInstances = new Map<string, AdvancedStorageService>();
 // Export the singleton getter for use in components
 export function getStorageService(user: any): AdvancedStorageService | null {
     if (!user?.uid) return null;
-    
+
     if (!storageServiceInstances.has(user.uid)) {
         storageServiceInstances.set(user.uid, new AdvancedStorageService(user));
     }
-    
+
     return storageServiceInstances.get(user.uid) || null;
 }
 
@@ -176,7 +176,7 @@ export function useBreakReminders(enabled: boolean = false) {
 
 export function useBreakReminder(reminderId: string) {
     const { data: breakReminders = [] } = useBreakReminders(true);
-    
+
     return useMemo(() => {
         return breakReminders.find(reminder => reminder.id === reminderId) || null;
     }, [breakReminders, reminderId]);
@@ -279,7 +279,7 @@ export function useTodayAggregatedStats(enabled: boolean = true) {
         queryKey: queryKeys.dailyAggregatedStats(user?.uid || '', today),
         queryFn: async () => {
             if (!user) throw new Error('User not authenticated');
-            
+
             // Read only 1 document instead of 100+ sessions!
             return await FirebaseService.getDailyAggregatedStats(user, today);
         },
@@ -303,7 +303,7 @@ export function useDailyAggregatedStats(date: string, enabled: boolean = true) {
         queryKey: queryKeys.dailyAggregatedStats(user?.uid || '', date),
         queryFn: async () => {
             if (!user) throw new Error('User not authenticated');
-            
+
             return await FirebaseService.getDailyAggregatedStats(user, date);
         },
         enabled: enabled && !!user,
@@ -321,7 +321,7 @@ export function useDailyAggregatedStats(date: string, enabled: boolean = true) {
 export function useMultipleDailyStats(dates: string[], enabled: boolean = true) {
     const { user } = useAuth();
     const today = getTodayString();
-    
+
     // Use React Query's ability to run multiple queries in parallel
     const queries = dates.map(date => {
         const isPast = date < today;
@@ -346,7 +346,7 @@ export function useMultipleDailyStats(dates: string[], enabled: boolean = true) 
     const isLoading = queries.some(q => q.isLoading);
     const isError = queries.some(q => q.isError);
     const errors = queries.filter(q => q.isError).map(q => q.error);
-    
+
     const data = queries.map((query, index) => {
         return query.data || {
             date: dates[index],
@@ -373,7 +373,7 @@ export function useMultipleDailyStats(dates: string[], enabled: boolean = true) 
 
 export function useWeeklyAggregatedStats(enabled: boolean = false) {
     const { user } = useAuth();
-    
+
     // Generate last 7 days date strings
     const dateStrings = useMemo(() => {
         const dates = [];
@@ -392,13 +392,13 @@ export function useWeeklyAggregatedStats(enabled: boolean = false) {
 export function useMonthlyAggregatedStats(currentDate: Date, enabled: boolean = false) {
     const { user } = useAuth();
     const monthKey = currentDate.getFullYear() + '-' + (currentDate.getMonth() + 1).toString().padStart(2, '0');
-    
+
     // Generate month's date strings - memoized based on month/year
     const dateStrings = useMemo(() => {
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
         const daysInMonth = new Date(year, month + 1, 0).getDate();
-        
+
         const dates = [];
         for (let day = 1; day <= daysInMonth; day++) {
             const date = new Date(year, month, day);
@@ -531,7 +531,7 @@ export function useTaskMutations() {
                 return old.map((task: any) => {
                     if (task.id === taskId) {
                         const now = Date.now();
-                        
+
                         // Handle different task types
                         if (task.spacedRepetition?.enabled) {
                             // Spaced repetition tasks: update lastReviewed but keep as incomplete
@@ -542,6 +542,9 @@ export function useTaskMutations() {
                                     lastReviewed: now,
                                     reviewCount: (task.spacedRepetition.reviewCount || 0) + 1
                                 },
+                                // FIXED: Also update flattened fields for immediate filtering
+                                spacedRepetitionLastReviewed: now,
+                                spacedRepetitionReviewCount: (task.spacedRepetition.reviewCount || 0) + 1,
                                 completed: false // Spaced repetition tasks remain incomplete
                             };
                         } else if (task.recurring?.enabled) {
@@ -552,6 +555,8 @@ export function useTaskMutations() {
                                     ...task.recurring,
                                     lastCompleted: now
                                 },
+                                // FIXED: Also update flattened fields for immediate filtering
+                                recurringLastCompleted: now,
                                 completed: false // Recurring tasks remain incomplete
                             };
                         } else {
@@ -567,7 +572,7 @@ export function useTaskMutations() {
                 });
             });
 
-            // Optimistically update stats
+            // Optimistically update stats - increment for all task completions (regular, recurring, spaced repetition)
             queryClient.setQueryData(queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString()), (old: any) => {
                 if (!old) return old;
                 return {
@@ -590,13 +595,13 @@ export function useTaskMutations() {
         },
         onSettled: () => {
             // Always invalidate and refetch to ensure consistency with server state
-            queryClient.invalidateQueries({ 
+            queryClient.invalidateQueries({
                 queryKey: queryKeys.tasks(user?.uid || ''),
                 refetchType: 'active' // Only refetch active queries
             });
             // Invalidate stats to update counts immediately
             if (user?.uid) {
-                queryClient.invalidateQueries({ 
+                queryClient.invalidateQueries({
                     queryKey: queryKeys.dailyAggregatedStats(user.uid, getTodayString()),
                     refetchType: 'active' // Only refetch active queries
                 });
@@ -621,8 +626,8 @@ export function useTaskMutations() {
             // Optimistically update tasks
             queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), (old: any) => {
                 if (!old) return old;
-                return old.map((task: any) => 
-                    task.id === taskId 
+                return old.map((task: any) =>
+                    task.id === taskId
                         ? { ...task, completed: false, completedAt: null }
                         : task
                 );
@@ -651,12 +656,12 @@ export function useTaskMutations() {
         },
         onSettled: () => {
             // Invalidate tasks and stats for immediate updates
-            queryClient.invalidateQueries({ 
+            queryClient.invalidateQueries({
                 queryKey: queryKeys.tasks(user?.uid || '')
             });
             // Invalidate stats to update counts immediately
             if (user?.uid) {
-                queryClient.invalidateQueries({ 
+                queryClient.invalidateQueries({
                     queryKey: queryKeys.dailyAggregatedStats(user.uid, getTodayString())
                 });
             }
@@ -709,7 +714,7 @@ export function useSessionMutations() {
                         breakRemindersCompleted: (session as any).breakRemindersCompleted?.length || 0,
                     };
                 }
-                
+
                 return {
                     ...old,
                     totalSessions: (old.totalSessions || 0) + 1,
@@ -733,10 +738,10 @@ export function useSessionMutations() {
         onSuccess: () => {
             // Invalidate queries to ensure consistency
             if (user?.uid) {
-                queryClient.invalidateQueries({ 
+                queryClient.invalidateQueries({
                     queryKey: queryKeys.sessions(user.uid)
                 });
-                queryClient.invalidateQueries({ 
+                queryClient.invalidateQueries({
                     queryKey: queryKeys.dailyAggregatedStats(user.uid, getTodayString())
                 });
             }

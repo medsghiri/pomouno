@@ -8,7 +8,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar as CalendarIcon, Target, CheckCircle, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { Task, TodaysStats } from "@/lib/storage";
+import { TodaysStats } from "@/lib/storage";
+import type { Task } from "@/lib/advanced-storage-service";
 import { useTasks, useSessions } from "@/hooks/use-app-data";
 
 interface CalendarDialogProps {
@@ -24,7 +25,10 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
 
   // Use optimized hooks for data fetching - ENABLED when dialog is open
   const { data: tasks = [], isLoading: tasksLoading } = useTasks(open); // Only load when dialog is open
-  const { data: sessions = [], isLoading: sessionsLoading } = useSessions(100, open); // Only load when dialog is open
+  const { data: sessions = [], isLoading: sessionsLoading } = useSessions(
+    100,
+    open
+  ); // Only load when dialog is open
 
   const loading = tasksLoading || sessionsLoading;
 

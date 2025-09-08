@@ -910,10 +910,11 @@ export function TaskManager({
 
         // Recurring tasks - show if scheduled for today and not completed today
         if (task.recurring?.enabled) {
+          // FIXED: Only show if the task is due and available (not completed today)
           return isRecurringTaskDueAndAvailable(task);
         }
 
-        // Spaced repetition tasks - show if due for review (including overdue tasks)
+        // Spaced repetition tasks - show if due for review and not reviewed today
         if (task.spacedRepetition?.enabled) {
           const now = new Date();
           now.setHours(0, 0, 0, 0);
@@ -937,7 +938,7 @@ export function TaskManager({
           const isDue = nextReview.getTime() <= now.getTime();
           const canReview = canCompleteSpacedRepetitionTask(task);
 
-          // Show if due (including overdue) and can be reviewed
+          // FIXED: Only show if due (including overdue) and can be reviewed (not reviewed today)
           return isDue && canReview;
         }
 

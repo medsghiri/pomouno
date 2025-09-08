@@ -10,6 +10,7 @@ import { LocalStorage, PomodoroSession } from "@/lib/storage";
 import { useAuth } from "@/lib/auth-context";
 import { TimerSession } from "@/lib/auth-storage-provider";
 import { useToast } from "@/hooks/use-toast";
+import { useSettings } from "@/hooks/use-app-data";
 import AudioService from "@/lib/audio-service";
 import VibrationService from "@/lib/vibration-service";
 import NotificationService from "@/lib/notification-service";
@@ -44,7 +45,8 @@ export function TimerWithTitle({
   >("work");
   const [currentSession, setCurrentSession] = useState(1);
   const [totalSessions, setTotalSessions] = useState(4);
-  const [settings, setSettings] = useState(LocalStorage.getSettings());
+  const { data: settingsData } = useSettings();
+  const settings = settingsData || LocalStorage.getSettings();
   const [currentTask, setCurrentTask] = useState<any | null>(null);
   const [showBreakReminders, setShowBreakReminders] = useState(false);
   const [breakRemindersCompleted, setBreakRemindersCompleted] = useState<
@@ -179,58 +181,8 @@ export function TimerWithTitle({
     };
   }, [isActive, isPaused, sessionType]);
 
-  // Listen for settings updates
+  // Update timer when settings change
   useEffect(() => {
-    const handleSettingsUpdate = (event: CustomEvent) => {
-      const newSettings = event.detail;
-      setSettings((prevSettings) => {
-        if (JSON.stringify(prevSettings) !== JSON.stringify(newSettings)) {
-          return newSettings;
-        }
-        return prevSettings;
-      });
-    };
-
-    const handleAudioChange = (event: CustomEvent) => {
-      const audioChanges = event.detail;
-      setSettings((prevSettings) => {
-        const updatedSettings = { ...prevSettings, ...audioChanges };
-        if (JSON.stringify(prevSettings) !== JSON.stringify(updatedSettings)) {
-          LocalStorage.saveSettings(updatedSettings);
-          return updatedSettings;
-        }
-        return prevSettings;
-      });
-    };
-
-    window.addEventListener(
-      "settingsUpdated",
-      handleSettingsUpdate as EventListener
-    );
-    window.addEventListener("audioChanged", handleAudioChange as EventListener);
-
-    return () => {
-      window.removeEventListener(
-        "settingsUpdated",
-        handleSettingsUpdate as EventListener
-      );
-      window.removeEventListener(
-        "audioChanged",
-        handleAudioChange as EventListener
-      );
-    };
-  }, []);
-
-  // Load settings and update timer when settings change
-  useEffect(() => {
-    const currentSettings = LocalStorage.getSettings();
-    setSettings((prevSettings) => {
-      if (JSON.stringify(prevSettings) !== JSON.stringify(currentSettings)) {
-        return currentSettings;
-      }
-      return prevSettings;
-    });
-
     let duration: number;
     switch (sessionType) {
       case "work":
@@ -246,13 +198,10 @@ export function TimerWithTitle({
         duration = settings.workDuration * 60;
     }
 
-    if (!isActive) {
-      setTimeLeft(duration);
-      setTotalTime(duration);
-    }
-
+    setTotalTime(duration);
+    setTimeLeft(duration);
     setTotalSessions(settings.sessionsUntilLongBreak);
-  }, [settings, sessionType, isActive]);
+  }, [settings, sessionType]);
 
   // Update current task when selectedTask changes
   useEffect(() => {

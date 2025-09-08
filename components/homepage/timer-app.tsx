@@ -124,35 +124,14 @@ export function TimerApp({
       LocalStorage.resetAllDailySessions();
       localStorage.setItem("pomouono_last_daily_reset", today);
     }
+  }, [user]);
 
-    // Load theme settings
-    const settings = LocalStorage.getSettings();
+  // Update UI when settings change via React Query
+  useEffect(() => {
     setIsDarkMode(settings.darkMode);
     setDailyGoal(settings.dailySessionGoal);
     setShowDailyGoal(settings.showDailyGoal);
-  }, [user]);
-
-  // Listen for theme changes and settings updates
-  useEffect(() => {
-    const handleSettingsUpdate = (event: CustomEvent) => {
-      const settings = event.detail;
-      setIsDarkMode(settings.darkMode);
-      setDailyGoal(settings.dailySessionGoal);
-      setShowDailyGoal(settings.showDailyGoal);
-    };
-
-    window.addEventListener(
-      "settingsUpdated",
-      handleSettingsUpdate as EventListener
-    );
-
-    return () => {
-      window.removeEventListener(
-        "settingsUpdated",
-        handleSettingsUpdate as EventListener
-      );
-    };
-  }, []);
+  }, [settings]);
 
   const handleAuthSuccess = useCallback(async () => {
     if (!user) return;

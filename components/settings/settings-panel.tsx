@@ -12,9 +12,7 @@ import { NumberPicker } from "@/components/ui/number-picker";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -547,23 +545,15 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                   </SelectTrigger>
                   <SelectContent className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
                     <SelectItem value="none">No Sound</SelectItem>
-                    {(() => {
-                      const groupedAudio = audioService.getAudioByCategory('focus');
-                      return Object.entries(groupedAudio).map(([groupName, audioItems]) => (
-                        <SelectGroup key={groupName}>
-                          <SelectLabel className="text-gray-600 dark:text-gray-400">{groupName}</SelectLabel>
-                          {audioItems.map(({ key }) => (
-                            <SelectItem
-                              key={key}
-                              value={key}
-                              className="text-gray-900 dark:text-white"
-                            >
-                              {audioService.getAudioDisplayName(key)}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      ));
-                    })()}
+                    {availableAudio.focus.map((audioKey) => (
+                      <SelectItem
+                        key={audioKey}
+                        value={audioKey}
+                        className="text-gray-900 dark:text-white"
+                      >
+                        {audioService.getAudioDisplayName(audioKey)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 {settings.focusAudio !== "none" && (
@@ -614,23 +604,15 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                   </SelectTrigger>
                   <SelectContent className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
                     <SelectItem value="none">No Sound</SelectItem>
-                    {(() => {
-                      const groupedAudio = audioService.getAudioByCategory('break');
-                      return Object.entries(groupedAudio).map(([groupName, audioItems]) => (
-                        <SelectGroup key={groupName}>
-                          <SelectLabel className="text-gray-600 dark:text-gray-400">{groupName}</SelectLabel>
-                          {audioItems.map(({ key }) => (
-                            <SelectItem
-                              key={key}
-                              value={key}
-                              className="text-gray-900 dark:text-white"
-                            >
-                              {audioService.getAudioDisplayName(key)}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      ));
-                    })()}
+                    {availableAudio.break.map((audioKey) => (
+                      <SelectItem
+                        key={audioKey}
+                        value={audioKey}
+                        className="text-gray-900 dark:text-white"
+                      >
+                        {audioService.getAudioDisplayName(audioKey)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 {settings.shortBreakAudio !== "none" && (
@@ -681,23 +663,15 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                   </SelectTrigger>
                   <SelectContent className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
                     <SelectItem value="none">No Sound</SelectItem>
-                    {(() => {
-                      const groupedAudio = audioService.getAudioByCategory('break');
-                      return Object.entries(groupedAudio).map(([groupName, audioItems]) => (
-                        <SelectGroup key={groupName}>
-                          <SelectLabel className="text-gray-600 dark:text-gray-400">{groupName}</SelectLabel>
-                          {audioItems.map(({ key }) => (
-                            <SelectItem
-                              key={key}
-                              value={key}
-                              className="text-gray-900 dark:text-white"
-                            >
-                              {audioService.getAudioDisplayName(key)}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      ));
-                    })()}
+                    {availableAudio.break.map((audioKey) => (
+                      <SelectItem
+                        key={audioKey}
+                        value={audioKey}
+                        className="text-gray-900 dark:text-white"
+                      >
+                        {audioService.getAudioDisplayName(audioKey)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 {settings.longBreakAudio !== "none" && (
@@ -748,23 +722,15 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                   </SelectTrigger>
                   <SelectContent className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
                     <SelectItem value="none">No Sound</SelectItem>
-                    {(() => {
-                      const groupedAudio = audioService.getAudioByCategory('notification');
-                      return Object.entries(groupedAudio).map(([groupName, audioItems]) => (
-                        <SelectGroup key={groupName}>
-                          <SelectLabel className="text-gray-600 dark:text-gray-400">{groupName}</SelectLabel>
-                          {audioItems.map(({ key }) => (
-                            <SelectItem
-                              key={key}
-                              value={key}
-                              className="text-gray-900 dark:text-white"
-                            >
-                              {audioService.getAudioDisplayName(key)}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      ));
-                    })()}
+                    {availableAudio.notification.map((audioKey) => (
+                      <SelectItem
+                        key={audioKey}
+                        value={audioKey}
+                        className="text-gray-900 dark:text-white"
+                      >
+                        {audioService.getAudioDisplayName(audioKey)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 {settings.notificationAudio !== "none" && (

@@ -1,6 +1,3 @@
-import { Clock, Target, Brain, TrendingUp } from 'lucide-react';
-import { Logo } from '@/components/logo';
-
 export function HeroSection() {
     return (
         <div className="text-center space-y-8 py-4">
@@ -25,10 +22,10 @@ export function HeroSection() {
                 </h2>
                 <p className="text-muted-foreground mb-4">
                     Start with just one 25-minute session. Pick a task, hit start, and see how much you can get done when
-                    you're truly focused. You might surprise yourself!
+                    you&apos;re truly focused. You might surprise yourself!
                 </p>
                 <p className="text-sm text-muted-foreground italic">
-                    "The secret to getting ahead is getting started." - Mark Twain
+                    &quot;The secret to getting ahead is getting started.&quot; - Mark Twain
                 </p>
             </div>
 

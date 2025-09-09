@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { Plus, Trash2, Edit3, Coffee, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -31,7 +31,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { IconSelector, IconItem } from "@/components/ui/icon-selector";
 import type {
   BreakReminder,
-  BreakReminderCategory,
   CreateBreakReminderRequest,
 } from "@/lib/advanced-storage-service";
 import {
@@ -40,11 +39,10 @@ import {
   useTodaysBreakReminderCompletions,
   useBreakReminderMutations,
   useCategoryMutations,
-  getStorageService,
 } from "@/hooks/use-app-data";
 
 // SIMPLIFIED: Use static default categories only (matching use-app-data.ts)
-const DEFAULT_CATEGORIES = [
+const _DEFAULT_CATEGORIES = [
   { id: "hydration", name: "Hydration", icon: "💧", color: "#3B82F6" },
   { id: "movement", name: "Movement", icon: "🏃", color: "#10B981" },
   { id: "rest", name: "Rest", icon: "💜", color: "#8B5CF6" },

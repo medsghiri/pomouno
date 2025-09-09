@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth-context';
 import { AdvancedStorageService } from '@/lib/advanced-storage-service';
 import type {
@@ -281,14 +281,28 @@ export function useTodayAggregatedStats(enabled: boolean = true) {
             if (!user) throw new Error('User not authenticated');
 
             // Read only 1 document instead of 100+ sessions!
-            return await FirebaseService.getDailyAggregatedStats(user, today);
+            const data = await FirebaseService.getDailyAggregatedStats(user, today);
+            
+            // Mark the data as fresh from backend
+            return {
+                ...data,
+                _lastFetched: Date.now()
+            };
         },
         enabled: enabled && !!user,
-        staleTime: 5 * 60 * 1000, // 5 minutes - today's stats update frequently
-        gcTime: 30 * 60 * 1000, // 30 minutes
+        staleTime: Infinity, // Never consider this data stale to prevent automatic refetches
+        gcTime: 60 * 60 * 1000, // 1 hour
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
         refetchOnMount: false,
+        refetchInterval: false,
+        retry: 1,
+        retryDelay: 2000,
+        // Use a select function to preserve optimistic updates
+        select: (data) => {
+            // Always return the data as-is since we handle merging in mutations
+            return data;
+        }
     });
 }
 
@@ -322,24 +336,26 @@ export function useMultipleDailyStats(dates: string[], enabled: boolean = true) 
     const { user } = useAuth();
     const today = getTodayString();
 
-    // Use React Query's ability to run multiple queries in parallel
-    const queries = dates.map(date => {
-        const isPast = date < today;
-        return useQuery({
-            queryKey: queryKeys.dailyAggregatedStats(user?.uid || '', date),
-            queryFn: async () => {
-                if (!user) throw new Error('User not authenticated');
-                return await FirebaseService.getDailyAggregatedStats(user, date);
-            },
-            enabled: enabled && !!user,
-            // 🚀 INFINITE CACHING: Past days cached forever, today updates frequently
-            staleTime: isPast ? Infinity : 5 * 60 * 1000,
-            gcTime: isPast ? Infinity : 30 * 60 * 1000,
-            refetchOnWindowFocus: isPast ? false : false,
-            refetchOnReconnect: isPast ? false : false,
-            refetchOnMount: isPast ? false : false,
-            refetchInterval: isPast ? false : false,
-        });
+    // Use React Query's useQueries for dynamic number of queries
+    const queries = useQueries({
+        queries: dates.map(date => {
+            const isPast = date < today;
+            return {
+                queryKey: queryKeys.dailyAggregatedStats(user?.uid || '', date),
+                queryFn: async () => {
+                    if (!user) throw new Error('User not authenticated');
+                    return await FirebaseService.getDailyAggregatedStats(user, date);
+                },
+                enabled: enabled && !!user,
+                // 🚀 INFINITE CACHING: Past days cached forever, today updates frequently
+                staleTime: isPast ? Infinity : 5 * 60 * 1000,
+                gcTime: isPast ? Infinity : 30 * 60 * 1000,
+                refetchOnWindowFocus: isPast ? false : false,
+                refetchOnReconnect: isPast ? false : false,
+                refetchOnMount: isPast ? false : false,
+                refetchInterval: isPast ? false : false,
+            };
+        }),
     });
 
     // Combine results with loading and error states
@@ -486,8 +502,62 @@ export function useTaskMutations() {
             if (!storageService) throw new Error('Not authenticated');
             return await storageService.createTask(taskData);
         },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.tasks(user?.uid || '') });
+        onMutate: async (taskData) => {
+            // Cancel any outgoing refetches
+            await queryClient.cancelQueries({ queryKey: queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString()) });
+
+            // Snapshot the previous value
+            const previousStats = queryClient.getQueryData(queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString()));
+
+            // Optimistically update the stats for task creation
+            queryClient.setQueryData(queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString()), (old: any) => {
+                if (!old) return old;
+                return {
+                    ...old,
+                    tasksCreated: (old.tasksCreated || 0) + 1
+                };
+            });
+
+            return { previousStats };
+        },
+        onSuccess: (data, variables) => {
+            // Update task creation count permanently
+            const todayKey = queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString());
+            
+            queryClient.setQueryData(todayKey, (old: any) => {
+                if (!old) {
+                    return {
+                        date: getTodayString(),
+                        totalSessions: 0,
+                        workSessions: 0,
+                        shortBreakSessions: 0,
+                        longBreakSessions: 0,
+                        focusTimeMinutes: 0,
+                        tasksCompleted: 0,
+                        tasksCreated: 1,
+                        breakRemindersShown: 0,
+                        breakRemindersCompleted: 0,
+                        _lastUpdated: Date.now()
+                    };
+                }
+                return {
+                    ...old,
+                    tasksCreated: (old.tasksCreated || 0) + 1,
+                    _lastUpdated: Date.now()
+                };
+            });
+
+            // Only invalidate tasks, never the stats
+            queryClient.invalidateQueries({ 
+                queryKey: queryKeys.tasks(user?.uid || '') 
+            });
+        },
+        onError: (err, taskData, context) => {
+            console.error('Task creation failed:', err);
+            // If the mutation fails, rollback
+            if (context?.previousStats) {
+                queryClient.setQueryData(queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString()), context.previousStats);
+            }
         },
     });
 
@@ -584,27 +654,47 @@ export function useTaskMutations() {
             // Return a context object with the snapshotted values
             return { previousTasks, previousStats };
         },
+        onSuccess: (data, variables) => {
+            // Update task completion count permanently
+            const todayKey = queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString());
+            
+            queryClient.setQueryData(todayKey, (old: any) => {
+                if (!old) {
+                    return {
+                        date: getTodayString(),
+                        totalSessions: 0,
+                        workSessions: 0,
+                        shortBreakSessions: 0,
+                        longBreakSessions: 0,
+                        focusTimeMinutes: 0,
+                        tasksCompleted: 1,
+                        tasksCreated: 0,
+                        breakRemindersShown: 0,
+                        breakRemindersCompleted: 0,
+                        _lastUpdated: Date.now()
+                    };
+                }
+                return {
+                    ...old,
+                    tasksCompleted: (old.tasksCompleted || 0) + 1,
+                    _lastUpdated: Date.now()
+                };
+            });
+
+            // Only invalidate tasks, never the stats
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.tasks(user?.uid || ''),
+                refetchType: 'active'
+            });
+        },
         onError: (err, newTask, context) => {
+            console.error('Task completion failed:', err);
             // If the mutation fails, use the context returned from onMutate to roll back
             if (context?.previousTasks) {
                 queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), context.previousTasks);
             }
             if (context?.previousStats) {
                 queryClient.setQueryData(queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString()), context.previousStats);
-            }
-        },
-        onSettled: () => {
-            // Always invalidate and refetch to ensure consistency with server state
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.tasks(user?.uid || ''),
-                refetchType: 'active' // Only refetch active queries
-            });
-            // Invalidate stats to update counts immediately
-            if (user?.uid) {
-                queryClient.invalidateQueries({
-                    queryKey: queryKeys.dailyAggregatedStats(user.uid, getTodayString()),
-                    refetchType: 'active' // Only refetch active queries
-                });
             }
         },
     });
@@ -645,25 +735,32 @@ export function useTaskMutations() {
             // Return a context object with the snapshotted values
             return { previousTasks, previousStats };
         },
+        onSuccess: (data, variables) => {
+            // Update task completion count permanently (decrement)
+            const todayKey = queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString());
+            
+            queryClient.setQueryData(todayKey, (old: any) => {
+                if (!old) return old;
+                return {
+                    ...old,
+                    tasksCompleted: Math.max((old.tasksCompleted || 0) - 1, 0),
+                    _lastUpdated: Date.now()
+                };
+            });
+
+            // Only invalidate tasks, never the stats
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.tasks(user?.uid || '')
+            });
+        },
         onError: (err, taskId, context) => {
+            console.error('Task uncompletion failed:', err);
             // If the mutation fails, use the context returned from onMutate to roll back
             if (context?.previousTasks) {
                 queryClient.setQueryData(queryKeys.tasks(user?.uid || ''), context.previousTasks);
             }
             if (context?.previousStats) {
                 queryClient.setQueryData(queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString()), context.previousStats);
-            }
-        },
-        onSettled: () => {
-            // Invalidate tasks and stats for immediate updates
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.tasks(user?.uid || '')
-            });
-            // Invalidate stats to update counts immediately
-            if (user?.uid) {
-                queryClient.invalidateQueries({
-                    queryKey: queryKeys.dailyAggregatedStats(user.uid, getTodayString())
-                });
             }
         },
     });
@@ -690,62 +787,51 @@ export function useSessionMutations() {
             }
             return await storageService.recordSession(session);
         },
-        onMutate: async (session: PomodoroSession) => {
-            // Cancel any outgoing refetches
-            await queryClient.cancelQueries({ queryKey: queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString()) });
-
-            // Snapshot the previous value
-            const previousStats = queryClient.getQueryData(queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString()));
-
-            // Optimistically update the stats
-            queryClient.setQueryData(queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString()), (old: any) => {
+        onSuccess: (data, variables) => {
+            // Update stats optimistically and permanently
+            const todayKey = queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString());
+            
+            queryClient.setQueryData(todayKey, (old: any) => {
                 if (!old) {
-                    // Create initial stats object if it doesn't exist
                     return {
                         date: getTodayString(),
                         totalSessions: 1,
-                        workSessions: session.type === 'work' ? 1 : 0,
-                        shortBreakSessions: session.type === 'short-break' ? 1 : 0,
-                        longBreakSessions: session.type === 'long-break' ? 1 : 0,
-                        focusTimeMinutes: session.type === 'work' ? session.duration : 0,
+                        workSessions: variables.type === 'work' ? 1 : 0,
+                        shortBreakSessions: variables.type === 'short-break' ? 1 : 0,
+                        longBreakSessions: variables.type === 'long-break' ? 1 : 0,
+                        focusTimeMinutes: variables.type === 'work' ? variables.duration : 0,
                         tasksCompleted: 0,
                         tasksCreated: 0,
-                        breakRemindersShown: (session as any).breakRemindersShown?.length || 0,
-                        breakRemindersCompleted: (session as any).breakRemindersCompleted?.length || 0,
+                        breakRemindersShown: (variables as any).breakRemindersShown?.length || 0,
+                        breakRemindersCompleted: (variables as any).breakRemindersCompleted?.length || 0,
+                        _lastUpdated: Date.now()
                     };
                 }
 
                 return {
                     ...old,
                     totalSessions: (old.totalSessions || 0) + 1,
-                    workSessions: (old.workSessions || 0) + (session.type === 'work' ? 1 : 0),
-                    shortBreakSessions: (old.shortBreakSessions || 0) + (session.type === 'short-break' ? 1 : 0),
-                    longBreakSessions: (old.longBreakSessions || 0) + (session.type === 'long-break' ? 1 : 0),
-                    focusTimeMinutes: (old.focusTimeMinutes || 0) + (session.type === 'work' ? session.duration : 0),
-                    breakRemindersShown: (old.breakRemindersShown || 0) + ((session as any).breakRemindersShown?.length || 0),
-                    breakRemindersCompleted: (old.breakRemindersCompleted || 0) + ((session as any).breakRemindersCompleted?.length || 0),
+                    workSessions: (old.workSessions || 0) + (variables.type === 'work' ? 1 : 0),
+                    shortBreakSessions: (old.shortBreakSessions || 0) + (variables.type === 'short-break' ? 1 : 0),
+                    longBreakSessions: (old.longBreakSessions || 0) + (variables.type === 'long-break' ? 1 : 0),
+                    focusTimeMinutes: (old.focusTimeMinutes || 0) + (variables.type === 'work' ? variables.duration : 0),
+                    breakRemindersShown: (old.breakRemindersShown || 0) + ((variables as any).breakRemindersShown?.length || 0),
+                    breakRemindersCompleted: (old.breakRemindersCompleted || 0) + ((variables as any).breakRemindersCompleted?.length || 0),
+                    _lastUpdated: Date.now()
                 };
             });
 
-            return { previousStats };
-        },
-        onError: (err, session, context) => {
-            // If the mutation fails, rollback
-            if (context?.previousStats) {
-                queryClient.setQueryData(queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString()), context.previousStats);
-            }
-        },
-        onSuccess: () => {
-            // Invalidate queries to ensure consistency
+            // Only invalidate session list, never the stats
             if (user?.uid) {
                 queryClient.invalidateQueries({
-                    queryKey: queryKeys.sessions(user.uid)
-                });
-                queryClient.invalidateQueries({
-                    queryKey: queryKeys.dailyAggregatedStats(user.uid, getTodayString())
+                    queryKey: queryKeys.sessions(user.uid),
+                    exact: false
                 });
             }
         },
+        onError: (error) => {
+            console.error('Session recording failed:', error);
+        }
     });
 
     return {

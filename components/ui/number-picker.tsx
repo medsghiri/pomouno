@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 interface NumberPickerProps {
   value: number;
-  onChange: (value: number) => void;
+  onChange: (_value: number) => void;
   min: number;
   max: number;
   step?: number;

@@ -66,7 +66,7 @@ export default function TermsPage() {
 
                 <h2>Limitation of Liability</h2>
                 <p>
-                    PomoUno is provided "as is" without warranties of any kind. We shall not be liable for any indirect, incidental, special, consequential, or punitive damages.
+                    PomoUno is provided &ldquo;as is&rdquo; without warranties of any kind. We shall not be liable for any indirect, incidental, special, consequential, or punitive damages.
                 </p>
 
                 <h2>User Content</h2>

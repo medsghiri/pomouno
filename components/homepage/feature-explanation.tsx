@@ -13,7 +13,7 @@ export function FeatureExplanation() {
                         <h3 className="text-xl font-semibold">Science-Backed Technique</h3>
                     </div>
                     <p className="text-muted-foreground leading-relaxed mb-4">
-                        The Pomodoro Technique isn't just a productivity fad - it's based on real research about how
+                        The Pomodoro Technique isn&apos;t just a productivity fad - it&apos;s based on real research about how
                         our brains work best. The 25-minute work periods align with natural attention spans, while
                         regular breaks prevent mental fatigue and maintain creativity.
                     </p>
@@ -36,7 +36,7 @@ export function FeatureExplanation() {
                     </p>
                     <p className="text-muted-foreground leading-relaxed">
                         Create an account to sync your data across devices, or use it completely anonymously with
-                        local storage. Your productivity journey shouldn't cost money - it should save you time.
+                        local storage. Your productivity journey shouldn&apos;t cost money - it should save you time.
                     </p>
                 </div>
             </div>
@@ -53,8 +53,8 @@ export function FeatureExplanation() {
                         </div>
                         <h4 className="font-semibold text-foreground mb-2">Task Management</h4>
                         <p className="text-sm text-muted-foreground">
-                            Create tasks, estimate how many sessions they'll take, and track your progress.
-                            See exactly how much work you've put into each project.
+                            Create tasks, estimate how many sessions they&apos;ll take, and track your progress.
+                            See exactly how much work you&apos;ve put into each project.
                         </p>
                     </div>
 

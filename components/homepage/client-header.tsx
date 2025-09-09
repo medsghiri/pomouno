@@ -20,9 +20,9 @@ export function ClientHeader({
   onCalendarClick,
 }: ClientHeaderProps) {
   const router = useRouter();
-  const statisticsAccess = useFeatureAccess("statistics");
-  const tasksAccess = useFeatureAccess("tasks");
-  const breakRemindersAccess = useFeatureAccess("break-reminders");
+  const _statisticsAccess = useFeatureAccess("statistics");
+  const _tasksAccess = useFeatureAccess("tasks");
+  const _breakRemindersAccess = useFeatureAccess("break-reminders");
 
   const handleAuthClick = () => {
     router.push("/auth");

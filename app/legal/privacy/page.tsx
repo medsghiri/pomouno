@@ -42,7 +42,7 @@ export default function PrivacyPage() {
                     <li><strong>Error logs</strong> - Technical errors to improve the service</li>
                 </ul>
 
-                <h3>Information We Don't Collect</h3>
+                <h3>Information We Don&apos;t Collect</h3>
                 <p>We explicitly do not collect:</p>
                 <ul>
                     <li>Personal identification beyond email</li>
@@ -56,7 +56,7 @@ export default function PrivacyPage() {
                 <p>We use your information solely to:</p>
                 <ul>
                     <li><strong>Provide the service</strong> - Timer functionality, task management, and statistics</li>
-                    <li><strong>Sync your data</strong> - Across your devices when you're signed in</li>
+                    <li><strong>Sync your data</strong> - Across your devices when you&apos;re signed in</li>
                     <li><strong>Improve the app</strong> - Fix bugs and add features based on usage patterns</li>
                     <li><strong>Communicate with you</strong> - Respond to support requests and important updates</li>
                 </ul>
@@ -65,7 +65,7 @@ export default function PrivacyPage() {
 
                 <h3>Local-First Approach</h3>
                 <p>
-                    PomoUno is designed with a "local-first" philosophy. Your data is primarily stored on your device using browser local storage. This means:
+                    PomoUno is designed with a &ldquo;local-first&rdquo; philosophy. Your data is primarily stored on your device using browser local storage. This means:
                 </p>
                 <ul>
                     <li>The app works offline without an internet connection</li>
@@ -97,7 +97,7 @@ export default function PrivacyPage() {
                     We do not sell, trade, or rent your personal information to third parties. We only share data in these limited circumstances:
                 </p>
                 <ul>
-                    <li><strong>Firebase/Google</strong> - For authentication and data storage (covered by Google's privacy policy)</li>
+                    <li><strong>Firebase/Google</strong> - For authentication and data storage (covered by Google&apos;s privacy policy)</li>
                     <li><strong>Legal requirements</strong> - If required by law or to protect our rights</li>
                     <li><strong>Service providers</strong> - Only if necessary for core functionality, under strict privacy agreements</li>
                 </ul>
@@ -123,7 +123,7 @@ export default function PrivacyPage() {
                     We use minimal cookies and primarily rely on browser local storage. See our <Link href="/legal/cookies" className="text-red-600 dark:text-red-400 hover:underline">Cookie Policy</Link> for detailed information.
                 </p>
 
-                <h2>Children's Privacy</h2>
+                <h2>Children&apos;s Privacy</h2>
                 <p>
                     PomoUno is suitable for users of all ages, including students. We do not knowingly collect personal information from children under 13 without parental consent. If you believe we have collected such information, please contact us immediately.
                 </p>
@@ -139,7 +139,7 @@ export default function PrivacyPage() {
                 </p>
                 <ul>
                     <li>Posting the updated policy on this page</li>
-                    <li>Updating the "Last updated" date</li>
+                    <li>Updating the &ldquo;Last updated&rdquo; date</li>
                     <li>Sending an email notification for significant changes (if you have an account)</li>
                 </ul>
 

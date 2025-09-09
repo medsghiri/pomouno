@@ -4,12 +4,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { TimerDisplay } from "@/components/timer/timer-display";
 import { BreakReminderDisplay } from "@/components/timer/break-reminder-display";
 import { DynamicTitle } from "./dynamic-title";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { auth } from "@/lib/firebase";
 import { LocalStorage, PomodoroSession } from "@/lib/storage";
 import { useAuth } from "@/lib/auth-context";
 import { TimerSession } from "@/lib/auth-storage-provider";
-import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/use-app-data";
 import AudioService from "@/lib/audio-service";
 import VibrationService from "@/lib/vibration-service";
@@ -52,14 +49,12 @@ export function TimerWithTitle({
   const [currentSessionId, setCurrentSessionId] = useState<string>("");
   const [isSessionRestored, setIsSessionRestored] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false); // Track if component has been initialized
-  const { toast } = useToast();
   const { storageProvider } = useAuth();
   
   const audioService = AudioService.getInstance();
   const vibrationService = VibrationService.getInstance();
   const notificationService = NotificationService.getInstance();
   const breakRemindersTriggered = useRef<string | null>(null);
-  const [user] = useAuthState(auth);
 
   // Restore session on component mount - MUST RUN FIRST
   useEffect(() => {
@@ -190,16 +185,6 @@ export function TimerWithTitle({
     setCurrentTask(selectedTask);
   }, [selectedTask]);
 
-  // Auto-start timer when shouldAutoStart is true
-  useEffect(() => {
-    if (shouldAutoStart && !isActive && sessionType === "work") {
-      handleStart();
-      if (onAutoStartComplete) {
-        onAutoStartComplete();
-      }
-    }
-  }, [shouldAutoStart, isActive, sessionType]);
-
   // Show break reminders when break session becomes active (handles auto-start case)
   useEffect(() => {
     if (
@@ -216,22 +201,32 @@ export function TimerWithTitle({
     }
   }, [isActive, sessionType]);
 
-  // Timer logic
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-
-    if (isActive && !isPaused && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft((timeLeft) => timeLeft - 1);
-      }, 1000);
-    } else if (timeLeft === 0 && isActive) {
-      handleSessionEnd();
+  const handleStart = useCallback(async () => {
+    // Request notification permission on first use
+    if (settings.notifications) {
+      await notificationService.requestPermissionOnFirstUse();
     }
 
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isActive, isPaused, timeLeft]);
+    if (!isActive) {
+      setCurrentSessionId(Date.now().toString());
+    }
+    setIsActive(true);
+    setIsPaused(false);
+
+    // Break reminders are now handled by useEffect that watches isActive + sessionType
+
+    // Resume audio if it was paused
+    audioService.resumeAudio();
+
+    // Vibrate on start
+    vibrationService.timerStart();
+  }, [
+    isActive,
+    audioService,
+    vibrationService,
+    notificationService,
+    settings.notifications,
+  ]);
 
   const handleSessionEnd = useCallback(async () => {
     setIsActive(false);
@@ -331,35 +326,26 @@ export function TimerWithTitle({
     audioService,
     vibrationService,
     notificationService,
+    storageProvider.basic,
+    handleStart,
   ]);
 
-  const handleStart = useCallback(async () => {
-    // Request notification permission on first use
-    if (settings.notifications) {
-      await notificationService.requestPermissionOnFirstUse();
+  // Timer logic
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+
+    if (isActive && !isPaused && timeLeft > 0) {
+      interval = setInterval(() => {
+        setTimeLeft((timeLeft) => timeLeft - 1);
+      }, 1000);
+    } else if (timeLeft === 0 && isActive) {
+      handleSessionEnd();
     }
 
-    if (!isActive) {
-      setCurrentSessionId(Date.now().toString());
-    }
-    setIsActive(true);
-    setIsPaused(false);
-
-    // Break reminders are now handled by useEffect that watches isActive + sessionType
-
-    // Resume audio if it was paused
-    audioService.resumeAudio();
-
-    // Vibrate on start
-    vibrationService.timerStart();
-  }, [
-    isActive,
-    sessionType,
-    audioService,
-    vibrationService,
-    notificationService,
-    settings.notifications,
-  ]);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isActive, isPaused, timeLeft, handleSessionEnd]);
 
   const handlePause = useCallback(() => {
     setIsPaused(!isPaused);
@@ -370,7 +356,7 @@ export function TimerWithTitle({
       audioService.resumeAudio();
       vibrationService.buttonPress();
     }
-  }, [isPaused, sessionType, audioService, vibrationService]);
+  }, [isPaused, audioService, vibrationService]);
 
   const handleReset = useCallback(() => {
     setIsActive(false);
@@ -401,11 +387,21 @@ export function TimerWithTitle({
     setTotalTime(duration);
   }, [sessionType, settings, audioService, vibrationService, storageProvider]);
 
-  const handleSkip = useCallback(() => {
+  const _handleSkip = useCallback(() => {
     if (isActive) {
       handleSessionEnd();
     }
   }, [isActive, handleSessionEnd]);
+
+  // Auto-start timer when shouldAutoStart is true
+  useEffect(() => {
+    if (shouldAutoStart && !isActive && sessionType === "work") {
+      handleStart();
+      if (onAutoStartComplete) {
+        onAutoStartComplete();
+      }
+    }
+  }, [shouldAutoStart, isActive, sessionType, handleStart, onAutoStartComplete]);
 
   return (
     <>

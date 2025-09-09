@@ -6,7 +6,7 @@ import { Logo } from "@/components/logo";
 
 interface SessionSelectorProps {
   value: number;
-  onChange: (value: number) => void;
+  onChange: (_value: number) => void;
   max?: number;
   className?: string;
 }

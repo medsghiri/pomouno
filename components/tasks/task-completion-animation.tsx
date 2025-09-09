@@ -15,7 +15,7 @@ interface TaskCompletionAnimationProps {
 
 export function TaskCompletionAnimation({
     isVisible,
-    taskTitle,
+    taskTitle: _taskTitle,
     taskType,
     onAnimationComplete,
     nextReviewDate,

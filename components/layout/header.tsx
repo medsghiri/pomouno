@@ -13,7 +13,6 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { MobileMenu } from "./mobile-menu";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
 import {
   User,
   LogOut,
@@ -24,7 +23,6 @@ import {
   Calendar,
 } from "lucide-react";
 import { useAuth, useFeatureAccess } from "@/lib/auth-context";
-import { useToast } from "@/hooks/use-toast";
 
 interface HeaderProps {
   onAuthClick: () => void;
@@ -48,7 +46,6 @@ export function Header({
   const tasksAccess = useFeatureAccess("tasks");
   const breakRemindersAccess = useFeatureAccess("break-reminders");
   const [mounted, setMounted] = useState(false);
-  const { toast } = useToast();
 
   useEffect(() => {
     setMounted(true);

@@ -87,7 +87,7 @@ export function TaskCompletionDialog({
             Focus Session Complete!
           </DialogTitle>
           <DialogDescription>
-            Great work! You've completed a focus session.
+            Great work! You&apos;ve completed a focus session.
           </DialogDescription>
         </DialogHeader>
 
@@ -273,9 +273,10 @@ export function TaskCompletionDialog({
                     return "next month";
                   case "specific-days":
                     return "on the next scheduled day";
-                  case "custom":
+                  case "custom": {
                     const interval = task.recurring?.interval || 1;
                     return `in ${interval} day${interval > 1 ? "s" : ""}`;
+                  }
                   default:
                     return "according to its schedule";
                 }

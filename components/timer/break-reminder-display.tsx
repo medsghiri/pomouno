@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
-import type { BreakReminder } from "@/lib/advanced-storage-service";
 import {
   useBreakReminders,
   useTodaysBreakReminderCompletions,
@@ -84,7 +83,7 @@ export function BreakReminderDisplay({
       const reminderIds = reminders.map((r) => r.id);
       onRemindersCompleted([], reminderIds);
     }
-  }, [isVisible]); // Only depend on isVisible to avoid loops
+  }, [isVisible, reminders, onRemindersCompleted]); // Only depend on isVisible to avoid loops
 
   // Report completions when they change
   useEffect(() => {
@@ -93,7 +92,7 @@ export function BreakReminderDisplay({
       const reminderIds = reminders.map((r) => r.id);
       onRemindersCompleted(completedArray, reminderIds);
     }
-  }, [completedReminders.size]); // Only depend on the size to avoid loops
+  }, [completedReminders, isVisible, onRemindersCompleted, reminders]); // Only depend on the size to avoid loops
 
   const getCategoryInfo = (categoryId: string) => {
     const category = DEFAULT_CATEGORIES.find(
@@ -124,17 +123,17 @@ export function BreakReminderDisplay({
     }
   };
 
-  // Don't show if user is not authenticated
-  if (!user) {
-    return null;
-  }
-
   const handleClose = useCallback(() => {
     setIsManuallyDismissed(true);
     if (onClose) {
       onClose();
     }
   }, [onClose]);
+
+  // Don't show if user is not authenticated
+  if (!user) {
+    return null;
+  }
 
   const shouldShowDialog =
     isVisible &&

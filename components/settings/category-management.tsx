@@ -1,21 +1,20 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { IconSelector, IconItem } from '@/components/ui/icon-selector';
-import { Plus, Trash2, Edit3, Tag, Palette } from 'lucide-react';
+import { Plus, Trash2, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '@/lib/firebase';
 import { getStorageService } from '@/hooks/use-app-data';
-import type { AdvancedStorageService, TaskCategory, BreakReminderCategory, CreateCategoryRequest } from '@/lib/advanced-storage-service';
+import type { TaskCategory, BreakReminderCategory, CreateCategoryRequest } from '@/lib/advanced-storage-service';
 
 // Default color palette for categories
 const DEFAULT_COLORS = [
@@ -56,10 +55,9 @@ export function CategoryManagement({ onCategoriesChange }: CategoryManagementPro
     const [categoryName, setCategoryName] = useState('');
     const [categoryColor, setCategoryColor] = useState(DEFAULT_COLORS[0]);
     const [categoryIcon, setCategoryIcon] = useState<IconItem | null>(null);
-    const [editingCategory, setEditingCategory] = useState<TaskCategory | BreakReminderCategory | null>(null);
 
     // Load categories
-    const loadCategories = async () => {
+    const loadCategories = useCallback(async () => {
         if (!user) return;
 
         try {
@@ -88,20 +86,19 @@ export function CategoryManagement({ onCategoriesChange }: CategoryManagementPro
         } finally {
             setLoading(false);
         }
-    };
+    }, [user, toast]);
 
     useEffect(() => {
         if (user) {
             loadCategories();
         }
-    }, [user]);
+    }, [user, loadCategories]);
 
     // Reset form
     const resetForm = () => {
         setCategoryName('');
         setCategoryColor(DEFAULT_COLORS[0]);
         setCategoryIcon(null);
-        setEditingCategory(null);
     };
 
     // Handle create category
@@ -282,7 +279,7 @@ export function CategoryManagement({ onCategoriesChange }: CategoryManagementPro
                                             <AlertDialogHeader>
                                                 <AlertDialogTitle>Delete Category</AlertDialogTitle>
                                                 <AlertDialogDescription>
-                                                    Are you sure you want to delete "{category.name}"? This action cannot be undone.
+                                                    Are you sure you want to delete &quot;{category.name}&quot;? This action cannot be undone.
                                                 </AlertDialogDescription>
                                             </AlertDialogHeader>
                                             <AlertDialogFooter>
@@ -359,7 +356,7 @@ export function CategoryManagement({ onCategoriesChange }: CategoryManagementPro
                                             <AlertDialogHeader>
                                                 <AlertDialogTitle>Delete Category</AlertDialogTitle>
                                                 <AlertDialogDescription>
-                                                    Are you sure you want to delete "{category.name}"? This action cannot be undone.
+                                                    Are you sure you want to delete &quot;{category.name}&quot;? This action cannot be undone.
                                                 </AlertDialogDescription>
                                             </AlertDialogHeader>
                                             <AlertDialogFooter>

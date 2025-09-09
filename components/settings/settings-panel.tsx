@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -16,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { LocalStorage, Settings } from "@/lib/storage";
+import { Settings } from "@/lib/storage";
 import { CategoryManagement } from "./category-management";
 import {
   RotateCcw,
@@ -25,12 +24,9 @@ import {
   Clock,
   Play,
   Pause,
-  Music,
-  List,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
-import { UpgradePrompt } from "@/components/auth/upgrade-prompt";
 import { useSettings, useSettingsMutation } from "@/hooks/use-app-data";
 import { useAvailableAudio } from "@/hooks/use-audio-client";
 import AudioService from "@/lib/audio-service";
@@ -61,7 +57,7 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
-  const { user, storageProvider } = useAuth();
+  const { user, storageProvider: _storageProvider } = useAuth();
   const { data: settingsData } = useSettings();
   const settings = settingsData || DEFAULT_SETTINGS;
   const updateSettings = useSettingsMutation();
@@ -98,7 +94,7 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
     return () => {
       audioService.removeVolumeChangeCallback(handleVolumeChange);
     };
-  }, [isUserChanging, settings, updateSettings]);
+  }, [isUserChanging, settings, updateSettings, audioService]);
 
   const handleSettingChange = async (key: keyof Settings, value: any) => {
     setIsUserChanging(true); // Prevent external updates during user changes
@@ -219,12 +215,12 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
     return () => {
       audioService.stopPreview();
     };
-  }, []);
+  }, [audioService]);
 
   // Use React Query hook for available audio instead of service call
 
   // Check if any audio is enabled
-  const hasAudioEnabled = () => {
+  const _hasAudioEnabled = () => {
     return (
       settings.focusAudio !== "none" ||
       settings.shortBreakAudio !== "none" ||

@@ -20,11 +20,11 @@ interface DifficultySelectionDialogProps {
 }
 
 export function DifficultySelectionDialog({
-  open,
+  open: _open,
   onOpenChange,
   taskTitle,
   onDifficultySelect,
-  currentInterval = 1,
+  currentInterval: _currentInterval = 1,
 }: DifficultySelectionDialogProps) {
   const [selectedDifficulty, setSelectedDifficulty] = useState<
     "easy" | "medium" | "hard" | null
@@ -44,10 +44,10 @@ export function DifficultySelectionDialog({
     switch (difficulty) {
       case "easy":
         // Easy: Increase interval significantly (2.5x factor), minimum 4 days
-        return Math.max(Math.ceil(currentInterval * 2.5), 4);
+        return Math.max(Math.ceil(_currentInterval * 2.5), 4);
       case "medium":
         // Medium: Moderate increase (1.3x factor), minimum 2 days
-        return Math.max(Math.ceil(currentInterval * 1.3), 2);
+        return Math.max(Math.ceil(_currentInterval * 1.3), 2);
       case "hard":
         // Hard: Reset to 1 day (fixed)
         return 1;
@@ -88,7 +88,7 @@ export function DifficultySelectionDialog({
   ];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={_open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg p-6">
         <DialogHeader className="text-center space-y-3">
           <DialogTitle className="flex items-center justify-center gap-2 text-lg font-semibold text-foreground">
@@ -96,7 +96,7 @@ export function DifficultySelectionDialog({
             How difficult was this review?
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Your answer affects when you'll see "{taskTitle}" again
+            Your answer affects when you&apos;ll see &quot;{taskTitle}&quot; again
           </DialogDescription>
         </DialogHeader>
 

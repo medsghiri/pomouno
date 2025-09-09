@@ -68,8 +68,8 @@ import { SessionSelector } from "@/components/ui/session-selector";
 import { DaySelector } from "@/components/ui/day-selector";
 import { IconSelector, IconItem } from "@/components/ui/icon-selector";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { LocalStorage, TaskUtils } from "@/lib/storage";
-import type { Task, TaskCategory } from "@/lib/advanced-storage-service";
+import { LocalStorage } from "@/lib/storage";
+import type { Task } from "@/lib/advanced-storage-service";
 import { TaskCompletionAnimation } from "./task-completion-animation";
 import { DifficultySelectionDialog } from "./difficulty-selection-dialog";
 import { TaskCompletionEstimation } from "./task-completion-estimation";
@@ -82,12 +82,10 @@ import { useAuth } from "@/lib/auth-context";
 import {
   useTasks,
   useTaskCategories,
-  useTodaysTaskSessions,
   useTaskMutations,
   useCategoryMutations,
   useTodayAggregatedStats,
   useSettings,
-  getStorageService,
 } from "@/hooks/use-app-data";
 
 // Utility function to truncate text
@@ -97,7 +95,7 @@ const truncateText = (text: string, maxLength: number): string => {
 };
 
 // SIMPLIFIED: Static categories only - no Firebase queries needed
-const DEFAULT_TASK_CATEGORIES = [
+const _DEFAULT_TASK_CATEGORIES = [
   { id: "work", name: "Work", color: "#3B82F6", icon: "💼" },
   { id: "personal", name: "Personal", color: "#10B981", icon: "🏠" },
   { id: "study", name: "Study", color: "#8B5CF6", icon: "📚" },
@@ -224,7 +222,7 @@ export function TaskManager({
   const currentSettings = settings || LocalStorage.getSettings();
 
   // Memoize today's task sessions for better performance
-  const todaysTaskSessions = useMemo(() => {
+  const _todaysTaskSessions = useMemo(() => {
     const sessionsMap: Record<string, number> = {};
     tasks.forEach((task) => {
       // This will be populated by individual task session queries when needed
@@ -624,11 +622,12 @@ export function TaskManager({
           isScheduledForToday =
             task.recurring.daysOfWeek?.includes(todayDay) || false;
           break;
-        case "weekly":
+        case "weekly": {
           // For weekly, check if it's the same day of week as when task was created
           const createdDate = new Date(task.createdAt);
           isScheduledForToday = todayDay === createdDate.getDay();
           break;
+        }
         case "custom":
           // For custom interval, check if enough days have passed since last completion
           if (task.recurring.lastCompleted) {
@@ -1081,7 +1080,7 @@ export function TaskManager({
             return isTaskDueToday(task);
           });
           break;
-        case "week":
+        case "week": {
           const weekFromNow = new Date();
           weekFromNow.setDate(weekFromNow.getDate() + 7);
           filtered = filtered.filter((task) => {
@@ -1101,6 +1100,7 @@ export function TaskManager({
             return dueDate.getTime() <= weekFromNow.getTime();
           });
           break;
+        }
         case "no-date":
           filtered = filtered.filter((task) => {
             // Recurring and spaced repetition tasks always have effective due dates
@@ -1244,7 +1244,7 @@ export function TaskManager({
 
   // Use optimized aggregated stats
   const completedCount = todaysStats?.data?.tasksCompleted || 0;
-  const totalSessions = todaysStats?.data?.totalSessions || 0;
+  const totalSessions = todaysStats?.data?.workSessions || 0;
 
   // Show active tasks count (tasks that are currently available to work on)
   const activeTasks = getFilteredTasks();
@@ -2474,7 +2474,7 @@ export function TaskManager({
                     <div className="text-sm text-muted-foreground">
                       <p>✨ This task will use spaced repetition learning</p>
                       <p className="text-xs mt-1">
-                        You'll rate the difficulty after each review to optimize
+                        You&apos;ll rate the difficulty after each review to optimize
                         future intervals
                       </p>
                     </div>

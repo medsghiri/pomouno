@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,13 +11,13 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import {
-  BarChart,
   Bar,
   XAxis,
   YAxis,
   ResponsiveContainer,
-  LineChart,
   Line,
+  ComposedChart,
+  Legend,
 } from "recharts";
 import {
   Clock,
@@ -32,8 +32,6 @@ import {
   Activity,
   Coffee,
 } from "lucide-react";
-import { LocalStorage, TodaysStats } from "@/lib/storage";
-import type { Task } from "@/lib/advanced-storage-service";
 import { FeatureGate } from "@/components/auth/feature-gate";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -41,7 +39,6 @@ import {
   useWeeklyAggregatedStats,
   useMonthlyAggregatedStats,
   useBreakReminders,
-  useTodaysBreakReminderCompletions,
   useBreakReminderCompletionCounts,
   useBreakReminderCategories,
 } from "@/hooks/use-app-data";
@@ -63,22 +60,15 @@ export function StatsDisplay() {
   );
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // 🔥 NEW: Use ultra-efficient aggregated stats hooks - Only load data for active tab!
-  const { data: todayStats } = useTodayAggregatedStats(activeTab === "today");
-  const { data: weeklyStats } = useWeeklyAggregatedStats(activeTab === "week");
+  // 🔥 NEW: Use ultra-efficient aggregated stats hooks - Always call hooks, use enabled flag
+  const { data: todayStats } = useTodayAggregatedStats(true); // Always load today's stats
+  const { data: weeklyStats } = useWeeklyAggregatedStats(true); // Always load weekly stats  
   const { data: monthlyStats } = useMonthlyAggregatedStats(
     currentDate,
-    activeTab === "month"
+    true // Always load monthly stats
   );
-  const breakReminderStats = useBreakReminderCompletionCounts(
-    activeTab === "today"
-  ); // Only load for today tab
-  const { data: breakReminders = [] } = useBreakReminders(
-    activeTab === "today"
-  ); // Get full reminder data for colors/categories
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const breakReminderStats = useBreakReminderCompletionCounts(true); // Always load
+  const { data: breakReminders = [] } = useBreakReminders(true); // Always load
 
   // No need for manual data loading - hooks handle everything with optimized caching
 
@@ -158,8 +148,8 @@ export function StatsDisplay() {
           averageSessionsPerDay: 0,
         };
 
-      const totalSessions = stats.reduce(
-        (sum: number, stat: any) => sum + (stat.totalSessions || 0),
+      const totalWorkSessions = stats.reduce(
+        (sum: number, stat: any) => sum + (stat.workSessions || 0),
         0
       );
       const totalFocusTime = stats.reduce(
@@ -171,16 +161,16 @@ export function StatsDisplay() {
         0
       );
       const activeDays = stats.filter(
-        (stat: any) => (stat.totalSessions || 0) > 0
+        (stat: any) => (stat.workSessions || 0) > 0
       ).length;
 
       return {
-        totalSessions,
+        totalSessions: totalWorkSessions,
         totalFocusTime,
         totalTasksCompleted,
         activeDays,
         averageSessionsPerDay:
-          activeDays > 0 ? Math.round(totalSessions / activeDays) : 0,
+          activeDays > 0 ? Math.round(totalWorkSessions / activeDays) : 0,
       };
     };
   }, [weeklyStats, monthlyStats]);
@@ -280,7 +270,7 @@ export function StatsDisplay() {
             </div>
 
             {/* Break Reminder Stats for Today */}
-            {user && getBreakReminderStats().length > 0 && (
+            {user && (
               <Card className="p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <Coffee className="w-5 h-5 text-blue-500" />
@@ -288,51 +278,68 @@ export function StatsDisplay() {
                     Break Reminders Today
                   </h3>
                 </div>
-                <div className="grid grid-cols-1 gap-3">
-                  {getBreakReminderStats().map((stat) => (
-                    <div
-                      key={stat.id}
-                      className="flex items-center justify-between p-4 rounded-xl border hover:shadow-md transition-all duration-200"
-                      style={{ borderLeft: `4px solid ${stat.color}` }}
-                    >
-                      <div className="flex items-center gap-3 flex-1">
+                {getBreakReminderStats().filter((stat) => stat.todayCount > 0)
+                  .length > 0 ? (
+                  <div className="grid grid-cols-1 gap-3">
+                    {getBreakReminderStats()
+                      .filter((stat) => stat.todayCount > 0)
+                      .map((stat) => (
                         <div
-                          className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
-                          style={{
-                            backgroundColor: `${stat.color}20`,
-                            color: stat.color,
-                          }}
+                          key={stat.id}
+                          className="flex items-center justify-between p-4 rounded-xl border hover:shadow-md transition-all duration-200"
+                          style={{ borderLeft: `4px solid ${stat.color}` }}
                         >
-                          {stat.icon || "☕"}
-                        </div>
-                        <div className="flex-1">
-                          <span className="font-medium text-foreground">
-                            {stat.title}
-                          </span>
-                          <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-3 flex-1">
                             <div
-                              className="px-2 py-1 rounded text-xs font-medium"
+                              className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
                               style={{
-                                backgroundColor: `${stat.color}15`,
+                                backgroundColor: `${stat.color}20`,
                                 color: stat.color,
                               }}
                             >
-                              {stat.category}
+                              {stat.icon || "☕"}
+                            </div>
+                            <div className="flex-1">
+                              <span className="font-medium text-foreground">
+                                {stat.title}
+                              </span>
+                              <div className="flex items-center gap-2 mt-1">
+                                <div
+                                  className="px-2 py-1 rounded text-xs font-medium"
+                                  style={{
+                                    backgroundColor: `${stat.color}15`,
+                                    color: stat.color,
+                                  }}
+                                >
+                                  {stat.category}
+                                </div>
+                              </div>
                             </div>
                           </div>
+                          <div className="flex items-center gap-3">
+                            <Badge
+                              variant="secondary"
+                              className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                            >
+                              {stat.todayCount} completed
+                            </Badge>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Badge
-                          variant="secondary"
-                          className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                        >
-                          {stat.todayCount} completed
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Coffee className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                    <p className="text-muted-foreground mb-2">
+                      No break reminders completed today yet
+                    </p>
+                    <span className="text-sm text-muted-foreground">
+                      Break reminders help you stay healthy during focus
+                      sessions. Complete break activities like drinking water,
+                      stretching, or taking a walk to see your progress here.
+                    </span>
+                  </div>
+                )}
               </Card>
             )}
 
@@ -345,7 +352,7 @@ export function StatsDisplay() {
                   <div className="flex items-center gap-3 mb-4">
                     <Activity className="w-5 h-5 text-green-500" />
                     <h3 className="text-lg font-semibold">
-                      Today's Productivity
+                      Today&apos;s Productivity
                     </h3>
                   </div>
                   <div className="grid grid-cols-2 gap-6">
@@ -437,40 +444,40 @@ export function StatsDisplay() {
                 {weeklyStats.length > 0 && (
                   <Card className="p-6">
                     <div className="flex items-center gap-3 mb-6">
-                      <BarChart3 className="w-5 h-5 text-purple-500" />
+                      <BarChart3 className="w-5 h-5 text-foreground" />
                       <h3 className="text-lg font-semibold">Weekly Progress</h3>
                     </div>
                     <ChartContainer
                       config={{
-                        sessions: {
-                          label: "Sessions",
-                          color: "hsl(var(--chart-1))",
+                        workSessions: {
+                          label: "Work Sessions",
+                          color: "#ef4444", // Red for work sessions
                         },
-                        focusTime: {
-                          label: "Focus Hours",
-                          color: "hsl(var(--chart-2))",
+                        focusHours: {
+                          label: "Focus Hours", 
+                          color: "#3b82f6", // Blue for focus hours
                         },
-                        tasks: {
-                          label: "Tasks",
-                          color: "hsl(var(--chart-3))",
+                        tasksCompleted: {
+                          label: "Tasks Completed",
+                          color: "#10b981", // Green for tasks completed
                         },
                       }}
-                      className="h-[300px]"
+                      className="h-[320px]"
                     >
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
+                        <ComposedChart
                           data={weeklyStats.map((stat: any) => ({
                             day: new Date(stat.date).toLocaleDateString(
                               "en-US",
                               { weekday: "short" }
                             ),
                             date: stat.date,
-                            sessions: stat.totalSessions || 0,
+                            workSessions: stat.workSessions || 0,
                             focusHours:
                               Math.round(
                                 ((stat.focusTimeMinutes || 0) / 60) * 10
                               ) / 10,
-                            tasks: stat.tasksCompleted || 0,
+                            tasksCompleted: stat.tasksCompleted || 0,
                           }))}
                           margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                         >
@@ -491,15 +498,41 @@ export function StatsDisplay() {
                               fill: "hsl(var(--muted-foreground))",
                             }}
                           />
+                          <Legend
+                            content={(props) => {
+                              const { payload } = props;
+                              return (
+                                <div className="flex justify-center gap-6 mt-4 text-sm">
+                                  {payload?.map((entry, index) => (
+                                    <div key={index} className="flex items-center gap-2">
+                                      <div
+                                        className="w-3 h-3 rounded"
+                                        style={{ backgroundColor: entry.color }}
+                                      />
+                                      <span className="text-muted-foreground">
+                                        {entry.value === "workSessions" ? "Work Sessions" :
+                                         entry.value === "focusHours" ? "Focus Hours" :
+                                         entry.value === "tasksCompleted" ? "Tasks Completed" :
+                                         entry.value}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            }}
+                          />
                           <ChartTooltip
                             content={
                               <ChartTooltipContent
                                 formatter={(value, name) => {
-                                  if (name === "sessions")
-                                    return [`${value} sessions`, "Sessions"];
+                                  if (name === "workSessions")
+                                    return [
+                                      `${value} sessions`,
+                                      "Work Sessions",
+                                    ];
                                   if (name === "focusHours")
-                                    return [`${value}h focus`, "Focus Time"];
-                                  if (name === "tasks")
+                                    return [`${value}h`, "Focus Time"];
+                                  if (name === "tasksCompleted")
                                     return [
                                       `${value} tasks`,
                                       "Tasks Completed",
@@ -509,44 +542,74 @@ export function StatsDisplay() {
                                 labelFormatter={(label, payload) => {
                                   const data = payload?.[0]?.payload;
                                   return data?.date
-                                    ? new Date(data.date).toLocaleDateString()
+                                    ? new Date(data.date).toLocaleDateString(
+                                        "en-US",
+                                        {
+                                          weekday: "long",
+                                          month: "short",
+                                          day: "numeric",
+                                        }
+                                      )
                                     : label;
                                 }}
                               />
                             }
                           />
                           <Bar
-                            dataKey="sessions"
-                            fill="var(--color-sessions)"
-                            radius={[4, 4, 0, 0]}
-                            maxBarSize={60}
+                            dataKey="workSessions"
+                            fill="var(--color-workSessions)"
+                            radius={[2, 2, 0, 0]}
+                            maxBarSize={50}
                           />
                           <Bar
-                            dataKey="tasks"
-                            fill="var(--color-tasks)"
-                            radius={[4, 4, 0, 0]}
-                            maxBarSize={60}
+                            dataKey="focusHours"
+                            fill="var(--color-focusHours)"
+                            radius={[2, 2, 0, 0]}
+                            maxBarSize={50}
                           />
-                        </BarChart>
+                          <Bar
+                            dataKey="tasksCompleted"
+                            fill="var(--color-tasksCompleted)"
+                            radius={[2, 2, 0, 0]}
+                            maxBarSize={50}
+                          />
+                        </ComposedChart>
                       </ResponsiveContainer>
                     </ChartContainer>
 
                     {/* Weekly Summary Cards */}
-                    <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t">
+                    <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t">
                       <div className="text-center">
-                        <p className="text-2xl font-bold text-chart-1">
+                        <p
+                          className="text-2xl font-bold"
+                          style={{ color: "var(--color-workSessions)" }}
+                        >
                           {getStatsForPeriod("week").totalSessions}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Total Sessions
+                          Work Sessions
                         </p>
                       </div>
                       <div className="text-center">
-                        <p className="text-2xl font-bold text-chart-2">
+                        <p
+                          className="text-2xl font-bold"
+                          style={{ color: "var(--color-focusHours)" }}
+                        >
                           {formatTime(getStatsForPeriod("week").totalFocusTime)}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           Focus Time
+                        </p>
+                      </div>
+                      <div className="text-center">
+                        <p
+                          className="text-2xl font-bold"
+                          style={{ color: "var(--color-tasksCompleted)" }}
+                        >
+                          {getStatsForPeriod("week").totalTasksCompleted}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Tasks Done
                         </p>
                       </div>
                     </div>
@@ -625,37 +688,37 @@ export function StatsDisplay() {
                 {monthlyStats.length > 0 && (
                   <Card className="p-6">
                     <div className="flex items-center gap-3 mb-6">
-                      <TrendingUp className="w-5 h-5 text-blue-500" />
+                      <TrendingUp className="w-5 h-5 text-foreground" />
                       <h3 className="text-lg font-semibold">Monthly Trends</h3>
                     </div>
                     <ChartContainer
                       config={{
-                        sessions: {
-                          label: "Daily Sessions",
-                          color: "hsl(var(--chart-1))",
+                        workSessions: {
+                          label: "Work Sessions",
+                          color: "#ef4444", // Red for work sessions
                         },
                         focusHours: {
                           label: "Focus Hours",
-                          color: "hsl(var(--chart-2))",
+                          color: "#3b82f6", // Blue for focus hours
                         },
-                        tasks: {
+                        tasksCompleted: {
                           label: "Tasks Completed",
-                          color: "hsl(var(--chart-3))",
+                          color: "#10b981", // Green for tasks completed
                         },
                       }}
-                      className="h-[360px]"
+                      className="h-[380px]"
                     >
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
+                        <ComposedChart
                           data={monthlyStats.map((stat: any) => ({
                             day: new Date(stat.date).getDate(),
                             date: stat.date,
-                            sessions: stat.totalSessions || 0,
+                            workSessions: stat.workSessions || 0,
                             focusHours:
                               Math.round(
                                 ((stat.focusTimeMinutes || 0) / 60) * 10
                               ) / 10,
-                            tasks: stat.tasksCompleted || 0,
+                            tasksCompleted: stat.tasksCompleted || 0,
                           }))}
                           margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                         >
@@ -676,15 +739,41 @@ export function StatsDisplay() {
                               fill: "hsl(var(--muted-foreground))",
                             }}
                           />
+                          <Legend
+                            content={(props) => {
+                              const { payload } = props;
+                              return (
+                                <div className="flex justify-center gap-6 mt-4 text-sm">
+                                  {payload?.map((entry, index) => (
+                                    <div key={index} className="flex items-center gap-2">
+                                      <div
+                                        className="w-3 h-3 rounded"
+                                        style={{ backgroundColor: entry.color }}
+                                      />
+                                      <span className="text-muted-foreground">
+                                        {entry.value === "workSessions" ? "Work Sessions" :
+                                         entry.value === "focusHours" ? "Focus Hours" :
+                                         entry.value === "tasksCompleted" ? "Tasks Completed" :
+                                         entry.value}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            }}
+                          />
                           <ChartTooltip
                             content={
                               <ChartTooltipContent
                                 formatter={(value, name) => {
-                                  if (name === "sessions")
-                                    return [`${value} sessions`, "Sessions"];
+                                  if (name === "workSessions")
+                                    return [
+                                      `${value} sessions`,
+                                      "Work Sessions",
+                                    ];
                                   if (name === "focusHours")
-                                    return [`${value}h focus`, "Focus Hours"];
-                                  if (name === "tasks")
+                                    return [`${value}h`, "Focus Time"];
+                                  if (name === "tasksCompleted")
                                     return [
                                       `${value} tasks`,
                                       "Tasks Completed",
@@ -694,57 +783,53 @@ export function StatsDisplay() {
                                 labelFormatter={(label, payload) => {
                                   const data = payload?.[0]?.payload;
                                   return data?.date
-                                    ? new Date(data.date).toLocaleDateString()
+                                    ? new Date(data.date).toLocaleDateString(
+                                        "en-US",
+                                        {
+                                          month: "short",
+                                          day: "numeric",
+                                        }
+                                      )
                                     : `Day ${label}`;
                                 }}
                               />
                             }
                           />
-                          <Line
-                            type="monotone"
-                            dataKey="sessions"
-                            stroke="var(--color-sessions)"
-                            strokeWidth={3}
-                            dot={{
-                              fill: "var(--color-sessions)",
-                              strokeWidth: 0,
-                              r: 4,
-                            }}
-                            activeDot={{ r: 6, strokeWidth: 0 }}
+                          <Bar
+                            dataKey="workSessions"
+                            fill="var(--color-workSessions)"
+                            radius={[1, 1, 0, 0]}
+                            maxBarSize={20}
                           />
-                          <Line
-                            type="monotone"
+                          <Bar
                             dataKey="focusHours"
-                            stroke="var(--color-focusHours)"
-                            strokeWidth={3}
-                            dot={{
-                              fill: "var(--color-focusHours)",
-                              strokeWidth: 0,
-                              r: 4,
-                            }}
-                            activeDot={{ r: 6, strokeWidth: 0 }}
+                            fill="var(--color-focusHours)"
+                            radius={[1, 1, 0, 0]}
+                            maxBarSize={20}
                           />
                           <Line
                             type="monotone"
-                            dataKey="tasks"
-                            stroke="var(--color-tasks)"
-                            strokeWidth={2}
+                            dataKey="tasksCompleted"
+                            stroke="var(--color-tasksCompleted)"
+                            strokeWidth={3}
                             dot={{
-                              fill: "var(--color-tasks)",
+                              fill: "var(--color-tasksCompleted)",
                               strokeWidth: 0,
                               r: 3,
                             }}
                             activeDot={{ r: 5, strokeWidth: 0 }}
-                            strokeDasharray="5 5"
                           />
-                        </LineChart>
+                        </ComposedChart>
                       </ResponsiveContainer>
                     </ChartContainer>
 
                     {/* Monthly Summary Grid */}
                     <div className="grid grid-cols-4 gap-4 mt-6 pt-6 border-t">
                       <div className="text-center">
-                        <p className="text-xl font-bold text-chart-1">
+                        <p
+                          className="text-xl font-bold"
+                          style={{ color: "var(--color-workSessions)" }}
+                        >
                           {getStatsForPeriod("month").totalSessions}
                         </p>
                         <p className="text-xs text-muted-foreground">
@@ -752,7 +837,10 @@ export function StatsDisplay() {
                         </p>
                       </div>
                       <div className="text-center">
-                        <p className="text-xl font-bold text-chart-2">
+                        <p
+                          className="text-xl font-bold"
+                          style={{ color: "var(--color-focusHours)" }}
+                        >
                           {formatTime(
                             getStatsForPeriod("month").totalFocusTime
                           )}
@@ -762,13 +850,16 @@ export function StatsDisplay() {
                         </p>
                       </div>
                       <div className="text-center">
-                        <p className="text-xl font-bold text-chart-3">
+                        <p
+                          className="text-xl font-bold"
+                          style={{ color: "var(--color-tasksCompleted)" }}
+                        >
                           {getStatsForPeriod("month").totalTasksCompleted}
                         </p>
                         <p className="text-xs text-muted-foreground">Tasks</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-xl font-bold text-orange-500">
+                        <p className="text-xl font-bold text-foreground">
                           {getStatsForPeriod("month").activeDays}
                         </p>
                         <p className="text-xs text-muted-foreground">

@@ -29,7 +29,7 @@ class AudioService {
     private isPausedByUser = false;
     private currentVolume = 0.5;
     private currentNotificationVolume = 0.7;
-    private volumeChangeCallbacks: ((volume: number) => void)[] = [];
+    private volumeChangeCallbacks: ((_volume: number) => void)[] = [];
 
     private constructor() { }
 
@@ -211,7 +211,7 @@ class AudioService {
     // Get audio organized by category and subcategory for UI dropdowns
     getAudioByCategory(categoryType: 'focus' | 'break' | 'notification') {
         const audioItems = Object.entries(this.audioMetadata)
-            .filter(([key, metadata]) => {
+            .filter(([_key, metadata]) => {
                 if (categoryType === 'focus') {
                     return metadata.category === 'focus';
                 } else if (categoryType === 'break') {
@@ -269,7 +269,7 @@ class AudioService {
     }
 
     // Enhanced play audio with playlist support
-    async playAudio(audioKey: string, usePlaylist: boolean = false) {
+    async playAudio(audioKey: string, _usePlaylist: boolean = false) {
         if (!this.isInitialized) await this.initialize();
         if (audioKey === 'none') return;
 
@@ -364,12 +364,12 @@ class AudioService {
     }
 
     // Volume change event handling
-    onVolumeChange(callback: (volume: number) => void): void {
+    onVolumeChange(callback: (_volume: number) => void): void {
         this.volumeChangeCallbacks.push(callback);
     }
 
     // Remove volume change callback
-    removeVolumeChangeCallback(callback: (volume: number) => void): void {
+    removeVolumeChangeCallback(callback: (_volume: number) => void): void {
         const index = this.volumeChangeCallbacks.indexOf(callback);
         if (index > -1) {
             this.volumeChangeCallbacks.splice(index, 1);

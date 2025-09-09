@@ -6,7 +6,6 @@
 import {
     collection,
     doc,
-    setDoc,
     getDocs,
     addDoc,
     updateDoc,
@@ -16,9 +15,7 @@ import {
     orderBy,
     limit,
     getDoc,
-    writeBatch,
-    serverTimestamp,
-    Timestamp
+    writeBatch
 } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { db } from './firebase';
@@ -866,7 +863,7 @@ export class AdvancedStorageService {
     }
 
     // Calculate next recurring date based on local time
-    private calculateNextRecurringDate(fromDate: number, recurring: RecurringData, task?: Task): Date {
+    private calculateNextRecurringDate(fromDate: number, recurring: RecurringData, _task?: Task): Date {
         const date = new Date(fromDate);
         const nextDate = new Date(date);
 
@@ -878,7 +875,7 @@ export class AdvancedStorageService {
                 nextDate.setDate(nextDate.getDate() + recurring.interval);
                 break;
 
-            case 'weekdays':
+            case 'weekdays': {
                 // Skip to next weekday, respecting interval
                 let daysAdded = 0;
                 let currentDate = new Date(nextDate);
@@ -892,12 +889,12 @@ export class AdvancedStorageService {
                 }
                 nextDate.setTime(currentDate.getTime());
                 break;
-
+            }
             case 'weekly':
                 nextDate.setDate(nextDate.getDate() + (7 * recurring.interval));
                 break;
 
-            case 'monthly':
+            case 'monthly': {
                 const originalDay = nextDate.getDate();
                 nextDate.setMonth(nextDate.getMonth() + recurring.interval);
 
@@ -906,6 +903,7 @@ export class AdvancedStorageService {
                     nextDate.setDate(0); // Go to last day of previous month
                 }
                 break;
+            }
 
             case 'specific-days':
                 if (recurring.daysOfWeek && recurring.daysOfWeek.length > 0) {
@@ -961,7 +959,7 @@ export class AdvancedStorageService {
             const reminders = snapshot.docs.map(doc => {
                 const data = doc.data();
                 // Always use Firebase document ID, ignore any internal id field
-                const { id: internalId, ...cleanData } = data;
+                const { id: _internalId, ...cleanData } = data;
                 return {
                     id: doc.id, // Always use Firebase document ID
                     ...cleanData

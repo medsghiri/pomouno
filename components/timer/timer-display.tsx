@@ -88,7 +88,7 @@ export function TimerDisplay({
     // Set volume regardless of initialization status
     audioService.setVolume(settings.soundVolume);
     audioService.setNotificationVolume(settings.notificationVolume);
-  }, [settings.soundVolume, settings.notificationVolume]); // Removed isActive dependency
+  }, [settings.soundVolume, settings.notificationVolume, audioService]); // Removed isActive dependency
 
   // Handle audio during timer states using user's selected audio
   useEffect(() => {
@@ -133,6 +133,10 @@ export function TimerDisplay({
     isPaused,
     sessionType,
     settings.soundVolume,
+    audioService,
+    settings.focusAudio,
+    settings.shortBreakAudio,
+    settings.longBreakAudio,
     // REMOVED: Individual audio settings to prevent timer restart when changing audio
     // The audio selection will be handled by handleAudioChange function
   ]);

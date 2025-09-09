@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar as CalendarIcon, Target, CheckCircle, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { TodaysStats } from "@/lib/storage";
-import type { Task } from "@/lib/advanced-storage-service";
 import { useTasks, useSessions } from "@/hooks/use-app-data";
 
 interface CalendarDialogProps {
@@ -204,10 +203,11 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
               return true; // Daily tasks appear every day
             case "weekdays":
               return dayOfWeek !== 0 && dayOfWeek !== 6; // Monday-Friday
-            case "weekly":
+            case "weekly": {
               // Check if it's the same day of week as the original
               const originalDate = new Date(task.createdAt);
               return dayOfWeek === originalDate.getDay();
+            }
             case "specific-days":
               return task.recurring.daysOfWeek?.includes(dayOfWeek) || false;
             default:

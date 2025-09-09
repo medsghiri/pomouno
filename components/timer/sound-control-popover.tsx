@@ -37,7 +37,7 @@ export function SoundControlPopover({ className }: SoundControlPopoverProps) {
             // Sync with audio service
             audioService.setVolume(settings.soundVolume);
         }
-    }, [settings]);
+    }, [settings, audioService]);
 
     const handleVolumeChange = (newVolume: number[]) => {
         const volumeValue = newVolume[0];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { TimerWithTitle } from "./timer-with-title";
 import { TaskManager } from "@/components/tasks/task-manager";
 import { BreakReminderManager } from "@/components/tasks/break-reminder-manager";
@@ -73,7 +73,7 @@ export function TimerApp({
 
   // Use React Query hook for settings
   const { data: settingsData } = useSettings();
-  const settings = settingsData || {
+  const settings = useMemo(() => settingsData || {
     darkMode: false,
     dailySessionGoal: 8,
     showDailyGoal: true,
@@ -92,7 +92,7 @@ export function TimerApp({
     longBreakAudio: "none",
     notificationAudio: "notification-ping",
     usePlaylistForLofi: true,
-  };
+  }, [settingsData]);
 
   // Audio metadata is now loaded server-side, no need for client-side React Query
 
@@ -140,7 +140,6 @@ export function TimerApp({
       // FIXED: Use storage service through hooks instead of direct Firebase calls
       const storageService = getStorageService(user);
       if (storageService) {
-        const localData = LocalStorage.getAllData();
         // Migration is now handled by the AdvancedStorageService through proper hooks
         // This prevents direct Firebase calls that bypass React Query caching
       }
@@ -183,7 +182,7 @@ export function TimerApp({
       }
 
       // Check if daily goal will be achieved with this session
-      const currentSessions = todaysStats?.data?.totalSessions || 0;
+      const currentSessions = todaysStats?.data?.workSessions || 0;
       const newSessionCount =
         session.type === "work" ? currentSessions + 1 : currentSessions;
 
@@ -367,7 +366,7 @@ export function TimerApp({
         <div className="mb-6">
           <AuthPrompt
             trigger={authPromptTrigger}
-            sessionsCompleted={todaysStats?.data?.totalSessions || 0}
+            sessionsCompleted={todaysStats?.data?.workSessions || 0}
             onDismiss={() => setShowAuthPrompt(false)}
             onSignUp={handleSignUp}
           />
@@ -415,7 +414,7 @@ export function TimerApp({
               shouldAutoStart={shouldAutoStartTimer}
               onAutoStartComplete={() => setShouldAutoStartTimer(false)}
               todaysTaskSessions={todaysTaskSessions}
-              todaysWorkSessions={todaysStats?.data?.totalSessions || 0}
+              todaysWorkSessions={todaysStats?.data?.workSessions || 0}
             />
 
             {/* Productivity Tools */}
@@ -471,7 +470,7 @@ export function TimerApp({
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-foreground">
-                        {todaysStats?.data?.totalSessions || 0} / {dailyGoal}
+                        {todaysStats?.data?.workSessions || 0} / {dailyGoal}
                       </h3>
                       <p className="text-xs text-muted-foreground">
                         sessions today
@@ -481,7 +480,7 @@ export function TimerApp({
                   <div className="text-right">
                     <div className="text-2xl font-bold text-red-600 dark:text-red-400">
                       {Math.round(
-                        ((todaysStats?.data?.totalSessions || 0) / dailyGoal) * 100
+                        ((todaysStats?.data?.workSessions || 0) / dailyGoal) * 100
                       )}
                       %
                     </div>
@@ -494,24 +493,24 @@ export function TimerApp({
                     className="bg-gradient-to-r from-red-500 to-orange-500 h-3 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
                     style={{
                       width: `${Math.min(
-                        ((todaysStats?.data?.totalSessions || 0) / dailyGoal) * 100,
+                        ((todaysStats?.data?.workSessions || 0) / dailyGoal) * 100,
                         100
                       )}%`,
                     }}
                   >
-                    {(todaysStats?.data?.totalSessions || 0) > 0 && (
+                    {(todaysStats?.data?.workSessions || 0) > 0 && (
                       <div className="w-2 h-2 bg-white rounded-full shadow-sm"></div>
                     )}
                   </div>
                 </div>
 
                 <p className="text-sm text-center text-muted-foreground">
-                  {(todaysStats?.data?.totalSessions || 0) >= dailyGoal
+                  {(todaysStats?.data?.workSessions || 0) >= dailyGoal
                     ? "🎯 Daily goal achieved! Outstanding work!"
-                    : (todaysStats?.data?.totalSessions || 0) === 0
+                    : (todaysStats?.data?.workSessions || 0) === 0
                     ? "Ready to start your productive day?"
                     : `${
-                        dailyGoal - (todaysStats?.data?.totalSessions || 0)
+                        dailyGoal - (todaysStats?.data?.workSessions || 0)
                       } more to reach your goal`}
                 </p>
               </div>

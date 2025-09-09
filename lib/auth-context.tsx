@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { User } from "firebase/auth";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "./firebase";
@@ -14,16 +14,16 @@ interface AuthContextType {
   storageProvider: AuthStorageProvider;
 
   // Feature access methods
-  canAccessFeature: (feature: Feature) => boolean;
-  requiresAuth: (feature: Feature) => boolean;
-  getFeatureAccessMessage: (feature: Feature) => string;
+  canAccessFeature: (_feature: Feature) => boolean;
+  requiresAuth: (_feature: Feature) => boolean;
+  getFeatureAccessMessage: (_feature: Feature) => string;
 
   // Authentication actions
   logout: () => Promise<void>;
 
   // Auth prompts
-  showUpgradePrompt: (feature: Feature, context?: string) => void;
-  showSignInPrompt: (context?: string) => void;
+  showUpgradePrompt: (_feature: Feature, _context?: string) => void;
+  showSignInPrompt: (_context?: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,20 +39,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   );
   const { toast } = useToast();
 
-  // Update storage provider when user changes
-  useEffect(() => {
-    const newProvider = new AuthStorageProvider(user || null);
-    setStorageProvider(newProvider);
-  }, [user]);
-
-  // Handle user login
-  useEffect(() => {
-    if (user && !loading) {
-      handleUserLogin(user);
-    }
-  }, [user, loading]);
-
-  const handleUserLogin = async (newUser: User) => {
+  // Handle user login function
+  const handleUserLogin = useCallback(async (newUser: User) => {
     try {
       await storageProvider.login(newUser);
 
@@ -69,7 +57,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
         variant: "destructive",
       });
     }
-  };
+  }, [storageProvider, toast]);
+
+  // Update storage provider when user changes
+  useEffect(() => {
+    const newProvider = new AuthStorageProvider(user || null);
+    setStorageProvider(newProvider);
+  }, [user]);
+
+  // Handle user login
+  useEffect(() => {
+    if (user && !loading) {
+      handleUserLogin(user);
+    }
+  }, [user, loading, handleUserLogin]);
 
   const logout = async () => {
     try {

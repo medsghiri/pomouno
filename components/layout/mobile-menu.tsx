@@ -21,8 +21,7 @@ import {
   Coffee,
   Calendar,
 } from "lucide-react";
-import { useAuth, useFeatureAccess } from "@/lib/auth-context";
-import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth-context";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
@@ -36,7 +35,7 @@ interface MobileMenuProps {
 }
 
 export function MobileMenu({
-  onAuthClick,
+  onAuthClick: _onAuthClick,
   onSettingsClick,
   onStatsClick,
   onTasksClick,
@@ -44,11 +43,7 @@ export function MobileMenu({
   onCalendarClick,
 }: MobileMenuProps) {
   const { user, loading, logout } = useAuth();
-  const tasksAccess = useFeatureAccess("tasks");
-  const breakRemindersAccess = useFeatureAccess("break-reminders");
-  const statisticsAccess = useFeatureAccess("statistics");
   const [open, setOpen] = useState(false);
-  const { toast } = useToast();
 
   const handleSignOut = async () => {
     try {

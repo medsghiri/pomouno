@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 
 interface DaySelectorProps {
     selectedDays: number[];
-    onChange: (days: number[]) => void;
+    onChange: (_days: number[]) => void;
     className?: string;
 }
 

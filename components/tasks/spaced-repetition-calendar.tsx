@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Calendar, CalendarDays, Brain, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Calendar, CalendarDays, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +23,7 @@ interface ReviewDate {
 
 export function SpacedRepetitionCalendar({ className }: SpacedRepetitionCalendarProps) {
     const { user } = useAuth();
-    const [tasks, setTasks] = useState<Task[]>([]);
+    const [_tasks, setTasks] = useState<Task[]>([]);
     const [reviewDates, setReviewDates] = useState<ReviewDate[]>([]);
     const [selectedDate, setSelectedDate] = useState<Date | undefined>();
     const [selectedDateTasks, setSelectedDateTasks] = useState<Task[]>([]);
@@ -40,11 +40,7 @@ export function SpacedRepetitionCalendar({ className }: SpacedRepetitionCalendar
         }
     }, [user]);
 
-    useEffect(() => {
-        loadSpacedRepetitionTasks();
-    }, [storageService]);
-
-    const loadSpacedRepetitionTasks = async () => {
+    const loadSpacedRepetitionTasks = useCallback(async () => {
         if (!storageService) {
             setTasks([]);
             setReviewDates([]);
@@ -86,7 +82,11 @@ export function SpacedRepetitionCalendar({ className }: SpacedRepetitionCalendar
         } catch (error) {
             console.error('Failed to load spaced repetition tasks:', error);
         }
-    };
+    }, [storageService]);
+
+    useEffect(() => {
+        loadSpacedRepetitionTasks();
+    }, [storageService, loadSpacedRepetitionTasks]);
 
     const getTasksForDate = (date: Date): Task[] => {
         const dateStr = date.toISOString().split('T')[0];

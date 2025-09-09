@@ -47,7 +47,7 @@ export default function CookiesPage() {
 
                 <h2>Third-Party Services</h2>
                 <p>
-                    PomoUno uses Firebase (Google) for authentication and data synchronization when you create an account. Firebase may set its own cookies for authentication purposes. You can learn more about Google's privacy practices at <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-red-600 dark:text-red-400 hover:underline">Google Privacy Policy</a>.
+                    PomoUno uses Firebase (Google) for authentication and data synchronization when you create an account. Firebase may set its own cookies for authentication purposes. You can learn more about Google&apos;s privacy practices at <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-red-600 dark:text-red-400 hover:underline">Google Privacy Policy</a>.
                 </p>
 
                 <h2>Analytics and Tracking</h2>
@@ -61,7 +61,7 @@ export default function CookiesPage() {
                 <h3>Browser Controls</h3>
                 <ul>
                     <li><strong>Chrome:</strong> Settings → Privacy and security → Cookies and other site data</li>
-                    <li><strong>Firefox:</strong> Settings → Privacy & Security → Cookies and Site Data</li>
+                    <li><strong>Firefox:</strong> Settings → Privacy &amp; Security → Cookies and Site Data</li>
                     <li><strong>Safari:</strong> Preferences → Privacy → Manage Website Data</li>
                     <li><strong>Edge:</strong> Settings → Cookies and site permissions → Cookies and site data</li>
                 </ul>
@@ -70,9 +70,9 @@ export default function CookiesPage() {
                 <p>If you disable cookies and local storage:</p>
                 <ul>
                     <li>PomoUno will still work for basic timer functionality</li>
-                    <li>Your settings and tasks won't be saved between sessions</li>
-                    <li>You won't be able to create an account or sync data</li>
-                    <li>Statistics and progress tracking won't be available</li>
+                    <li>Your settings and tasks won&apos;t be saved between sessions</li>
+                    <li>You won&apos;t be able to create an account or sync data</li>
+                    <li>Statistics and progress tracking won&apos;t be available</li>
                 </ul>
 
                 <h2>Data Retention</h2>

@@ -38,6 +38,15 @@ export const metadata: Metadata = {
     "work from home productivity",
     "time blocking",
   ],
+  authors: [{ name: "PomoUno Team", url: "https://pomouno.com" }],
+  creator: "PomoUno Team",
+  publisher: "PomoUno",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "PomoUno",
+  },
   robots: {
     index: true,
     follow: true,
@@ -78,7 +87,7 @@ export const metadata: Metadata = {
     canonical: "https://pomouno.com",
   },
   verification: {
-    google: "your-google-verification-code",
+    google: "zTcgsDtsV4J_pqG77e8s4mmXoUDR42I6lycVjr4Z_6A",
     // Add other verification codes as needed
     // yandex: 'your-yandex-verification',
     // yahoo: 'your-yahoo-verification',
@@ -103,8 +112,13 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="PomoUno" />
+        <meta name="application-name" content="PomoUno" />
+        <meta name="msapplication-TileColor" content="#E53935" />
+        <meta name="theme-color" content="#E53935" />
+        <link rel="canonical" href="https://pomouno.com" />
         <script
           dangerouslySetInnerHTML={{
             __html: themeScript,
@@ -133,6 +147,19 @@ export default function RootLayout({
               publisher: {
                 "@type": "Organization",
                 name: "PomoUno",
+                url: "https://pomouno.com",
+                logo: {
+                  "@type": "ImageObject",
+                  url: "https://pomouno.com/web-app-manifest-192x192.png",
+                  width: 192,
+                  height: 192
+                }
+              },
+              offers: {
+                "@type": "Offer",
+                price: "0",
+                priceCurrency: "USD",
+                category: "free"
               },
               featureList: [
                 "Customizable Pomodoro Timer",
@@ -147,6 +174,33 @@ export default function RootLayout({
               screenshot: "https://pomouno.com/opengraph-image",
               keywords:
                 "pomodoro timer, productivity app, focus timer, time management, pomodoro technique, work timer, break timer, productivity tracker",
+            }),
+          }}
+        />
+
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Organization",
+              name: "PomoUno",
+              url: "https://pomouno.com",
+              logo: {
+                "@type": "ImageObject",
+                url: "https://pomouno.com/web-app-manifest-192x192.png",
+                width: 192,
+                height: 192
+              },
+              sameAs: [
+                "https://github.com/pomouno/pomouno"
+              ],
+              contactPoint: {
+                "@type": "ContactPoint",
+                contactType: "support",
+                url: "https://pomouno.com/legal/contact",
+                availableLanguage: "en"
+              }
             }),
           }}
         />

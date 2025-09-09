@@ -2,16 +2,16 @@ import { Brain, Target, DollarSign, Music, BarChart3, Moon, Cloud, Coffee } from
 
 export function FeatureExplanation() {
     return (
-        <div className="rounded-2xl p-8 text-foreground space-y-8">
+        <section className="rounded-2xl p-8 text-foreground space-y-8" aria-labelledby="features-heading">
 
             <div className="grid md:grid-cols-2 gap-8">
-                <div>
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+                <article>
+                    <header className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full" aria-hidden="true">
                             <Brain className="w-6 h-6 text-red-600 dark:text-red-400" />
                         </div>
                         <h3 className="text-xl font-semibold">Science-Backed Technique</h3>
-                    </div>
+                    </header>
                     <p className="text-muted-foreground leading-relaxed mb-4">
                         The Pomodoro Technique isn&apos;t just a productivity fad - it&apos;s based on real research about how
                         our brains work best. The 25-minute work periods align with natural attention spans, while
@@ -21,15 +21,15 @@ export function FeatureExplanation() {
                         Studies show that people who use time-blocking techniques like Pomodoro are more productive,
                         less stressed, and better at estimating how long tasks actually take.
                     </p>
-                </div>
+                </article>
 
-                <div>
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+                <article>
+                    <header className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full" aria-hidden="true">
                             <DollarSign className="w-6 h-6 text-red-600 dark:text-red-400" />
                         </div>
                         <h3 className="text-xl font-semibold">Completely Free to Use</h3>
-                    </div>
+                    </header>
                     <p className="text-muted-foreground leading-relaxed mb-4">
                         Unlike many productivity apps that hide essential features behind paywalls, PomoUno gives you
                         everything you need for free. No subscriptions, no premium tiers, no artificial limitations.
@@ -38,16 +38,16 @@ export function FeatureExplanation() {
                         Create an account to sync your data across devices, or use it completely anonymously with
                         local storage. Your productivity journey shouldn&apos;t cost money - it should save you time.
                     </p>
-                </div>
+                </article>
             </div>
 
             {/* Additional Features */}
             <div className="border-t border-accent pt-8">
-                <h3 className="text-2xl font-bold text-center mb-6">Everything You Need to Stay Focused</h3>
-                <div className="grid md:grid-cols-3 gap-6">
-                    <div className="text-center">
+                <h3 id="features-heading" className="text-2xl font-bold text-center mb-6">Everything You Need to Stay Focused</h3>
+                <div className="grid md:grid-cols-3 gap-6" role="list">
+                    <div className="text-center" role="listitem">
                         <div className="flex justify-center mb-3">
-                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full" aria-hidden="true">
                                 <Target className="w-5 h-5 text-red-600 dark:text-red-400" />
                             </div>
                         </div>
@@ -58,9 +58,9 @@ export function FeatureExplanation() {
                         </p>
                     </div>
 
-                    <div className="text-center">
+                    <div className="text-center" role="listitem">
                         <div className="flex justify-center mb-3">
-                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full" aria-hidden="true">
                                 <Coffee className="w-5 h-5 text-red-600 dark:text-red-400" />
                             </div>
                         </div>
@@ -71,9 +71,9 @@ export function FeatureExplanation() {
                         </p>
                     </div>
 
-                    <div className="text-center">
+                    <div className="text-center" role="listitem">
                         <div className="flex justify-center mb-3">
-                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full" aria-hidden="true">
                                 <Music className="w-5 h-5 text-red-600 dark:text-red-400" />
                             </div>
                         </div>
@@ -84,9 +84,9 @@ export function FeatureExplanation() {
                         </p>
                     </div>
 
-                    <div className="text-center">
+                    <div className="text-center" role="listitem">
                         <div className="flex justify-center mb-3">
-                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full" aria-hidden="true">
                                 <BarChart3 className="w-5 h-5 text-red-600 dark:text-red-400" />
                             </div>
                         </div>
@@ -97,9 +97,9 @@ export function FeatureExplanation() {
                         </p>
                     </div>
 
-                    <div className="text-center">
+                    <div className="text-center" role="listitem">
                         <div className="flex justify-center mb-3">
-                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full" aria-hidden="true">
                                 <Moon className="w-5 h-5 text-red-600 dark:text-red-400" />
                             </div>
                         </div>
@@ -110,9 +110,9 @@ export function FeatureExplanation() {
                         </p>
                     </div>
 
-                    <div className="text-center">
+                    <div className="text-center" role="listitem">
                         <div className="flex justify-center mb-3">
-                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full" aria-hidden="true">
                                 <Cloud className="w-5 h-5 text-red-600 dark:text-red-400" />
                             </div>
                         </div>
@@ -124,6 +124,6 @@ export function FeatureExplanation() {
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
     );
 }

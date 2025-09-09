@@ -37,7 +37,9 @@ export const metadata: Metadata = {
 export default function HomePage() {
   return (
     <div className="min-h-screen">
-      <HomepageWithInteractions />
+      <main role="main" aria-label="PomoUno Pomodoro Timer Application">
+        <HomepageWithInteractions />
+      </main>
       <Footer />
     </div>
   );

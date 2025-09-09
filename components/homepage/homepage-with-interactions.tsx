@@ -23,9 +23,10 @@ export function HomepageWithInteractions() {
         onCalendarClick={() => setShowCalendar(true)}
       />
 
-      <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-6 max-w-7xl">
+      <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6 max-w-7xl">
         {/* Timer Application - Client-side Interactive */}
-        <div className="my-12">
+        <section className="my-12" aria-labelledby="timer-section">
+          <h1 id="timer-section" className="sr-only">Pomodoro Timer</h1>
           <TimerApp
             showSettings={showSettings}
             setShowSettings={setShowSettings}
@@ -38,7 +39,7 @@ export function HomepageWithInteractions() {
             showCalendar={showCalendar}
             setShowCalendar={setShowCalendar}
           />
-        </div>
+        </section>
 
         {/* Hero Section - Static Content */}
         <HeroSection />
@@ -47,7 +48,7 @@ export function HomepageWithInteractions() {
         <div className="my-12">
           <FeatureExplanation />
         </div>
-      </main>
+      </div>
     </>
   );
 }

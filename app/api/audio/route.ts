@@ -124,7 +124,7 @@ export async function GET() {
         return NextResponse.json({
             success: true,
             data: sortedAudioMetadata,
-            cached: false,
+            cached: true,
             count: audioFiles.length
         });
 

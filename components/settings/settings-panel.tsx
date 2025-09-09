@@ -28,7 +28,6 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings, useSettingsMutation } from "@/hooks/use-app-data";
-import { useAvailableAudio } from "@/hooks/use-audio-client";
 import AudioService from "@/lib/audio-service";
 
 const DEFAULT_SETTINGS: Settings = {
@@ -66,10 +65,6 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
   const [isUserChanging, setIsUserChanging] = useState(false);
 
   const { toast } = useToast();
-
-  // Use server-side cached audio data
-  const { data: availableAudio = { focus: [], break: [], notification: [] } } =
-    useAvailableAudio();
 
   const audioService = AudioService.getInstance();
 
@@ -538,21 +533,15 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                     {(() => {
                       const groupedAudio =
                         audioService.getAudioByCategory("focus");
-                      return Object.entries(groupedAudio)
-                        .sort(([a], [b]) => a.localeCompare(b))
-                        .map(([groupName, audioItems]) => (
-                          <div key={groupName}>
-                            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                              {groupName}
-                            </div>
-                            {audioItems
-                              .sort((a, b) =>
-                                a.metadata.name.localeCompare(b.metadata.name)
-                              )
-                              .map(({ key, metadata }) => (
-                                <SelectItem
-                                  key={key}
-                                  value={key}
+                      return Object.entries(groupedAudio).map(([groupName, audioItems]) => (
+                        <div key={groupName}>
+                          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            {groupName}
+                          </div>
+                          {audioItems.map(({ key, metadata }) => (
+                            <SelectItem
+                              key={key}
+                              value={key}
                                   className="text-foreground"
                                 >
                                   {metadata.name}
@@ -614,28 +603,22 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                     {(() => {
                       const groupedAudio =
                         audioService.getAudioByCategory("break");
-                      return Object.entries(groupedAudio)
-                        .sort(([a], [b]) => a.localeCompare(b))
-                        .map(([groupName, audioItems]) => (
-                          <div key={groupName}>
-                            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                              {groupName}
-                            </div>
-                            {audioItems
-                              .sort((a, b) =>
-                                a.metadata.name.localeCompare(b.metadata.name)
-                              )
-                              .map(({ key, metadata }) => (
-                                <SelectItem
-                                  key={key}
-                                  value={key}
-                                  className="text-foreground"
-                                >
-                                  {metadata.name}
-                                </SelectItem>
-                              ))}
+                      return Object.entries(groupedAudio).map(([groupName, audioItems]) => (
+                        <div key={groupName}>
+                          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            {groupName}
                           </div>
-                        ));
+                          {audioItems.map(({ key, metadata }) => (
+                            <SelectItem
+                              key={key}
+                              value={key}
+                              className="text-foreground"
+                            >
+                              {metadata.name}
+                            </SelectItem>
+                          ))}
+                        </div>
+                      ));
                     })()}
                   </SelectContent>
                 </Select>
@@ -690,28 +673,22 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                     {(() => {
                       const groupedAudio =
                         audioService.getAudioByCategory("break");
-                      return Object.entries(groupedAudio)
-                        .sort(([a], [b]) => a.localeCompare(b))
-                        .map(([groupName, audioItems]) => (
-                          <div key={groupName}>
-                            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                              {groupName}
-                            </div>
-                            {audioItems
-                              .sort((a, b) =>
-                                a.metadata.name.localeCompare(b.metadata.name)
-                              )
-                              .map(({ key, metadata }) => (
-                                <SelectItem
-                                  key={key}
-                                  value={key}
-                                  className="text-foreground"
-                                >
-                                  {metadata.name}
-                                </SelectItem>
-                              ))}
+                      return Object.entries(groupedAudio).map(([groupName, audioItems]) => (
+                        <div key={groupName}>
+                          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            {groupName}
                           </div>
-                        ));
+                          {audioItems.map(({ key, metadata }) => (
+                            <SelectItem
+                              key={key}
+                              value={key}
+                              className="text-foreground"
+                            >
+                              {metadata.name}
+                            </SelectItem>
+                          ))}
+                        </div>
+                      ));
                     })()}
                   </SelectContent>
                 </Select>
@@ -766,28 +743,22 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                     {(() => {
                       const groupedAudio =
                         audioService.getAudioByCategory("notification");
-                      return Object.entries(groupedAudio)
-                        .sort(([a], [b]) => a.localeCompare(b))
-                        .map(([groupName, audioItems]) => (
-                          <div key={groupName}>
-                            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                              {groupName}
-                            </div>
-                            {audioItems
-                              .sort((a, b) =>
-                                a.metadata.name.localeCompare(b.metadata.name)
-                              )
-                              .map(({ key, metadata }) => (
-                                <SelectItem
-                                  key={key}
-                                  value={key}
-                                  className="text-foreground"
-                                >
-                                  {metadata.name}
-                                </SelectItem>
-                              ))}
+                      return Object.entries(groupedAudio).map(([groupName, audioItems]) => (
+                        <div key={groupName}>
+                          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            {groupName}
                           </div>
-                        ));
+                          {audioItems.map(({ key, metadata }) => (
+                            <SelectItem
+                              key={key}
+                              value={key}
+                              className="text-foreground"
+                            >
+                              {metadata.name}
+                            </SelectItem>
+                          ))}
+                        </div>
+                      ));
                     })()}
                   </SelectContent>
                 </Select>

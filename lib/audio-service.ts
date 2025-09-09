@@ -1,7 +1,6 @@
 import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from './firebase';
 import { AudioFile } from './storage';
-import { getAudioMetadata } from './audio-cache';
 
 interface AudioPlaybackState {
     isPlaying: boolean;
@@ -119,18 +118,36 @@ class AudioService {
                 return;
             }
 
-            // NEW: Use server-side cached audio metadata instead of direct Firebase calls
-            console.log('🔍 Loading audio metadata from cache...');
+            // Use API route for audio metadata
+            console.log('� Loading audio metadata from API...');
+            
+            const response = await fetch('/api/audio', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
 
-            const cachedMetadata = await getAudioMetadata();
-            this.audioMetadata = cachedMetadata;
+            if (!response.ok) {
+                throw new Error(`API request failed: ${response.status}`);
+            }
 
-            console.log(`✅ Loaded ${Object.keys(this.audioMetadata).length} audio files from cache`);
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || 'API request failed');
+            }
+
+            this.audioMetadata = result.data;
+            console.log(`✅ Loaded ${Object.keys(this.audioMetadata).length} audio files from API`);
 
             // Mark as globally initialized
             AudioService.isGloballyInitialized = true;
         } catch (error) {
-            console.error('❌ Failed to load audio metadata from cache:', error);
+            console.error('❌ Failed to load audio metadata from API:', error);
+            console.log('🔄 Using fallback audio data...');
+            this.audioMetadata = this.getFallbackAudioMetadata();
+            AudioService.isGloballyInitialized = true;
         }
     }
 
@@ -236,7 +253,31 @@ class AudioService {
             grouped[groupName].push({ key, metadata });
         });
 
-        return grouped;
+        // Sort each group's items by name
+        Object.keys(grouped).forEach(type => {
+            grouped[type].sort((a, b) => a.metadata.name.localeCompare(b.metadata.name));
+        });
+
+        // Apply priority ordering to match API route sorting
+        const typeOrder = ['Clock Ticking', 'Lo-Fi Music', 'Background Noise', 'Nature Sounds'];
+        const orderedGrouped: { [type: string]: Array<{ key: string; metadata: AudioFile }> } = {};
+
+        // Add priority types first
+        typeOrder.forEach(type => {
+            if (grouped[type]) {
+                orderedGrouped[type] = grouped[type];
+            }
+        });
+
+        // Add remaining types alphabetically
+        Object.keys(grouped)
+            .filter(type => !typeOrder.includes(type))
+            .sort()
+            .forEach(type => {
+                orderedGrouped[type] = grouped[type];
+            });
+
+        return orderedGrouped;
     }
 
     // Get display name for audio type
@@ -538,10 +579,6 @@ class AudioService {
 
     // Method to refresh audio library (useful after adding new files)
     async refreshAudioLibrary() {
-        // Clear the cache first
-        const { clearAudioCache } = await import('./audio-cache');
-        clearAudioCache();
-
         // Reset service state
         AudioService.isGloballyInitialized = false;
         this.isInitialized = false;
@@ -587,6 +624,66 @@ class AudioService {
     // Get all audio metadata
     getAllAudioMetadata(): { [key: string]: AudioFile } {
         return { ...this.audioMetadata };
+    }
+
+    // Fallback audio metadata when API is not available
+    private getFallbackAudioMetadata(): { [key: string]: AudioFile } {
+        return {
+            // Clock Ticking Sounds
+            'ticking-clock': {
+                id: 'fallback-1',
+                key: 'ticking-clock',
+                name: 'Kitchen Clock Ticking',
+                category: 'focus',
+                type: 'ticking',
+                volume: 0.3,
+                loop: true,
+                storagePath: 'audio/quartz-kitchen-clock-ticking-60-seconds-253100.mp3',
+                fileName: 'quartz-kitchen-clock-ticking-60-seconds-253100.mp3',
+                active: true,
+                createdAt: '2025-01-26T00:00:00.000Z'
+            },
+            'ticking-clock-2': {
+                id: 'fallback-2',
+                key: 'ticking-clock-2',
+                name: 'Classic Clock Ticking',
+                category: 'focus',
+                type: 'ticking',
+                volume: 0.3,
+                loop: true,
+                storagePath: 'audio/ticking-clock-sound-effect-1-mp3-edition-264451.mp3',
+                fileName: 'ticking-clock-sound-effect-1-mp3-edition-264451.mp3',
+                active: true,
+                createdAt: '2025-01-26T00:00:00.000Z'
+            },
+            // Lo-Fi Music
+            'lofi-cozy': {
+                id: 'fallback-3',
+                key: 'lofi-cozy',
+                name: 'Cozy Night Lo-Fi',
+                category: 'focus',
+                type: 'lofi',
+                volume: 0.4,
+                loop: true,
+                storagePath: 'audio/good-night-lofi-cozy-chill-music-160166.mp3',
+                fileName: 'good-night-lofi-cozy-chill-music-160166.mp3',
+                active: true,
+                createdAt: '2025-01-26T00:00:00.000Z'
+            },
+            // Notification Sounds
+            'notification-ping': {
+                id: 'fallback-4',
+                key: 'notification-ping',
+                name: 'Gentle Ping',
+                category: 'notification',
+                type: 'notification',
+                volume: 0.6,
+                storagePath: 'audio/notification-ping-335500.mp3',
+                fileName: 'notification-ping-335500.mp3',
+                active: true,
+                createdAt: '2025-01-26T00:00:00.000Z'
+            }
+        };
     }
 
     // Legacy methods for backward compatibility

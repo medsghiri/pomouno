@@ -496,28 +496,22 @@ export function TimerDisplay({
                 {(() => {
                   const categoryType = sessionType === "work" ? "focus" : "break";
                   const groupedAudio = audioService.getAudioByCategory(categoryType);
-                  return Object.entries(groupedAudio)
-                    .sort(([a], [b]) => a.localeCompare(b))
-                    .map(([groupName, audioItems]) => (
-                      <div key={groupName}>
-                        <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                          {groupName}
-                        </div>
-                        {audioItems
-                          .sort((a, b) =>
-                            a.metadata.name.localeCompare(b.metadata.name)
-                          )
-                          .map(({ key, metadata }) => (
-                            <SelectItem
-                              key={key}
-                              value={key}
-                              className="text-foreground"
-                            >
-                              {metadata.name}
-                            </SelectItem>
-                          ))}
+                  return Object.entries(groupedAudio).map(([groupName, audioItems]) => (
+                    <div key={groupName}>
+                      <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        {groupName}
                       </div>
-                    ));
+                      {audioItems.map(({ key, metadata }) => (
+                        <SelectItem
+                          key={key}
+                          value={key}
+                          className="text-foreground"
+                        >
+                          {metadata.name}
+                        </SelectItem>
+                      ))}
+                    </div>
+                  ));
                 })()}
               </SelectContent>
             </Select>

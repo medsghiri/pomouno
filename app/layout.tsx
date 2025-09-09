@@ -1,5 +1,4 @@
 import "./globals.css";
-import "./init"; // Initialize audio cache on server startup
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/toaster";
@@ -126,11 +125,6 @@ export default function RootLayout({
               applicationCategory: "ProductivityApplication",
               operatingSystem: "Any",
               browserRequirements: "Requires JavaScript",
-              offers: {
-                "@type": "Offer",
-                price: "0",
-                priceCurrency: "USD",
-              },
               author: {
                 "@type": "Organization",
                 name: "PomoUno Team",

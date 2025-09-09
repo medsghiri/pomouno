@@ -6,18 +6,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  ChartConfig,
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
 } from "@/components/ui/chart";
 import {
   Bar,
+  BarChart,
   XAxis,
   YAxis,
   ResponsiveContainer,
-  Line,
-  ComposedChart,
-  Legend,
+  CartesianGrid,
 } from "recharts";
 import {
   Clock,
@@ -71,6 +73,42 @@ export function StatsDisplay() {
   const { data: breakReminders = [] } = useBreakReminders(true); // Always load
 
   // No need for manual data loading - hooks handle everything with optimized caching
+
+  // Calculate current streak from daily activity
+  const calculateCurrentStreak = useMemo(() => {
+    if (!weeklyStats || weeklyStats.length === 0) return 0;
+    
+    // Get today's date and work backwards
+    let streak = 0;
+    const today = new Date();
+    const sortedStats = [...weeklyStats].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    for (let i = 0; i < sortedStats.length; i++) {
+      const stat = sortedStats[i];
+      const statDate = new Date(stat.date);
+      
+      // Check if this date has activity (work sessions > 0)
+      if ((stat.workSessions || 0) > 0) {
+        // If this is the first day we're checking or it's consecutive
+        if (i === 0 || streak > 0) {
+          streak++;
+        } else {
+          break; // No activity on this day, streak is broken
+        }
+      } else {
+        // No activity on this day
+        if (i === 0) {
+          // Today has no activity, streak is 0
+          break;
+        } else {
+          // Previous day had no activity, streak ends
+          break;
+        }
+      }
+    }
+    
+    return streak;
+  }, [weeklyStats]);
 
   const formatTime = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
@@ -243,28 +281,28 @@ export function StatsDisplay() {
                 title="Work Sessions"
                 value={todayStats?.workSessions || 0}
                 icon={Target}
-                color="text-red-500"
+                color="text-primary"
                 description="Focus sessions completed"
               />
               <StatCard
                 title="Focus Time"
                 value={formatTime(todayStats?.focusTimeMinutes || 0)}
                 icon={Clock}
-                color="text-orange-500"
+                color="text-primary"
                 description="Deep work time"
               />
               <StatCard
                 title="Tasks Done"
                 value={todayStats?.tasksCompleted || 0}
                 icon={CheckCircle}
-                color="text-green-500"
+                color="text-primary"
                 description="Completed today"
               />
               <StatCard
                 title="Current Streak"
-                value={0}
+                value={calculateCurrentStreak}
                 icon={Flame}
-                color="text-orange-500"
+                color="text-primary"
                 description="Consecutive active days"
               />
             </div>
@@ -273,7 +311,7 @@ export function StatsDisplay() {
             {user && (
               <Card className="p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <Coffee className="w-5 h-5 text-blue-500" />
+                  <Coffee className="w-5 h-5" />
                   <h3 className="text-lg font-semibold">
                     Break Reminders Today
                   </h3>
@@ -342,68 +380,6 @@ export function StatsDisplay() {
                 )}
               </Card>
             )}
-
-            {/* Today's Focus Time Chart */}
-            {user &&
-              todayStats &&
-              (todayStats.workSessions > 0 ||
-                todayStats.focusTimeMinutes > 0) && (
-                <Card className="p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <Activity className="w-5 h-5 text-green-500" />
-                    <h3 className="text-lg font-semibold">
-                      Today&apos;s Productivity
-                    </h3>
-                  </div>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-2">
-                        Session Distribution
-                      </p>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm">Work Sessions</span>
-                          <span className="font-semibold">
-                            {todayStats.workSessions}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm">Sessions</span>
-                          <span className="font-semibold">
-                            {todayStats.totalSessions}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-2">
-                        Time Breakdown
-                      </p>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm">Focus Time</span>
-                          <span className="font-semibold">
-                            {formatTime(todayStats.focusTimeMinutes)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm">Avg/Session</span>
-                          <span className="font-semibold">
-                            {todayStats.workSessions > 0
-                              ? formatTime(
-                                  Math.round(
-                                    todayStats.focusTimeMinutes /
-                                      todayStats.workSessions
-                                  )
-                                )
-                              : "0m"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              )}
           </TabsContent>
 
           <TabsContent value="week" className="space-y-6 mt-6">
@@ -414,28 +390,28 @@ export function StatsDisplay() {
                     title="Sessions"
                     value={getStatsForPeriod("week").totalSessions}
                     icon={Target}
-                    color="text-red-500"
+                    color="text-primary"
                     description="This week"
                   />
                   <StatCard
                     title="Focus Time"
                     value={formatTime(getStatsForPeriod("week").totalFocusTime)}
                     icon={Clock}
-                    color="text-orange-500"
+                    color="text-primary"
                     description="This week"
                   />
                   <StatCard
                     title="Tasks Completed"
                     value={getStatsForPeriod("week").totalTasksCompleted}
                     icon={CheckCircle}
-                    color="text-green-500"
+                    color="text-primary"
                     description="This week"
                   />
                   <StatCard
                     title="Active Days"
                     value={getStatsForPeriod("week").activeDays}
                     icon={Calendar}
-                    color="text-blue-500"
+                    color="text-primary"
                     description="Days with activity"
                   />
                 </div>
@@ -451,21 +427,22 @@ export function StatsDisplay() {
                       config={{
                         workSessions: {
                           label: "Work Sessions",
-                          color: "#ef4444", // Red for work sessions
+                          color: "#dc2626", // Red
                         },
                         focusHours: {
                           label: "Focus Hours", 
-                          color: "#3b82f6", // Blue for focus hours
+                          color: "#f97316", // Orange
                         },
                         tasksCompleted: {
                           label: "Tasks Completed",
-                          color: "#10b981", // Green for tasks completed
+                          color: "#ec4899", // Pink
                         },
-                      }}
+                      } satisfies ChartConfig}
                       className="h-[320px]"
                     >
                       <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart
+                        <BarChart
+                          accessibilityLayer
                           data={weeklyStats.map((stat: any) => ({
                             day: new Date(stat.date).toLocaleDateString(
                               "en-US",
@@ -479,8 +456,9 @@ export function StatsDisplay() {
                               ) / 10,
                             tasksCompleted: stat.tasksCompleted || 0,
                           }))}
-                          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                          margin={{ top: 20, right: 30, left: 40, bottom: 40 }}
                         >
+                          <CartesianGrid vertical={false} />
                           <XAxis
                             dataKey="day"
                             axisLine={false}
@@ -489,6 +467,7 @@ export function StatsDisplay() {
                               fontSize: 12,
                               fill: "hsl(var(--muted-foreground))",
                             }}
+                            height={40}
                           />
                           <YAxis
                             axisLine={false}
@@ -497,122 +476,54 @@ export function StatsDisplay() {
                               fontSize: 12,
                               fill: "hsl(var(--muted-foreground))",
                             }}
+                            width={40}
                           />
-                          <Legend
-                            content={(props) => {
-                              const { payload } = props;
-                              return (
-                                <div className="flex justify-center gap-6 mt-4 text-sm">
-                                  {payload?.map((entry, index) => (
-                                    <div key={index} className="flex items-center gap-2">
-                                      <div
-                                        className="w-3 h-3 rounded"
-                                        style={{ backgroundColor: entry.color }}
-                                      />
-                                      <span className="text-muted-foreground">
-                                        {entry.value === "workSessions" ? "Work Sessions" :
-                                         entry.value === "focusHours" ? "Focus Hours" :
-                                         entry.value === "tasksCompleted" ? "Tasks Completed" :
-                                         entry.value}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              );
-                            }}
-                          />
-                          <ChartTooltip
+                          <ChartTooltip 
                             content={
-                              <ChartTooltipContent
-                                formatter={(value, name) => {
-                                  if (name === "workSessions")
-                                    return [
-                                      `${value} sessions`,
-                                      "Work Sessions",
-                                    ];
-                                  if (name === "focusHours")
-                                    return [`${value}h`, "Focus Time"];
-                                  if (name === "tasksCompleted")
-                                    return [
-                                      `${value} tasks`,
-                                      "Tasks Completed",
-                                    ];
-                                  return [value, name];
-                                }}
+                              <ChartTooltipContent 
+                                indicator="line"
                                 labelFormatter={(label, payload) => {
                                   const data = payload?.[0]?.payload;
                                   return data?.date
-                                    ? new Date(data.date).toLocaleDateString(
-                                        "en-US",
-                                        {
-                                          weekday: "long",
-                                          month: "short",
-                                          day: "numeric",
-                                        }
-                                      )
+                                    ? new Date(data.date).toLocaleDateString("en-US", {
+                                        weekday: "long",
+                                        month: "short",
+                                        day: "numeric",
+                                      })
                                     : label;
                                 }}
+                                formatter={(value, name) => [
+                                  `${value} ${name === 'focusHours' ? 'h' : ''}`,
+                                  name === 'workSessions' ? 'Work Sessions' :
+                                  name === 'focusHours' ? 'Focus Hours' :
+                                  name === 'tasksCompleted' ? 'Tasks Completed' : name
+                                ]}
                               />
                             }
+                            cursor={false}
                           />
+                          <ChartLegend content={<ChartLegendContent />} />
                           <Bar
                             dataKey="workSessions"
+                            stackId="a"
                             fill="var(--color-workSessions)"
-                            radius={[2, 2, 0, 0]}
-                            maxBarSize={50}
+                            radius={[0, 0, 4, 4]}
                           />
                           <Bar
                             dataKey="focusHours"
+                            stackId="a"
                             fill="var(--color-focusHours)"
-                            radius={[2, 2, 0, 0]}
-                            maxBarSize={50}
+                            radius={[0, 0, 0, 0]}
                           />
                           <Bar
                             dataKey="tasksCompleted"
+                            stackId="a"
                             fill="var(--color-tasksCompleted)"
-                            radius={[2, 2, 0, 0]}
-                            maxBarSize={50}
+                            radius={[4, 4, 0, 0]}
                           />
-                        </ComposedChart>
+                        </BarChart>
                       </ResponsiveContainer>
                     </ChartContainer>
-
-                    {/* Weekly Summary Cards */}
-                    <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t">
-                      <div className="text-center">
-                        <p
-                          className="text-2xl font-bold"
-                          style={{ color: "var(--color-workSessions)" }}
-                        >
-                          {getStatsForPeriod("week").totalSessions}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Work Sessions
-                        </p>
-                      </div>
-                      <div className="text-center">
-                        <p
-                          className="text-2xl font-bold"
-                          style={{ color: "var(--color-focusHours)" }}
-                        >
-                          {formatTime(getStatsForPeriod("week").totalFocusTime)}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Focus Time
-                        </p>
-                      </div>
-                      <div className="text-center">
-                        <p
-                          className="text-2xl font-bold"
-                          style={{ color: "var(--color-tasksCompleted)" }}
-                        >
-                          {getStatsForPeriod("week").totalTasksCompleted}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Tasks Done
-                        </p>
-                      </div>
-                    </div>
                   </Card>
                 )}
               </>
@@ -656,7 +567,7 @@ export function StatsDisplay() {
                     title="Sessions"
                     value={getStatsForPeriod("month").totalSessions}
                     icon={Target}
-                    color="text-red-500"
+                    color=" text-primary"
                     description="This month"
                   />
                   <StatCard
@@ -665,21 +576,21 @@ export function StatsDisplay() {
                       getStatsForPeriod("month").totalFocusTime
                     )}
                     icon={Clock}
-                    color="text-orange-500"
+                    color=" text-primary"
                     description="This month"
                   />
                   <StatCard
                     title="Tasks Completed"
                     value={getStatsForPeriod("month").totalTasksCompleted}
                     icon={CheckCircle}
-                    color="text-green-500"
+                    color="text-primary"
                     description="This month"
                   />
                   <StatCard
                     title="Active Days"
                     value={getStatsForPeriod("month").activeDays}
                     icon={Calendar}
-                    color="text-blue-500"
+                    color="text-primary"
                     description="Days with activity"
                   />
                 </div>
@@ -688,28 +599,29 @@ export function StatsDisplay() {
                 {monthlyStats.length > 0 && (
                   <Card className="p-6">
                     <div className="flex items-center gap-3 mb-6">
-                      <TrendingUp className="w-5 h-5 text-foreground" />
+                      <TrendingUp className="w-5 h-5" />
                       <h3 className="text-lg font-semibold">Monthly Trends</h3>
                     </div>
                     <ChartContainer
                       config={{
                         workSessions: {
                           label: "Work Sessions",
-                          color: "#ef4444", // Red for work sessions
+                          color: "#dc2626", // Red
                         },
                         focusHours: {
                           label: "Focus Hours",
-                          color: "#3b82f6", // Blue for focus hours
+                          color: "#f97316", // Orange
                         },
                         tasksCompleted: {
                           label: "Tasks Completed",
-                          color: "#10b981", // Green for tasks completed
+                          color: "#ec4899", // Pink
                         },
-                      }}
+                      } satisfies ChartConfig}
                       className="h-[380px]"
                     >
                       <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart
+                        <BarChart
+                          accessibilityLayer
                           data={monthlyStats.map((stat: any) => ({
                             day: new Date(stat.date).getDate(),
                             date: stat.date,
@@ -720,8 +632,9 @@ export function StatsDisplay() {
                               ) / 10,
                             tasksCompleted: stat.tasksCompleted || 0,
                           }))}
-                          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                          margin={{ top: 20, right: 30, left: 40, bottom: 40 }}
                         >
+                          <CartesianGrid vertical={false} />
                           <XAxis
                             dataKey="day"
                             axisLine={false}
@@ -730,6 +643,7 @@ export function StatsDisplay() {
                               fontSize: 12,
                               fill: "hsl(var(--muted-foreground))",
                             }}
+                            height={40}
                           />
                           <YAxis
                             axisLine={false}
@@ -738,135 +652,54 @@ export function StatsDisplay() {
                               fontSize: 12,
                               fill: "hsl(var(--muted-foreground))",
                             }}
+                            width={40}
                           />
-                          <Legend
-                            content={(props) => {
-                              const { payload } = props;
-                              return (
-                                <div className="flex justify-center gap-6 mt-4 text-sm">
-                                  {payload?.map((entry, index) => (
-                                    <div key={index} className="flex items-center gap-2">
-                                      <div
-                                        className="w-3 h-3 rounded"
-                                        style={{ backgroundColor: entry.color }}
-                                      />
-                                      <span className="text-muted-foreground">
-                                        {entry.value === "workSessions" ? "Work Sessions" :
-                                         entry.value === "focusHours" ? "Focus Hours" :
-                                         entry.value === "tasksCompleted" ? "Tasks Completed" :
-                                         entry.value}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              );
-                            }}
-                          />
-                          <ChartTooltip
+                          <ChartTooltip 
                             content={
-                              <ChartTooltipContent
-                                formatter={(value, name) => {
-                                  if (name === "workSessions")
-                                    return [
-                                      `${value} sessions`,
-                                      "Work Sessions",
-                                    ];
-                                  if (name === "focusHours")
-                                    return [`${value}h`, "Focus Time"];
-                                  if (name === "tasksCompleted")
-                                    return [
-                                      `${value} tasks`,
-                                      "Tasks Completed",
-                                    ];
-                                  return [value, name];
-                                }}
+                              <ChartTooltipContent 
+                                indicator="line"
                                 labelFormatter={(label, payload) => {
                                   const data = payload?.[0]?.payload;
                                   return data?.date
-                                    ? new Date(data.date).toLocaleDateString(
-                                        "en-US",
-                                        {
-                                          month: "short",
-                                          day: "numeric",
-                                        }
-                                      )
+                                    ? new Date(data.date).toLocaleDateString("en-US", {
+                                        month: "long",
+                                        day: "numeric",
+                                        year: "numeric",
+                                      })
                                     : `Day ${label}`;
                                 }}
+                                formatter={(value, name) => [
+                                  `${value} ${name === 'focusHours' ? 'h' : ''}`,
+                                  name === 'workSessions' ? 'Work Sessions' :
+                                  name === 'focusHours' ? 'Focus Hours' :
+                                  name === 'tasksCompleted' ? 'Tasks Completed' : name
+                                ]}
                               />
                             }
+                            cursor={false}
                           />
+                          <ChartLegend content={<ChartLegendContent />} />
                           <Bar
                             dataKey="workSessions"
+                            stackId="a"
                             fill="var(--color-workSessions)"
-                            radius={[1, 1, 0, 0]}
-                            maxBarSize={20}
+                            radius={[0, 0, 4, 4]}
                           />
                           <Bar
                             dataKey="focusHours"
+                            stackId="a"
                             fill="var(--color-focusHours)"
-                            radius={[1, 1, 0, 0]}
-                            maxBarSize={20}
+                            radius={[0, 0, 0, 0]}
                           />
-                          <Line
-                            type="monotone"
+                          <Bar
                             dataKey="tasksCompleted"
-                            stroke="var(--color-tasksCompleted)"
-                            strokeWidth={3}
-                            dot={{
-                              fill: "var(--color-tasksCompleted)",
-                              strokeWidth: 0,
-                              r: 3,
-                            }}
-                            activeDot={{ r: 5, strokeWidth: 0 }}
+                            stackId="a"
+                            fill="var(--color-tasksCompleted)"
+                            radius={[4, 4, 0, 0]}
                           />
-                        </ComposedChart>
+                        </BarChart>
                       </ResponsiveContainer>
                     </ChartContainer>
-
-                    {/* Monthly Summary Grid */}
-                    <div className="grid grid-cols-4 gap-4 mt-6 pt-6 border-t">
-                      <div className="text-center">
-                        <p
-                          className="text-xl font-bold"
-                          style={{ color: "var(--color-workSessions)" }}
-                        >
-                          {getStatsForPeriod("month").totalSessions}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Sessions
-                        </p>
-                      </div>
-                      <div className="text-center">
-                        <p
-                          className="text-xl font-bold"
-                          style={{ color: "var(--color-focusHours)" }}
-                        >
-                          {formatTime(
-                            getStatsForPeriod("month").totalFocusTime
-                          )}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Focus Time
-                        </p>
-                      </div>
-                      <div className="text-center">
-                        <p
-                          className="text-xl font-bold"
-                          style={{ color: "var(--color-tasksCompleted)" }}
-                        >
-                          {getStatsForPeriod("month").totalTasksCompleted}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Tasks</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-xl font-bold text-foreground">
-                          {getStatsForPeriod("month").activeDays}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Active Days
-                        </p>
-                      </div>
-                    </div>
                   </Card>
                 )}
               </>

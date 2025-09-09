@@ -521,7 +521,8 @@ export function useTaskMutations() {
             return { previousStats };
         },
         onSuccess: (data, variables) => {
-            // Update task creation count permanently
+            // Don't increment again - the optimistic update already did it
+            // Just mark the update as successful and add timestamp
             const todayKey = queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString());
             
             queryClient.setQueryData(todayKey, (old: any) => {
@@ -534,7 +535,7 @@ export function useTaskMutations() {
                         longBreakSessions: 0,
                         focusTimeMinutes: 0,
                         tasksCompleted: 0,
-                        tasksCreated: 1,
+                        tasksCreated: 1, // Only if no previous data
                         breakRemindersShown: 0,
                         breakRemindersCompleted: 0,
                         _lastUpdated: Date.now()
@@ -542,8 +543,7 @@ export function useTaskMutations() {
                 }
                 return {
                     ...old,
-                    tasksCreated: (old.tasksCreated || 0) + 1,
-                    _lastUpdated: Date.now()
+                    _lastUpdated: Date.now() // Just update timestamp, don't increment again
                 };
             });
 
@@ -655,7 +655,8 @@ export function useTaskMutations() {
             return { previousTasks, previousStats };
         },
         onSuccess: (data, variables) => {
-            // Update task completion count permanently
+            // Don't increment again - the optimistic update already did it
+            // Just mark the update as successful and add timestamp
             const todayKey = queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString());
             
             queryClient.setQueryData(todayKey, (old: any) => {
@@ -667,7 +668,7 @@ export function useTaskMutations() {
                         shortBreakSessions: 0,
                         longBreakSessions: 0,
                         focusTimeMinutes: 0,
-                        tasksCompleted: 1,
+                        tasksCompleted: 1, // Only if no previous data
                         tasksCreated: 0,
                         breakRemindersShown: 0,
                         breakRemindersCompleted: 0,
@@ -676,8 +677,7 @@ export function useTaskMutations() {
                 }
                 return {
                     ...old,
-                    tasksCompleted: (old.tasksCompleted || 0) + 1,
-                    _lastUpdated: Date.now()
+                    _lastUpdated: Date.now() // Just update timestamp, don't increment again
                 };
             });
 
@@ -736,15 +736,15 @@ export function useTaskMutations() {
             return { previousTasks, previousStats };
         },
         onSuccess: (data, variables) => {
-            // Update task completion count permanently (decrement)
+            // Don't decrement again - the optimistic update already did it
+            // Just mark the update as successful and add timestamp
             const todayKey = queryKeys.dailyAggregatedStats(user?.uid || '', getTodayString());
             
             queryClient.setQueryData(todayKey, (old: any) => {
                 if (!old) return old;
                 return {
                     ...old,
-                    tasksCompleted: Math.max((old.tasksCompleted || 0) - 1, 0),
-                    _lastUpdated: Date.now()
+                    _lastUpdated: Date.now() // Just update timestamp, don't decrement again
                 };
             });
 

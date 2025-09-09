@@ -357,7 +357,7 @@ export function StatsDisplay() {
                           <div className="flex items-center gap-3">
                             <Badge
                               variant="secondary"
-                              className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                              
                             >
                               {stat.todayCount} completed
                             </Badge>
@@ -434,11 +434,11 @@ export function StatsDisplay() {
                           color: "#f97316", // Orange
                         },
                         tasksCompleted: {
-                          label: "Tasks Completed",
+                          label: "Tasks",
                           color: "#ec4899", // Pink
                         },
                       } satisfies ChartConfig}
-                      className="h-[320px]"
+                      className="h-[320px]" 
                     >
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
@@ -478,28 +478,8 @@ export function StatsDisplay() {
                             }}
                             width={40}
                           />
-                          <ChartTooltip 
-                            content={
-                              <ChartTooltipContent 
-                                indicator="line"
-                                labelFormatter={(label, payload) => {
-                                  const data = payload?.[0]?.payload;
-                                  return data?.date
-                                    ? new Date(data.date).toLocaleDateString("en-US", {
-                                        weekday: "long",
-                                        month: "short",
-                                        day: "numeric",
-                                      })
-                                    : label;
-                                }}
-                                formatter={(value, name) => [
-                                  `${value} ${name === 'focusHours' ? 'h' : ''}`,
-                                  name === 'workSessions' ? 'Work Sessions' :
-                                  name === 'focusHours' ? 'Focus Hours' :
-                                  name === 'tasksCompleted' ? 'Tasks Completed' : name
-                                ]}
-                              />
-                            }
+                          <ChartTooltip
+                            content={<ChartTooltipContent indicator="line" />}
                             cursor={false}
                           />
                           <ChartLegend content={<ChartLegendContent />} />
@@ -613,7 +593,7 @@ export function StatsDisplay() {
                           color: "#f97316", // Orange
                         },
                         tasksCompleted: {
-                          label: "Tasks Completed",
+                          label: "Tasks",
                           color: "#ec4899", // Pink
                         },
                       } satisfies ChartConfig}
@@ -654,28 +634,8 @@ export function StatsDisplay() {
                             }}
                             width={40}
                           />
-                          <ChartTooltip 
-                            content={
-                              <ChartTooltipContent 
-                                indicator="line"
-                                labelFormatter={(label, payload) => {
-                                  const data = payload?.[0]?.payload;
-                                  return data?.date
-                                    ? new Date(data.date).toLocaleDateString("en-US", {
-                                        month: "long",
-                                        day: "numeric",
-                                        year: "numeric",
-                                      })
-                                    : `Day ${label}`;
-                                }}
-                                formatter={(value, name) => [
-                                  `${value} ${name === 'focusHours' ? 'h' : ''}`,
-                                  name === 'workSessions' ? 'Work Sessions' :
-                                  name === 'focusHours' ? 'Focus Hours' :
-                                  name === 'tasksCompleted' ? 'Tasks Completed' : name
-                                ]}
-                              />
-                            }
+                          <ChartTooltip
+                            content={<ChartTooltipContent indicator="line" />}
                             cursor={false}
                           />
                           <ChartLegend content={<ChartLegendContent />} />

@@ -219,6 +219,9 @@ class AudioService {
     }
 
     getAudioDisplayName(key: string): string {
+        if (!key) {
+            return "Unknown Audio";
+        }
         const metadata = this.audioMetadata[key];
         return metadata ? metadata.name : key.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }

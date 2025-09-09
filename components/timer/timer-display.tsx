@@ -328,21 +328,26 @@ export function TimerDisplay({
   };
 
   const getCurrentAudioKey = () => {
+    if (!settings) {
+      return "none";
+    }
+    
     if (sessionType === "work") {
-      return settings.focusAudio;
+      return settings.focusAudio || "none";
     } else if (sessionType === "shortBreak") {
-      return settings.shortBreakAudio;
+      return settings.shortBreakAudio || "none";
     } else if (sessionType === "longBreak") {
-      return settings.longBreakAudio;
+      return settings.longBreakAudio || "none";
     }
     return "none";
   };
 
   const getCurrentAudioName = () => {
     const currentKey = getCurrentAudioKey();
-    return currentKey === "none"
-      ? "No Sound"
-      : audioService.getAudioDisplayName(currentKey);
+    if (!currentKey || currentKey === "none") {
+      return "No Sound";
+    }
+    return audioService.getAudioDisplayName(currentKey);
   };
 
   return (

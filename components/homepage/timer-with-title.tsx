@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { TimerDisplay } from "@/components/timer/timer-display";
 import { BreakReminderDisplay } from "@/components/timer/break-reminder-display";
 import { DynamicTitle } from "./dynamic-title";
@@ -42,8 +42,16 @@ export function TimerWithTitle({
   >("work");
   const [currentSession, setCurrentSession] = useState(1);
   const [totalSessions, setTotalSessions] = useState(4);
-  const { data: settingsData } = useSettings();
+  const { data: settingsData, isLoading: settingsLoading } = useSettings();
   const settings = settingsData || LocalStorage.getSettings();
+  
+  // Ensure settings are valid before using them
+  const safeSettings = useMemo(() => {
+    if (!settings || settingsLoading) {
+      return LocalStorage.getSettings(); // Fallback to localStorage defaults
+    }
+    return settings;
+  }, [settings, settingsLoading]);
   const [currentTask, setCurrentTask] = useState<any | null>(null);
   const [showBreakReminders, setShowBreakReminders] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string>("");
@@ -236,8 +244,8 @@ export function TimerWithTitle({
     storageProvider.basic.clearCurrentSession();
 
     // Play completion sound and vibrate
-    if (settings.notificationAudio !== "none") {
-      audioService.playNotification(settings.notificationAudio);
+    if (safeSettings.notificationAudio !== "none") {
+      audioService.playNotification(safeSettings.notificationAudio);
     }
     vibrationService.sessionComplete();
 
@@ -448,7 +456,7 @@ export function TimerWithTitle({
             setTotalTime(newDuration * 60);
           }
         }}
-        settings={settings}
+        settings={safeSettings}
         currentTask={currentTask}
         todaysTaskSessions={todaysTaskSessions}
         todaysWorkSessions={todaysWorkSessions}

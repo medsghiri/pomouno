@@ -3,10 +3,10 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { AudioFile } from '@/lib/storage';
 
-// Cache for audio metadata
+// Cache for audio metadata - permanent cache (Cloudflare handles updates)
 let audioCache: Record<string, AudioFile> | null = null;
 let cacheTimestamp: number = 0;
-const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
+const CACHE_DURATION = Number.MAX_SAFE_INTEGER; // Cache forever
 
 /**
  * GET /api/audio - Fetch all audio files with proper ordering

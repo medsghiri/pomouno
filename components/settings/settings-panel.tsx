@@ -535,15 +535,32 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                   </SelectTrigger>
                   <SelectContent className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
                     <SelectItem value="none">No Sound</SelectItem>
-                    {availableAudio.focus.map((audioKey) => (
-                      <SelectItem
-                        key={audioKey}
-                        value={audioKey}
-                        className="text-gray-900 dark:text-white"
-                      >
-                        {audioService.getAudioDisplayName(audioKey)}
-                      </SelectItem>
-                    ))}
+                    {(() => {
+                      const groupedAudio =
+                        audioService.getAudioByCategory("focus");
+                      return Object.entries(groupedAudio)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([groupName, audioItems]) => (
+                          <div key={groupName}>
+                            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                              {groupName}
+                            </div>
+                            {audioItems
+                              .sort((a, b) =>
+                                a.metadata.name.localeCompare(b.metadata.name)
+                              )
+                              .map(({ key, metadata }) => (
+                                <SelectItem
+                                  key={key}
+                                  value={key}
+                                  className="text-foreground"
+                                >
+                                  {metadata.name}
+                                </SelectItem>
+                              ))}
+                          </div>
+                        ));
+                    })()}
                   </SelectContent>
                 </Select>
                 {settings.focusAudio !== "none" && (
@@ -594,15 +611,32 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                   </SelectTrigger>
                   <SelectContent className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
                     <SelectItem value="none">No Sound</SelectItem>
-                    {availableAudio.break.map((audioKey) => (
-                      <SelectItem
-                        key={audioKey}
-                        value={audioKey}
-                        className="text-gray-900 dark:text-white"
-                      >
-                        {audioService.getAudioDisplayName(audioKey)}
-                      </SelectItem>
-                    ))}
+                    {(() => {
+                      const groupedAudio =
+                        audioService.getAudioByCategory("break");
+                      return Object.entries(groupedAudio)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([groupName, audioItems]) => (
+                          <div key={groupName}>
+                            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                              {groupName}
+                            </div>
+                            {audioItems
+                              .sort((a, b) =>
+                                a.metadata.name.localeCompare(b.metadata.name)
+                              )
+                              .map(({ key, metadata }) => (
+                                <SelectItem
+                                  key={key}
+                                  value={key}
+                                  className="text-foreground"
+                                >
+                                  {metadata.name}
+                                </SelectItem>
+                              ))}
+                          </div>
+                        ));
+                    })()}
                   </SelectContent>
                 </Select>
                 {settings.shortBreakAudio !== "none" && (
@@ -653,15 +687,32 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                   </SelectTrigger>
                   <SelectContent className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
                     <SelectItem value="none">No Sound</SelectItem>
-                    {availableAudio.break.map((audioKey) => (
-                      <SelectItem
-                        key={audioKey}
-                        value={audioKey}
-                        className="text-gray-900 dark:text-white"
-                      >
-                        {audioService.getAudioDisplayName(audioKey)}
-                      </SelectItem>
-                    ))}
+                    {(() => {
+                      const groupedAudio =
+                        audioService.getAudioByCategory("break");
+                      return Object.entries(groupedAudio)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([groupName, audioItems]) => (
+                          <div key={groupName}>
+                            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                              {groupName}
+                            </div>
+                            {audioItems
+                              .sort((a, b) =>
+                                a.metadata.name.localeCompare(b.metadata.name)
+                              )
+                              .map(({ key, metadata }) => (
+                                <SelectItem
+                                  key={key}
+                                  value={key}
+                                  className="text-foreground"
+                                >
+                                  {metadata.name}
+                                </SelectItem>
+                              ))}
+                          </div>
+                        ));
+                    })()}
                   </SelectContent>
                 </Select>
                 {settings.longBreakAudio !== "none" && (
@@ -712,15 +763,32 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
                   </SelectTrigger>
                   <SelectContent className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
                     <SelectItem value="none">No Sound</SelectItem>
-                    {availableAudio.notification.map((audioKey) => (
-                      <SelectItem
-                        key={audioKey}
-                        value={audioKey}
-                        className="text-gray-900 dark:text-white"
-                      >
-                        {audioService.getAudioDisplayName(audioKey)}
-                      </SelectItem>
-                    ))}
+                    {(() => {
+                      const groupedAudio =
+                        audioService.getAudioByCategory("notification");
+                      return Object.entries(groupedAudio)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([groupName, audioItems]) => (
+                          <div key={groupName}>
+                            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                              {groupName}
+                            </div>
+                            {audioItems
+                              .sort((a, b) =>
+                                a.metadata.name.localeCompare(b.metadata.name)
+                              )
+                              .map(({ key, metadata }) => (
+                                <SelectItem
+                                  key={key}
+                                  value={key}
+                                  className="text-foreground"
+                                >
+                                  {metadata.name}
+                                </SelectItem>
+                              ))}
+                          </div>
+                        ));
+                    })()}
                   </SelectContent>
                 </Select>
                 {settings.notificationAudio !== "none" && (

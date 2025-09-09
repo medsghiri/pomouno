@@ -1,18 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Play, Pause, Square, Music, ChevronDown, Check, VolumeX } from "lucide-react";
+import {
+  Play,
+  Pause,
+  Square,
+  Music,
+  Check,
+  VolumeX,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SoundControlPopover } from "./sound-control-popover";
 import { cn } from "@/lib/utils";
 import { Settings } from "@/lib/storage";
@@ -54,10 +59,10 @@ export function TimerDisplay({
 }: TimerDisplayProps) {
   const [mounted, setMounted] = useState(false);
   const [isAudioServiceReady, setIsAudioServiceReady] = useState(false);
-  
+
   // Add settings mutation hook for direct updates
   const updateSettings = useSettingsMutation();
-  
+
   const audioService = AudioService.getInstance();
   const vibrationService = VibrationService.getInstance();
 
@@ -65,10 +70,10 @@ export function TimerDisplay({
     setMounted(true);
   }, []);
 
-    // EMERGENCY FIX: Initialize audio service immediately so dropdowns work
+  // EMERGENCY FIX: Initialize audio service immediately so dropdowns work
   useEffect(() => {
     // Initialize audio service immediately for dropdown functionality
-    if (!audioService.isReady() && typeof window !== 'undefined') {
+    if (!audioService.isReady() && typeof window !== "undefined") {
       audioService.initialize().then(() => {
         // Check if service is truly ready with data
         const checkReady = () => {
@@ -84,7 +89,7 @@ export function TimerDisplay({
     } else if (audioService.isReady()) {
       setIsAudioServiceReady(true);
     }
-    
+
     // Set volume regardless of initialization status
     audioService.setVolume(settings.soundVolume);
     audioService.setNotificationVolume(settings.notificationVolume);
@@ -110,7 +115,7 @@ export function TimerDisplay({
         } else if (sessionType === "longBreak") {
           audioKey = settings.longBreakAudio;
         }
-        
+
         if (audioKey !== "none") {
           audioService.playAudio(audioKey, false);
         }
@@ -274,16 +279,16 @@ export function TimerDisplay({
   // Get available audio for current session type using the audio service
   const getCurrentAudioOptions = () => {
     if (!isAudioServiceReady) return [];
-    
+
     const categoryType = sessionType === "work" ? "focus" : "break";
     const groupedAudio = audioService.getAudioByCategory(categoryType);
-    
+
     // Flatten the grouped audio into a simple array
     const audioOptions: string[] = [];
-    Object.values(groupedAudio).forEach(audioItems => {
+    Object.values(groupedAudio).forEach((audioItems) => {
       audioItems.forEach(({ key }) => audioOptions.push(key));
     });
-    
+
     return audioOptions;
   };
 
@@ -311,7 +316,7 @@ export function TimerDisplay({
     if (isActive && settings.soundVolume > 0) {
       // Stop current audio only (not all audio including notifications)
       audioService.stopCurrentAudio();
-      
+
       // Start new audio immediately if not paused and audio is selected
       if (newAudioKey !== "none" && !isPaused) {
         // Small delay for smooth transition
@@ -434,7 +439,7 @@ export function TimerDisplay({
                   sessions
                 </span>
               </div>
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div className="w-full bg-accent rounded-full h-2">
                 <div
                   className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-300"
                   style={{
@@ -454,7 +459,7 @@ export function TimerDisplay({
       {/* Audio Control Section - Always Visible */}
       <div className="space-y-3">
         {/* Current Track Display */}
-        <div className="flex items-center justify-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
           <Music className="w-4 h-4" />
           <span>
             {currentTrackInfo &&
@@ -468,7 +473,7 @@ export function TimerDisplay({
             isActive &&
             !isPaused &&
             settings.soundVolume > 0 && (
-              <span className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+              <span className="text-xs bg-accent px-2 py-1 rounded">
                 {currentTrackInfo.playlistPosition}
               </span>
             )}
@@ -477,51 +482,46 @@ export function TimerDisplay({
         {/* Audio Controls */}
         <div className="flex items-center justify-center gap-2">
           {/* Audio Selection Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="">
-                <Music className="w-4 h-4 mr-2" />
-                {getCurrentAudioName()}
-                <ChevronDown className="w-4 h-4 ml-2" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="center"
-              className="w-56 backdrop-blur-sm"
+          <div className="flex items-center gap-2">
+            <Music className="w-4 h-4 text-muted-foreground" />
+            <Select
+              value={getCurrentAudioKey()}
+              onValueChange={handleAudioChange}
             >
-              <DropdownMenuItem
-                onClick={() => handleAudioChange("none")}
-                className="flex items-center justify-between text-gray-900 dark:text-white"
-              >
-                <span>No Sound</span>
-                {getCurrentAudioKey() === "none" && (
-                  <Check className="w-4 h-4" />
-                )}
-              </DropdownMenuItem>
-              {(() => {
-                const categoryType = sessionType === "work" ? "focus" : "break";
-                const groupedAudio = audioService.getAudioByCategory(categoryType);
-                return Object.entries(groupedAudio).map(([groupName, audioItems]) => (
-                  <DropdownMenuGroup key={groupName}>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel className="text-gray-600 dark:text-gray-400">{groupName}</DropdownMenuLabel>
-                    {audioItems.map(({ key }) => (
-                      <DropdownMenuItem
-                        key={key}
-                        onClick={() => handleAudioChange(key)}
-                        className="flex items-center justify-between text-gray-900 dark:text-white"
-                      >
-                        <span>{audioService.getAudioDisplayName(key)}</span>
-                        {getCurrentAudioKey() === key && (
-                          <Check className="w-4 h-4" />
-                        )}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuGroup>
-                ));
-              })()}
-            </DropdownMenuContent>
-          </DropdownMenu>
+              <SelectTrigger className="min-w-[160px] bg-white/20 dark:bg-gray-700/50 text-gray-900 dark:text-white backdrop-blur-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm max-h-[300px]">
+                <SelectItem value="none">No Sound</SelectItem>
+                {(() => {
+                  const categoryType = sessionType === "work" ? "focus" : "break";
+                  const groupedAudio = audioService.getAudioByCategory(categoryType);
+                  return Object.entries(groupedAudio)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([groupName, audioItems]) => (
+                      <div key={groupName}>
+                        <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          {groupName}
+                        </div>
+                        {audioItems
+                          .sort((a, b) =>
+                            a.metadata.name.localeCompare(b.metadata.name)
+                          )
+                          .map(({ key, metadata }) => (
+                            <SelectItem
+                              key={key}
+                              value={key}
+                              className="text-foreground"
+                            >
+                              {metadata.name}
+                            </SelectItem>
+                          ))}
+                      </div>
+                    ));
+                })()}
+              </SelectContent>
+            </Select>
+          </div>
 
           {/* Sound Control Popover - always show for audio selection and volume control */}
           <SoundControlPopover />
@@ -531,7 +531,9 @@ export function TimerDisplay({
         {settings.soundVolume === 0 && getCurrentAudioKey() !== "none" && (
           <div className="flex items-center justify-center gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2 mx-4">
             <VolumeX className="w-4 h-4" />
-            <span>Audio is muted. Adjust volume in the sound controls above.</span>
+            <span>
+              Audio is muted. Adjust volume in the sound controls above.
+            </span>
           </div>
         )}
       </div>
@@ -544,7 +546,7 @@ export function TimerDisplay({
             isActive ? "cursor-not-allowed opacity-50" : "cursor-pointer",
             sessionType === "work"
               ? "bg-red-500/20 ring-2 ring-red-500/50 dark:bg-red-500/20 dark:ring-red-400/50"
-              : "bg-white/10 hover:bg-white/15 dark:bg-gray-800/30 dark:hover:bg-gray-700/40"
+              : "bg-white/10 hover:bg-white/15 dark:bg-accent/30 dark:hover:bg-accent/40"
           )}
           onClick={() => handleSessionTypeChange("work")}
         >
@@ -554,7 +556,7 @@ export function TimerDisplay({
                 "font-medium text-xs sm:text-sm",
                 sessionType === "work"
                   ? "text-red-700 dark:text-red-300"
-                  : "text-gray-900 dark:text-gray-100"
+                  : "text-foreground"
               )}
             >
               Focus
@@ -564,7 +566,7 @@ export function TimerDisplay({
                 "text-xs",
                 sessionType === "work"
                   ? "text-red-600 dark:text-red-400"
-                  : "text-gray-700 dark:text-gray-400"
+                  : "text-muted-foreground"
               )}
             >
               {getSessionDuration("work")}
@@ -578,7 +580,7 @@ export function TimerDisplay({
             isActive ? "cursor-not-allowed opacity-50" : "cursor-pointer",
             sessionType === "shortBreak"
               ? "bg-green-500/20 ring-2 ring-green-500/50 dark:bg-green-500/20 dark:ring-green-400/50"
-              : "bg-white/10 hover:bg-white/15 dark:bg-gray-800/30 dark:hover:bg-gray-700/40"
+              : "bg-white/10 hover:bg-white/15 dark:bg-accent/30 dark:hover:bg-accent/40"
           )}
           onClick={() => handleSessionTypeChange("shortBreak")}
         >
@@ -588,7 +590,7 @@ export function TimerDisplay({
                 "font-medium text-xs sm:text-sm",
                 sessionType === "shortBreak"
                   ? "text-green-700 dark:text-green-300"
-                  : "text-gray-900 dark:text-gray-100"
+                  : "text-foreground"
               )}
             >
               <span className="hidden sm:inline">Short </span>Break
@@ -598,7 +600,7 @@ export function TimerDisplay({
                 "text-xs",
                 sessionType === "shortBreak"
                   ? "text-green-600 dark:text-green-400"
-                  : "text-gray-700 dark:text-gray-400"
+                  : "text-muted-foreground"
               )}
             >
               {getSessionDuration("shortBreak")}
@@ -612,7 +614,7 @@ export function TimerDisplay({
             isActive ? "cursor-not-allowed opacity-50" : "cursor-pointer",
             sessionType === "longBreak"
               ? "bg-blue-500/20 ring-2 ring-blue-500/50 dark:bg-blue-500/20 dark:ring-blue-400/50"
-              : "bg-white/10 hover:bg-white/15 dark:bg-gray-800/30 dark:hover:bg-gray-700/40"
+              : "bg-white/10 hover:bg-white/15 dark:bg-accent/30 dark:hover:bg-accent/40"
           )}
           onClick={() => handleSessionTypeChange("longBreak")}
         >
@@ -622,7 +624,7 @@ export function TimerDisplay({
                 "font-medium text-xs sm:text-sm",
                 sessionType === "longBreak"
                   ? "text-blue-700 dark:text-blue-300"
-                  : "text-gray-900 dark:text-gray-100"
+                  : "text-foreground"
               )}
             >
               <span className="hidden sm:inline">Long </span>Break
@@ -632,7 +634,7 @@ export function TimerDisplay({
                 "text-xs",
                 sessionType === "longBreak"
                   ? "text-blue-600 dark:text-blue-400"
-                  : "text-gray-700 dark:text-gray-400"
+                  : "text-muted-foreground"
               )}
             >
               {getSessionDuration("longBreak")}
@@ -647,7 +649,7 @@ export function TimerDisplay({
           <Button
             onClick={handleStartClick}
             size="lg"
-            className="px-6 sm:px-12 py-3 sm:py-4 text-base sm:text-lg font-medium bg-white/20 hover:bg-white/30 text-gray-900 dark:text-gray-100 transition-all duration-200 backdrop-blur-sm dark:bg-gray-700/50 dark:hover:bg-gray-600/50"
+            className="px-6 sm:px-12 py-3 sm:py-4 text-base sm:text-lg font-medium bg-white/20 hover:bg-white/30 text-foreground transition-all duration-200 backdrop-blur-sm dark:bg-accent/50 dark:hover:bg-accent/60"
           >
             <Play className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
             <span className="hidden sm:inline">
@@ -660,7 +662,7 @@ export function TimerDisplay({
             <Button
               onClick={isPaused ? handleStartClick : handlePauseClick}
               size="lg"
-              className="px-4 sm:px-8 py-3 sm:py-4 bg-white/20 hover:bg-white/30 text-gray-900 dark:text-gray-100 transition-all duration-200 backdrop-blur-sm dark:bg-gray-700/50 dark:hover:bg-gray-600/50"
+              className="px-4 sm:px-8 py-3 sm:py-4 bg-white/20 hover:bg-white/30 text-foreground transition-all duration-200 backdrop-blur-sm dark:bg-accent/50 dark:hover:bg-accent/60"
             >
               {isPaused ? (
                 <>
@@ -679,7 +681,7 @@ export function TimerDisplay({
               onClick={handleStopClick}
               size="lg"
               variant="outline"
-              className="px-4 sm:px-8 py-3 sm:py-4 bg-white/10 hover:bg-white/20 text-gray-900 dark:text-gray-100 transition-all duration-200 backdrop-blur-sm dark:bg-gray-800/30 dark:hover:bg-gray-700/40"
+              className="px-4 sm:px-8 py-3 sm:py-4 bg-white/10 hover:bg-white/20 text-foreground transition-all duration-200 backdrop-blur-sm dark:bg-accent/30 dark:hover:bg-accent/40"
             >
               <Square className="w-4 h-4 sm:w-5 sm:h-5 sm:mr-2" />
               <span className="hidden sm:inline">Stop</span>

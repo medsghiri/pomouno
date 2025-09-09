@@ -43,7 +43,7 @@ class AudioService {
     async initialize() {
         // EMERGENCY FIX: Prevent multiple simultaneous initializations
         if (this.isInitialized || typeof window === 'undefined') return;
-        
+
         if (this.isLoading) {
             // If already loading, wait for completion instead of starting another load
             while (this.isLoading) {
@@ -121,12 +121,12 @@ class AudioService {
 
             // NEW: Use server-side cached audio metadata instead of direct Firebase calls
             console.log('🔍 Loading audio metadata from cache...');
-            
+
             const cachedMetadata = await getAudioMetadata();
             this.audioMetadata = cachedMetadata;
-            
+
             console.log(`✅ Loaded ${Object.keys(this.audioMetadata).length} audio files from cache`);
-            
+
             // Mark as globally initialized
             AudioService.isGloballyInitialized = true;
         } catch (error) {
@@ -139,6 +139,7 @@ class AudioService {
     private async initializeAudioElements() {
         const initPromises = Object.entries(this.audioMetadata).map(async ([key, metadata]) => {
             try {
+                console.log(`🔍 Initializing audio ${key} with path: ${metadata.storagePath}`);
                 const storageRef = ref(storage, metadata.storagePath);
                 const audioUrl = await getDownloadURL(storageRef);
 
@@ -149,8 +150,9 @@ class AudioService {
 
                 this.audioLibrary[key] = audio;
                 this.audioMetadata[key].downloadUrl = audioUrl;
+                console.log(`✅ Successfully initialized audio ${key}`);
             } catch (error) {
-                console.error(`Failed to initialize audio ${key}:`, error);
+                console.error(`❌ Failed to initialize audio ${key} with path ${metadata.storagePath}:`, error);
             }
         });
 
@@ -223,13 +225,11 @@ class AudioService {
             })
             .map(([key, metadata]) => ({ key, metadata }));
 
-        // Group by category for better organization
-        const grouped: { [category: string]: Array<{ key: string; metadata: AudioFile }> } = {};
-        
+        // Group by type for better organization
+        const grouped: { [type: string]: Array<{ key: string; metadata: AudioFile }> } = {};
+
         audioItems.forEach(({ key, metadata }) => {
-            const groupName = metadata.category === 'focus' ? 'Focus Sounds' : 
-                             metadata.category === 'break' ? 'Break Sounds' : 
-                             'Notification Sounds';
+            const groupName = this.getTypeDisplayName(metadata.type);
             if (!grouped[groupName]) {
                 grouped[groupName] = [];
             }
@@ -237,6 +237,21 @@ class AudioService {
         });
 
         return grouped;
+    }
+
+    // Get display name for audio type
+    private getTypeDisplayName(type: string): string {
+        const typeMap: { [key: string]: string } = {
+            'ticking': 'Clock Ticking',
+            'lofi': 'Lo-Fi Music',
+            'nature': 'Nature Sounds',
+            'ambient': 'Ambient Sounds',
+            'noise': 'Background Noise',
+            'binaural': 'Binaural Beats',
+            'notification': 'Notifications'
+        };
+
+        return typeMap[type] || type.charAt(0).toUpperCase() + type.slice(1);
     }
 
     setVolume(volume: number) {
@@ -523,9 +538,17 @@ class AudioService {
 
     // Method to refresh audio library (useful after adding new files)
     async refreshAudioLibrary() {
+        // Clear the cache first
+        const { clearAudioCache } = await import('./audio-cache');
+        clearAudioCache();
+
+        // Reset service state
+        AudioService.isGloballyInitialized = false;
         this.isInitialized = false;
         this.audioLibrary = {};
         this.audioMetadata = {};
+
+        // Reinitialize
         await this.initialize();
     }
 

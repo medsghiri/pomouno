@@ -1055,50 +1055,55 @@ export class AdvancedStorageService {
         }
     }
 
-    // Statistics
+    // 🚀 OPTIMIZED Statistics - Uses daily aggregated stats instead of expensive session queries
     async getStatistics(dateRange: DateRange): Promise<Statistics> {
         const cacheKey = `statistics_${this.user.uid}_${dateRange.start}_${dateRange.end}`;
         const cached = this.getCached<Statistics>(cacheKey);
         if (cached) return cached;
 
         try {
-            // Get sessions in date range
-            const sessionsQuery = query(
-                collection(db, 'users', this.user.uid, 'sessions'),
-                where('timestamp', '>=', dateRange.start),
-                where('timestamp', '<=', dateRange.end),
-                orderBy('timestamp', 'desc')
-            );
-            const sessionsSnapshot = await getDocs(sessionsQuery);
-            const sessions = sessionsSnapshot.docs.map(doc => doc.data()) as PomodoroSession[];
+            // 🎯 PERFORMANCE FIX: Use daily aggregated stats instead of session queries
+            // Generate date strings for the range
+            const dateStrings: string[] = [];
+            const startDate = new Date(dateRange.start);
+            const endDate = new Date(dateRange.end);
+            
+            for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                dateStrings.push(d.toISOString().split('T')[0]);
+            }
 
-            // Get tasks completed in date range
-            const tasksQuery = query(
-                collection(db, 'users', this.user.uid, 'tasks'),
-                where('completedAt', '>=', dateRange.start),
-                where('completedAt', '<=', dateRange.end)
+            // Get daily stats for all dates in range (much more efficient than session queries)
+            const dailyStatsPromises = dateStrings.map(dateString => 
+                FirebaseService.getDailyAggregatedStats(this.user, dateString)
             );
-            const tasksSnapshot = await getDocs(tasksQuery);
+            const dailyStatsResults = await Promise.all(dailyStatsPromises);
 
-            // Get break reminder completions in date range
-            const completionsQuery = query(
-                collection(db, 'users', this.user.uid, 'breakReminderCompletions'),
-                where('completedAt', '>=', dateRange.start),
-                where('completedAt', '<=', dateRange.end)
-            );
-            const completionsSnapshot = await getDocs(completionsQuery);
+            // Aggregate the daily stats
+            let totalSessions = 0;
+            let totalFocusTime = 0;
+            let totalTasksCompleted = 0;
+            let breakRemindersCompleted = 0;
+
+            dailyStatsResults.forEach(dayStats => {
+                if (dayStats && !dayStats._isDefault) { // Only count real data, not default zeros
+                    totalSessions += dayStats.workSessions || 0;
+                    totalFocusTime += dayStats.focusTimeMinutes || 0;
+                    totalTasksCompleted += dayStats.tasksCompleted || 0;
+                    breakRemindersCompleted += dayStats.breakRemindersCompleted || 0;
+                }
+            });
 
             const statistics: Statistics = {
-                totalSessions: sessions.filter(s => s.type === 'work').length,
-                totalFocusTime: sessions
-                    .filter(s => s.type === 'work')
-                    .reduce((sum, s) => sum + s.duration, 0),
-                totalTasksCompleted: tasksSnapshot.size,
-                breakRemindersCompleted: completionsSnapshot.size,
+                totalSessions,
+                totalFocusTime,
+                totalTasksCompleted,
+                breakRemindersCompleted,
                 dateRange
             };
 
-            this.setCached(cacheKey, statistics, 2 * 60 * 1000); // Cache for 2 minutes
+            console.log(`📊 Statistics computed from ${dailyStatsResults.length} daily stats documents instead of ${totalSessions}+ session queries`);
+            
+            this.setCached(cacheKey, statistics, 5 * 60 * 1000); // Cache for 5 minutes
             return statistics;
         } catch (error) {
             console.error('Failed to get statistics:', error);

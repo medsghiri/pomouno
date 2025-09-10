@@ -1,4 +1,5 @@
 import { ImageResponse } from 'next/og'
+import { Logo } from '@/components/logo'
 
 export const runtime = 'edge'
 
@@ -26,36 +27,18 @@ export default async function Image() {
           backgroundPosition: '0 0, 0 20px, 20px -20px, -20px 0px',
         }}
       >
-        {/* Pomodoro Timer Circle */}
+        {/* Pomodoro Timer Logo */}
         <div
           style={{
             width: 200,
             height: 200,
-            borderRadius: '50%',
-            backgroundColor: '#E53935',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             marginBottom: 40,
-            boxShadow: '0 20px 40px rgba(229, 57, 53, 0.3)',
           }}
         >
-          <div
-            style={{
-              width: 140,
-              height: 140,
-              borderRadius: '50%',
-              backgroundColor: 'white',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 36,
-              fontWeight: 'bold',
-              color: '#E53935',
-            }}
-          >
-            25:00
-          </div>
+          <Logo size={200} style={{ boxShadow: '0 20px 40px rgba(229, 57, 53, 0.3)', borderRadius: '50%', background: 'transparent' }} />
         </div>
 
         {/* Title */}
@@ -74,13 +57,14 @@ export default async function Image() {
         {/* Subtitle */}
         <div
           style={{
-            fontSize: 32,
+            fontSize: 28,
             color: '#6b7280',
             textAlign: 'center',
-            maxWidth: 800,
+            maxWidth: 900,
+            lineHeight: 1.3,
           }}
         >
-          Free Online Pomodoro Timer for Focus & Productivity
+          Pomodoro timers, smart tasks, break reminders, and progress tracking.
         </div>
 
         {/* Features */}

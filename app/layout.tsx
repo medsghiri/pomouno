@@ -16,11 +16,11 @@ export const metadata: Metadata = {
       : "http://localhost:3000"
   ),
   title: {
-    default: "PomoUno - Online Pomodoro Timer for Focus & Productivity",
+    default: "PomoUno - Free Online Pomodoro Timer for Focus & Productivity",
     template: "%s | PomoUno",
   },
   description:
-    "Free online Pomodoro timer to boost productivity and focus. Use the proven 25-minute focus technique with customizable timers, task tracking, and productivity statistics. Start focusing now!",
+    "Free online Pomodoro that helps you start and stay focused with Pomodoro timers, smart tasks, and break reminders, plus stats and a calendar to track progress. Perfect for students, pros, and people with ADHD.",
   keywords: [
     "pomodoro timer online",
     "free pomodoro timer",
@@ -62,7 +62,7 @@ export const metadata: Metadata = {
     url: "https://pomouno.com",
     title: "PomoUno - Free Online Pomodoro Timer for Focus & Productivity",
     description:
-      "Boost productivity with our free online Pomodoro timer. Track tasks, maintain focus, and build better work habits with the proven 25-minute technique.",
+      "PomoUno helps you start and stay focused with Pomodoro timers, smart tasks, and break reminders, plus stats and a calendar to track progress. Perfect for students, pros, and people with ADHD.",
     siteName: "PomoUno",
     images: [
       {

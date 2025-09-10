@@ -23,10 +23,6 @@ export default function CookiesPage() {
                     Cookies are small text files that are stored on your device when you visit a website. They help websites remember information about your visit, which can make your next visit easier and the site more useful to you.
                 </p>
 
-                <h2>How PomoUno Uses Cookies and Local Storage</h2>
-                <p>
-                    PomoUno is designed to work offline-first and respects your privacy. We use minimal cookies and primarily rely on browser local storage to provide our services.
-                </p>
 
                 <h3>Essential Cookies and Storage</h3>
                 <p>These are necessary for PomoUno to function properly:</p>

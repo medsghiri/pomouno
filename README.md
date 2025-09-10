@@ -1,6 +1,6 @@
 # PomoUno 🍅
 
-A free, beautiful Pomodoro timer application built with Next.js and Firebase to boost your productivity and focus using the proven 25-minute work technique.
+A free, beautiful Pomodoro timer application built with Next.js and Firebase to boost your productivity and focus using the proven Pomodoro technique.
 
 ## ✨ Features
 
@@ -10,7 +10,6 @@ A free, beautiful Pomodoro timer application built with Next.js and Firebase to 
 - **Auto-start Options**: Automatically start breaks or work sessions
 - **Session Tracking**: Real-time daily session progress with goal visualization
 - **Audio Support**: Customizable focus sounds, break sounds, and notification alerts with volume control
-- **Offline-First**: Works completely offline with localStorage, syncs when authenticated
 
 ### 📋 Advanced Task Management
 
@@ -129,7 +128,6 @@ pnpm dev
 6. **Open your browser:**
    Navigate to [http://localhost:3000](http://localhost:3000) to start using PomoUno!
 
-> **Note:** The app works completely offline without Firebase configuration. Authentication and cross-device sync require Firebase setup.
 
 ## 📜 Available Scripts
 
@@ -189,7 +187,6 @@ pomouno/
 
 ### Environment Variables
 
-All environment variables are optional. The app works offline without Firebase:
 
 ```env
 # Firebase Configuration (Optional)
@@ -243,14 +240,6 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
    firebase deploy
    ```
 
-## 🔍 Key Features Deep Dive
-
-### Offline-First Architecture
-
-- **localStorage Primary:** All data stored locally first
-- **Firebase Sync:** Background synchronization when authenticated
-- **Optimistic Updates:** Immediate UI updates with server reconciliation
-- **Performance Optimized:** React Query caching minimizes Firebase reads/writes
 
 ### Advanced Task Management
 
@@ -325,7 +314,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### Performance Goals
 
 - **Sub-100ms Load Times**: Optimized caching and edge distribution
-- **Offline-First**: Enhanced offline capabilities with background sync
 - **Real-time Collaboration**: Live updates for team features
 - **Advanced PWA**: Enhanced mobile web app experience
 

@@ -4,7 +4,7 @@ import { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'PomoUno - Free Online Pomodoro Timer for Focus & Productivity',
-  description: 'Boost productivity with our free online Pomodoro timer. Use the proven 25-minute focus technique with task tracking, break reminders, and productivity statistics. Start focusing now!',
+  description: 'Boost productivity with our free online Pomodoro timer. Use the proven Pomodoro technique with task tracking, break reminders, and productivity statistics. Start focusing now!',
   keywords: [
     'pomodoro timer online',
     'free pomodoro timer',

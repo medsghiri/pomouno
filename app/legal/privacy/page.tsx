@@ -75,7 +75,6 @@ export default function PrivacyPage() {
                     PomoUno is designed with a &ldquo;local-first&rdquo; philosophy. Your data is primarily stored on your device using browser local storage. This means:
                 </p>
                 <ul>
-                    <li>The app works offline without an internet connection</li>
                     <li>Your data remains on your device even if our servers are down</li>
                     <li>You maintain control over your productivity data</li>
                 </ul>

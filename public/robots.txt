@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://pomouno.com/sitemap.xml

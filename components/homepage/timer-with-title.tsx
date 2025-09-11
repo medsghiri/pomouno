@@ -44,7 +44,7 @@ export function TimerWithTitle({
   const [totalSessions, setTotalSessions] = useState(4);
   const { data: settingsData, isLoading: settingsLoading } = useSettings();
   const settings = settingsData || LocalStorage.getSettings();
-  
+
   // Ensure settings are valid before using them
   const safeSettings = useMemo(() => {
     if (!settings || settingsLoading) {
@@ -58,7 +58,7 @@ export function TimerWithTitle({
   const [isSessionRestored, setIsSessionRestored] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false); // Track if component has been initialized
   const { storageProvider } = useAuth();
-  
+
   const audioService = AudioService.getInstance();
   const vibrationService = VibrationService.getInstance();
   const notificationService = NotificationService.getInstance();
@@ -67,7 +67,7 @@ export function TimerWithTitle({
   // Restore session on component mount - MUST RUN FIRST
   useEffect(() => {
     const savedSession = storageProvider.basic.getCurrentSession();
-    
+
     if (savedSession) {
       // Calculate elapsed time since last update
       const now = Date.now();
@@ -77,9 +77,16 @@ export function TimerWithTitle({
       if (savedSession.isActive && elapsed < 3600) {
         let newTimeLeft = savedSession.timeLeft - elapsed;
 
-        // If time has run out, complete the session
+        // FIXED: If time has run out during refresh, handle session completion properly
         if (newTimeLeft <= 0) {
-          newTimeLeft = 0;
+          // Session should have completed while we were away
+          // Clear the saved session and let the timer start fresh
+          storageProvider.basic.clearCurrentSession();
+          setIsSessionRestored(false);
+          setHasInitialized(true);
+
+          // If auto-start is enabled, we'll let the auto-start logic handle the next session
+          return;
         }
 
         // Restore all session state
@@ -107,6 +114,11 @@ export function TimerWithTitle({
 
   // Save session state whenever it changes
   useEffect(() => {
+    // FIXED: Only save session if component is initialized to prevent race conditions
+    if (!hasInitialized) {
+      return;
+    }
+
     if (isActive || isPaused) {
       const sessionData: TimerSession = {
         id:
@@ -147,6 +159,7 @@ export function TimerWithTitle({
     selectedTaskId,
     currentSessionId,
     storageProvider,
+    hasInitialized, // FIXED: Add hasInitialized dependency
   ]);
 
   // Update timer when settings change - ONLY after initialization
@@ -215,8 +228,12 @@ export function TimerWithTitle({
       await notificationService.requestPermissionOnFirstUse();
     }
 
+    // FIXED: Always generate a new session ID when starting a new session
     if (!isActive) {
-      setCurrentSessionId(Date.now().toString());
+      const newSessionId =
+        currentSessionId ||
+        `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      setCurrentSessionId(newSessionId);
     }
     setIsActive(true);
     setIsPaused(false);
@@ -230,6 +247,7 @@ export function TimerWithTitle({
     vibrationService.timerStart();
   }, [
     isActive,
+    currentSessionId,
     audioService,
     vibrationService,
     notificationService,
@@ -237,10 +255,26 @@ export function TimerWithTitle({
   ]);
 
   const handleSessionEnd = useCallback(async () => {
+    // FIXED: Store session data before clearing state for proper recording
+    const completedSession: PomodoroSession = {
+      id: currentSessionId || Date.now().toString(),
+      type:
+        sessionType === "work"
+          ? "work"
+          : sessionType === "shortBreak"
+          ? "short-break"
+          : "long-break",
+      duration: Math.round(totalTime / 60), // Convert seconds to minutes
+      completed: true,
+      timestamp: Date.now(),
+      ...(selectedTaskId &&
+        sessionType === "work" && { taskId: selectedTaskId }),
+    };
+
     setIsActive(false);
     setIsPaused(false);
 
-    // Clear the saved session since it's completed
+    // FIXED: Clear the saved session AFTER we've captured the data
     storageProvider.basic.clearCurrentSession();
 
     // Play completion sound and vibrate
@@ -254,36 +288,23 @@ export function TimerWithTitle({
       notificationService.showSessionComplete(sessionType);
     }
 
-    // Create session record
-    const sessionTypeMapping = {
-      work: "work" as const,
-      shortBreak: "short-break" as const,
-      longBreak: "long-break" as const,
-    };
-
-    const session: PomodoroSession = {
-      id: currentSessionId || Date.now().toString(),
-      type: sessionTypeMapping[sessionType],
-      duration: Math.round(totalTime / 60), // Convert seconds to minutes
-      completed: true,
-      timestamp: Date.now(),
-      ...(selectedTaskId &&
-        sessionType === "work" && { taskId: selectedTaskId }),
-    };
-
-    // Call the completion handler
-    onSessionComplete(session);
+    // Call the completion handler with the captured session data
+    onSessionComplete(completedSession);
 
     // Handle task session completion
     if (selectedTaskId && onTaskSessionComplete) {
       onTaskSessionComplete(selectedTaskId);
     }
 
+    // FIXED: Store the next session type and settings before auto-start
+    let nextSessionType: "work" | "shortBreak" | "longBreak";
+    let nextCurrentSession = currentSession;
+
     // Auto-advance to next session type
     if (sessionType === "work") {
       if (currentSession >= totalSessions) {
-        setSessionType("longBreak");
-        setCurrentSession(1);
+        nextSessionType = "longBreak";
+        nextCurrentSession = 1;
         // Only show break reminders immediately if auto-start is disabled
         if (!settings.autoStartBreaks) {
           setShowBreakReminders(true);
@@ -294,8 +315,8 @@ export function TimerWithTitle({
           notificationService.showBreakStart("long");
         }
       } else {
-        setSessionType("shortBreak");
-        setCurrentSession(currentSession + 1);
+        nextSessionType = "shortBreak";
+        nextCurrentSession = currentSession + 1;
         // Only show break reminders immediately if auto-start is disabled
         if (!settings.autoStartBreaks) {
           setShowBreakReminders(true);
@@ -307,19 +328,51 @@ export function TimerWithTitle({
         }
       }
     } else {
-      setSessionType("work");
+      nextSessionType = "work";
       setShowBreakReminders(false);
       breakRemindersTriggered.current = null;
     }
 
-    // Auto-start next session if enabled
+    // FIXED: Update session type and counter, then set timer duration for next session
+    setSessionType(nextSessionType);
+    setCurrentSession(nextCurrentSession);
+
+    // Set the correct duration for the next session type
+    let nextDuration: number;
+    switch (nextSessionType) {
+      case "work":
+        nextDuration = settings.workDuration * 60;
+        break;
+      case "shortBreak":
+        nextDuration = settings.shortBreakDuration * 60;
+        break;
+      case "longBreak":
+        nextDuration = settings.longBreakDuration * 60;
+        break;
+      default:
+        nextDuration = settings.workDuration * 60;
+    }
+
+    setTotalTime(nextDuration);
+    setTimeLeft(nextDuration);
+
+    // FIXED: Auto-start next session if enabled with proper session ID generation
     if (
       (sessionType === "work" && settings.autoStartBreaks) ||
       (sessionType !== "work" && settings.autoStartWork)
     ) {
+      // Generate new session ID for the next session
+      const nextSessionId = `session_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+      setCurrentSessionId(nextSessionId);
+
       setTimeout(() => {
         handleStart();
       }, 1000);
+    } else {
+      // Reset session ID if not auto-starting
+      setCurrentSessionId("");
     }
   }, [
     sessionType,
@@ -335,6 +388,7 @@ export function TimerWithTitle({
     vibrationService,
     notificationService,
     storageProvider.basic,
+    safeSettings.notificationAudio,
     handleStart,
   ]);
 
@@ -409,7 +463,13 @@ export function TimerWithTitle({
         onAutoStartComplete();
       }
     }
-  }, [shouldAutoStart, isActive, sessionType, handleStart, onAutoStartComplete]);
+  }, [
+    shouldAutoStart,
+    isActive,
+    sessionType,
+    handleStart,
+    onAutoStartComplete,
+  ]);
 
   return (
     <>

@@ -17,6 +17,7 @@ import {
   useBreakReminders,
   useTodaysBreakReminderCompletions,
   useBreakReminderMutations,
+  useBreakReminderCategories,
 } from "@/hooks/use-app-data";
 
 interface BreakReminderDisplayProps {
@@ -27,7 +28,7 @@ interface BreakReminderDisplayProps {
   onRemindersCompleted?: (completedIds: string[], shownIds: string[]) => void;
 }
 
-// Default categories for break reminders
+// Default categories for break reminders (fallback)
 const DEFAULT_CATEGORIES = [
   { id: "hydration", name: "Hydration", icon: "💧", color: "#3B82F6" },
   { id: "movement", name: "Movement", icon: "🏃", color: "#10B981" },
@@ -53,6 +54,9 @@ export function BreakReminderDisplay({
   const { data: allReminders = [], isLoading: remindersLoading } =
     useBreakReminders(!!user); // Only enable break reminders loading when user is authenticated
   const { data: todaysCompletions = [] } = useTodaysBreakReminderCompletions();
+  const { data: breakReminderCategories = [] } = useBreakReminderCategories(
+    !!user
+  );
 
   // Use mutation hooks for optimistic updates
   const { incrementBreakReminderCount } = useBreakReminderMutations();
@@ -95,10 +99,39 @@ export function BreakReminderDisplay({
   }, [completedReminders, isVisible, onRemindersCompleted, reminders]); // Only depend on the size to avoid loops
 
   const getCategoryInfo = (categoryId: string) => {
-    const category = DEFAULT_CATEGORIES.find(
-      (cat) => cat.id === categoryId || cat.name.toLowerCase() === categoryId
+    // FIXED: First try to find in actual Firebase categories
+    let category = breakReminderCategories.find(
+      (cat) =>
+        cat.id === categoryId ||
+        cat.name === categoryId ||
+        cat.name.toLowerCase() === categoryId.toLowerCase()
     );
-    return category || { name: "Custom", icon: "📝", color: "#6B7280" };
+
+    // If not found, try default categories
+    if (!category) {
+      const defaultCategory = DEFAULT_CATEGORIES.find(
+        (cat) =>
+          cat.id === categoryId ||
+          cat.name.toLowerCase() === categoryId.toLowerCase()
+      );
+
+      if (defaultCategory) {
+        category = {
+          ...defaultCategory,
+          createdAt: Date.now(),
+        };
+      }
+    }
+
+    return (
+      category || {
+        id: "custom",
+        name: "Custom",
+        icon: "📝",
+        color: "#6B7280",
+        createdAt: Date.now(),
+      }
+    );
   };
 
   const getTodaysCount = (reminderId: string) => {

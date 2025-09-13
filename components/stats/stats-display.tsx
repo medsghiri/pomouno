@@ -31,7 +31,6 @@ import {
   ChevronLeft,
   ChevronRight,
   BarChart3,
-  Activity,
   Coffee,
 } from "lucide-react";
 import { FeatureGate } from "@/components/auth/feature-gate";
@@ -64,7 +63,7 @@ export function StatsDisplay() {
 
   // 🔥 NEW: Use ultra-efficient aggregated stats hooks - Always call hooks, use enabled flag
   const { data: todayStats } = useTodayAggregatedStats(true); // Always load today's stats
-  const { data: weeklyStats } = useWeeklyAggregatedStats(true); // Always load weekly stats  
+  const { data: weeklyStats } = useWeeklyAggregatedStats(true); // Always load weekly stats
   const { data: monthlyStats } = useMonthlyAggregatedStats(
     currentDate,
     true // Always load monthly stats
@@ -77,16 +76,18 @@ export function StatsDisplay() {
   // Calculate current streak from daily activity
   const calculateCurrentStreak = useMemo(() => {
     if (!weeklyStats || weeklyStats.length === 0) return 0;
-    
+
     // Get today's date and work backwards
     let streak = 0;
     const today = new Date();
-    const sortedStats = [...weeklyStats].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
+    const sortedStats = [...weeklyStats].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+
     for (let i = 0; i < sortedStats.length; i++) {
       const stat = sortedStats[i];
       const statDate = new Date(stat.date);
-      
+
       // Check if this date has activity (work sessions > 0)
       if ((stat.workSessions || 0) > 0) {
         // If this is the first day we're checking or it's consecutive
@@ -106,7 +107,7 @@ export function StatsDisplay() {
         }
       }
     }
-    
+
     return streak;
   }, [weeklyStats]);
 
@@ -153,20 +154,53 @@ export function StatsDisplay() {
         };
       }
 
-      // Find category data for color and icon
-      const categoryData = breakReminderCategories.find(
+      // FIXED: Better category lookup - handle both ID and name references
+      let categoryData = breakReminderCategories.find(
         (cat) =>
-          cat.name === fullReminder.category ||
           cat.id === fullReminder.category ||
+          cat.name === fullReminder.category ||
           cat.name.toLowerCase() === fullReminder.category.toLowerCase()
       );
+
+      // FIXED: If no category found, try to match with default categories
+      if (!categoryData) {
+        const defaultCategories = [
+          { id: "hydration", name: "Hydration", icon: "💧", color: "#3B82F6" },
+          { id: "movement", name: "Movement", icon: "🏃", color: "#10B981" },
+          { id: "rest", name: "Rest", icon: "💜", color: "#8B5CF6" },
+          { id: "nutrition", name: "Nutrition", icon: "🍎", color: "#F59E0B" },
+          {
+            id: "mindfulness",
+            name: "Mindfulness",
+            icon: "🧘",
+            color: "#EC4899",
+          },
+        ];
+
+        const defaultCategory = defaultCategories.find(
+          (cat) =>
+            cat.id === fullReminder.category ||
+            cat.name === fullReminder.category ||
+            cat.name.toLowerCase() === fullReminder.category.toLowerCase()
+        );
+
+        if (defaultCategory) {
+          categoryData = {
+            ...defaultCategory,
+            createdAt: Date.now(),
+          };
+        }
+      }
+
+      // FIXED: Show category name instead of ID, fallback to "Custom" for unknown categories
+      const displayCategory = categoryData?.name || "Custom";
 
       return {
         id: stat.reminderId,
         title: stat.title,
         completionCount: stat.totalCompletions,
         todayCount: stat.todaysCompletions,
-        category: fullReminder.category || "General",
+        category: displayCategory,
         color: categoryData?.color || "#6B7280",
         icon: categoryData?.icon || "☕",
       };
@@ -355,10 +389,7 @@ export function StatsDisplay() {
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
-                            <Badge
-                              variant="secondary"
-                              
-                            >
+                            <Badge variant="secondary">
                               {stat.todayCount} completed
                             </Badge>
                           </div>
@@ -424,21 +455,23 @@ export function StatsDisplay() {
                       <h3 className="text-lg font-semibold">Weekly Progress</h3>
                     </div>
                     <ChartContainer
-                      config={{
-                        workSessions: {
-                          label: "Work Sessions",
-                          color: "#dc2626", // Red
-                        },
-                        focusHours: {
-                          label: "Focus Hours", 
-                          color: "#f97316", // Orange
-                        },
-                        tasksCompleted: {
-                          label: "Tasks",
-                          color: "#ec4899", // Pink
-                        },
-                      } satisfies ChartConfig}
-                      className="h-[320px]" 
+                      config={
+                        {
+                          workSessions: {
+                            label: "Work Sessions",
+                            color: "#dc2626", // Red
+                          },
+                          focusHours: {
+                            label: "Focus Hours",
+                            color: "#f97316", // Orange
+                          },
+                          tasksCompleted: {
+                            label: "Tasks",
+                            color: "#ec4899", // Pink
+                          },
+                        } satisfies ChartConfig
+                      }
+                      className="h-[320px]"
                     >
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
@@ -479,7 +512,53 @@ export function StatsDisplay() {
                             width={40}
                           />
                           <ChartTooltip
-                            content={<ChartTooltipContent indicator="line" />}
+                            content={({ active, payload, label }) => {
+                              if (active && payload && payload.length) {
+                                const data = payload[0]?.payload;
+                                const date = data?.date
+                                  ? new Date(data.date)
+                                  : null;
+                                const dayName = date
+                                  ? date.toLocaleDateString("en-US", {
+                                      weekday: "long",
+                                    })
+                                  : label;
+                                const dateStr = date
+                                  ? date.toLocaleDateString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                    })
+                                  : "";
+
+                                return (
+                                  <div className="rounded-lg border bg-background p-3 shadow-md">
+                                    <div className="font-medium text-foreground mb-2">
+                                      {dayName} {dateStr && `• ${dateStr}`}
+                                    </div>
+                                    {payload.map((entry, index) => (
+                                      <div
+                                        key={index}
+                                        className="flex items-center gap-2 text-sm"
+                                      >
+                                        <div
+                                          className="w-3 h-3 rounded-sm"
+                                          style={{
+                                            backgroundColor: entry.color,
+                                          }}
+                                        />
+                                        <span className="text-muted-foreground">
+                                          {entry.name}:
+                                        </span>
+                                        <span className="font-medium text-foreground">
+                                          {entry.value}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
                             cursor={false}
                           />
                           <ChartLegend content={<ChartLegendContent />} />
@@ -583,20 +662,22 @@ export function StatsDisplay() {
                       <h3 className="text-lg font-semibold">Monthly Trends</h3>
                     </div>
                     <ChartContainer
-                      config={{
-                        workSessions: {
-                          label: "Work Sessions",
-                          color: "#dc2626", // Red
-                        },
-                        focusHours: {
-                          label: "Focus Hours",
-                          color: "#f97316", // Orange
-                        },
-                        tasksCompleted: {
-                          label: "Tasks",
-                          color: "#ec4899", // Pink
-                        },
-                      } satisfies ChartConfig}
+                      config={
+                        {
+                          workSessions: {
+                            label: "Work Sessions",
+                            color: "#dc2626", // Red
+                          },
+                          focusHours: {
+                            label: "Focus Hours",
+                            color: "#f97316", // Orange
+                          },
+                          tasksCompleted: {
+                            label: "Tasks",
+                            color: "#ec4899", // Pink
+                          },
+                        } satisfies ChartConfig
+                      }
                       className="h-[380px]"
                     >
                       <ResponsiveContainer width="100%" height="100%">
@@ -635,7 +716,54 @@ export function StatsDisplay() {
                             width={40}
                           />
                           <ChartTooltip
-                            content={<ChartTooltipContent indicator="line" />}
+                            content={({ active, payload, label }) => {
+                              if (active && payload && payload.length) {
+                                const data = payload[0]?.payload;
+                                const date = data?.date
+                                  ? new Date(data.date)
+                                  : null;
+                                const dayName = date
+                                  ? date.toLocaleDateString("en-US", {
+                                      weekday: "long",
+                                    })
+                                  : `Day ${label}`;
+                                const dateStr = date
+                                  ? date.toLocaleDateString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                      year: "numeric",
+                                    })
+                                  : "";
+
+                                return (
+                                  <div className="rounded-lg border bg-background p-3 shadow-md">
+                                    <div className="font-medium text-foreground mb-2">
+                                      {dayName} {dateStr && `• ${dateStr}`}
+                                    </div>
+                                    {payload.map((entry, index) => (
+                                      <div
+                                        key={index}
+                                        className="flex items-center gap-2 text-sm"
+                                      >
+                                        <div
+                                          className="w-3 h-3 rounded-sm"
+                                          style={{
+                                            backgroundColor: entry.color,
+                                          }}
+                                        />
+                                        <span className="text-muted-foreground">
+                                          {entry.name}:
+                                        </span>
+                                        <span className="font-medium text-foreground">
+                                          {entry.value}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
                             cursor={false}
                           />
                           <ChartLegend content={<ChartLegendContent />} />

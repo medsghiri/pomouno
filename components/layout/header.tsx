@@ -189,10 +189,11 @@ export function Header({
                               ).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-                          <span className="hidden sm:inline text-sm font-medium">
+                            {/* Hide name unless screen is large */}
+                            <span className="hidden lg:inline text-sm font-medium">
                             {user.displayName?.split(" ")[0] ||
                               user.email?.split("@")[0]}
-                          </span>
+                            </span>
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-56">

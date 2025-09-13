@@ -6,10 +6,18 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Calendar as CalendarIcon, Target, CheckCircle, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Calendar as CalendarIcon,
+  Target,
+  CheckCircle,
+  X,
+  Trash2,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { TodaysStats } from "@/lib/storage";
-import { useTasks, useSessions } from "@/hooks/use-app-data";
+import { useTasks, useSessions, useTaskMutations } from "@/hooks/use-app-data";
+import { toast } from "sonner";
 
 interface CalendarDialogProps {
   open: boolean;
@@ -29,7 +37,21 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
     open
   ); // Only load when dialog is open
 
+  // Get task mutations for delete functionality
+  const { deleteTask } = useTaskMutations();
+
   const loading = tasksLoading || sessionsLoading;
+
+  // Handle task deletion
+  const handleDeleteTask = async (taskId: string, taskTitle: string) => {
+    try {
+      await deleteTask.mutateAsync(taskId);
+      toast.success(`Task "${taskTitle}" deleted successfully`);
+    } catch (error) {
+      console.error("Failed to delete task:", error);
+      toast.error("Failed to delete task. Please try again.");
+    }
+  };
 
   // Memoized stats arrays to prevent recalculation on every render
   const { weeklyStats, monthlyStats } = useMemo(() => {
@@ -544,12 +566,54 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
                                             </p>
                                           )}
                                         </div>
-                                        <Badge
-                                          variant={variant}
-                                          className="shrink-0"
-                                        >
-                                          {status}
-                                        </Badge>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <Badge variant={variant}>
+                                            {status}
+                                          </Badge>
+                                          {/* Only show delete button for future dates or today, and for non-completed tasks */}
+                                          {(() => {
+                                            const today = new Date();
+                                            today.setHours(0, 0, 0, 0);
+                                            const checkDate = new Date(
+                                              selectedDate
+                                            );
+                                            checkDate.setHours(0, 0, 0, 0);
+                                            const isFutureOrToday =
+                                              checkDate.getTime() >=
+                                              today.getTime();
+
+                                            // Show delete button for:
+                                            // 1. Future dates or today
+                                            // 2. Tasks that are not completed (regular tasks) or recurring/spaced repetition tasks
+                                            const canDelete =
+                                              isFutureOrToday &&
+                                              (!task.completed ||
+                                                task.recurring?.enabled ||
+                                                task.spacedRepetition?.enabled);
+
+                                            return (
+                                              canDelete && (
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() =>
+                                                    handleDeleteTask(
+                                                      task.id,
+                                                      task.title
+                                                    )
+                                                  }
+                                                  disabled={
+                                                    deleteTask.isPending
+                                                  }
+                                                  className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                  title="Delete task"
+                                                >
+                                                  <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                              )
+                                            );
+                                          })()}
+                                        </div>
                                       </div>
                                     </div>
                                   );

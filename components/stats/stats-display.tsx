@@ -325,10 +325,6 @@ export function StatsDisplay() {
 
   return (
     <FeatureGate feature="statistics">
-      {/* Header - Fixed position */}
-      <div className="sticky top-0 z-10 bg-background p-4 pr-16 border-b flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-foreground">Statistics</h2>
-      </div>
 
       <div className="p-4 space-y-6">
         <Tabs

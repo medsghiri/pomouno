@@ -48,7 +48,7 @@ export function Footer() {
               Contact
             </Link>
             <a
-              href="https://github.com/pomouno/pomouno"
+              href="https://github.com/medsghiri/pomouno"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 text-muted-foreground hover:text-red-600 dark:hover:text-red-400 transition-colors"

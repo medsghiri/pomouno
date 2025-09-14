@@ -152,14 +152,14 @@ export default function RootLayout({
                   "@type": "ImageObject",
                   url: "https://pomouno.com/web-app-manifest-192x192.png",
                   width: 192,
-                  height: 192
-                }
+                  height: 192,
+                },
               },
               offers: {
                 "@type": "Offer",
                 price: "0",
                 priceCurrency: "USD",
-                category: "free"
+                category: "free",
               },
               featureList: [
                 "Customizable Pomodoro Timer",
@@ -190,17 +190,15 @@ export default function RootLayout({
                 "@type": "ImageObject",
                 url: "https://pomouno.com/web-app-manifest-192x192.png",
                 width: 192,
-                height: 192
+                height: 192,
               },
-              sameAs: [
-                "https://github.com/pomouno/pomouno"
-              ],
+              sameAs: ["https://github.com/medsghiri/pomouno"],
               contactPoint: {
                 "@type": "ContactPoint",
                 contactType: "support",
                 url: "https://pomouno.com/legal/contact",
-                availableLanguage: "en"
-              }
+                availableLanguage: "en",
+              },
             }),
           }}
         />
@@ -208,9 +206,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider>
           <QueryProvider>
-            <AuthProvider>
-              {children}
-            </AuthProvider>
+            <AuthProvider>{children}</AuthProvider>
           </QueryProvider>
         </ThemeProvider>
         <Toaster />

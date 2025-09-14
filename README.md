@@ -199,48 +199,6 @@ NEXT_PUBLIC_FIREBASE_APP_ID=
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
 ```
 
-## 🚀 Deployment
-
-### Vercel (Recommended)
-
-1. **Connect to Vercel:**
-
-   ```bash
-   npx vercel
-   ```
-
-2. **Set Environment Variables:**
-
-   - Add your Firebase configuration in Vercel dashboard
-   - All variables are optional for basic functionality
-
-3. **Deploy:**
-   ```bash
-   npx vercel --prod
-   ```
-
-### Firebase Hosting
-
-1. **Install Firebase CLI:**
-
-   ```bash
-   npm install -g firebase-tools
-   ```
-
-2. **Login and Initialize:**
-
-   ```bash
-   firebase login
-   firebase init hosting
-   ```
-
-3. **Build and Deploy:**
-   ```bash
-   pnpm build
-   firebase deploy
-   ```
-
-
 ### Advanced Task Management
 
 - **Spaced Repetition Algorithm:** Implements SM-2 algorithm for learning tasks
@@ -255,68 +213,8 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
 - **Category Management:** Organize reminders by activity type
 - **Completion Analytics:** Track habit formation over time
 
-## 🤝 Contributing
 
-We welcome contributions! Here's how to get started:
-
-1. **Fork the repository**
-2. **Create a feature branch:** `git checkout -b feature/amazing-feature`
-3. **Make your changes** and add tests if applicable
-4. **Commit your changes:** `git commit -m 'Add amazing feature'`
-5. **Push to the branch:** `git push origin feature/amazing-feature`
-6. **Open a Pull Request**
-
-### Development Guidelines
-
-- Follow TypeScript best practices
-- Use semantic color classes (see `.kiro/steering/color-classes.md`)
-- Maintain accessibility standards
-- Add proper error handling
-- Write meaningful commit messages
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **Pomodoro Technique** by Francesco Cirillo
-- **UI Components** from [shadcn/ui](https://ui.shadcn.com)
-- **Icons** from [Lucide](https://lucide.dev)
-- **Charts** powered by [Recharts](https://recharts.org)
-- **Date Utilities** from [date-fns](https://date-fns.org)
-
-## 📚 Documentation
-
-- **[API Documentation](API_DOCUMENTATION.md)** - Comprehensive API reference for developers
-- **[Deployment Guide](DEPLOYMENT.md)** - Platform-specific deployment instructions
-- **[Changelog](CHANGELOG.md)** - Version history and release notes
-- **[Firebase Optimization Report](FIREBASE_FINAL_OPTIMIZATION_REPORT.md)** - Performance optimization details
-- **[Supabase Migration Plan](.kiro/specs/supabase-migration/)** - Future migration documentation
-
-## 📞 Support
-
-- **Issues:** [GitHub Issues](https://github.com/medsghiri/pomouno/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/medsghiri/pomouno/discussions)
-- **Email:** [Contact Page](/legal/contact)
-- **Documentation:** See links above for comprehensive guides
-
-## 🔮 Roadmap
-
-### Upcoming Features
-
-- **Supabase Migration**: PostgreSQL-based backend for 80-90% cost reduction
-- **Team Collaboration**: Shared workspaces and team productivity tracking
-- **Advanced Analytics**: Machine learning insights and productivity recommendations
-- **Mobile Apps**: Native iOS and Android applications
-- **Integrations**: Calendar, task management, and productivity tool integrations
-
-### Performance Goals
-
-- **Sub-100ms Load Times**: Optimized caching and edge distribution
-- **Real-time Collaboration**: Live updates for team features
-- **Advanced PWA**: Enhanced mobile web app experience
-
----
-
-**Built with ❤️ for productivity enthusiasts worldwide**

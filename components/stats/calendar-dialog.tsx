@@ -261,14 +261,51 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
                 </button>
               </div>
               <div className="p-6">
-                <div className="text-center py-8">
-                  <CalendarIcon className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                  <h3 className="text-lg font-semibold text-foreground mb-2">
-                    Sign In Required
+                <div className="text-center py-8 max-w-md mx-auto">
+                  <CalendarIcon className="w-16 h-16 mx-auto mb-6 text-muted-foreground opacity-50" />
+                  <h3 className="text-xl font-semibold text-foreground mb-3">
+                    Task Calendar View
                   </h3>
-                  <p className="text-muted-foreground">
-                    Please sign in to view your task calendar.
+                  <p className="text-muted-foreground mb-6 leading-relaxed">
+                    View your tasks in a beautiful calendar interface. See due
+                    dates, completed tasks, and plan your productivity schedule
+                    with ease.
                   </p>
+                  <div className="space-y-3 mb-6">
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <Target className="w-4 h-4 text-blue-500" />
+                      <span>Visual task scheduling and due dates</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                      <span>Track completed tasks by date</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <CalendarIcon className="w-4 h-4 text-purple-500" />
+                      <span>Monthly and weekly productivity overview</span>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <Button
+                      onClick={() => {
+                        onOpenChange(false);
+                        window.location.href = "/auth/signup";
+                      }}
+                      className="w-full bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      Sign Up to View Calendar
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        onOpenChange(false);
+                        window.location.href = "/auth/signin";
+                      }}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      Already have an account? Sign In
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>

@@ -12,7 +12,7 @@ export function TaskSessionDisplay({
   taskId,
   estimatedSessions,
 }: TaskSessionDisplayProps) {
-  const { data: todaysCount = 0 } = useTodaysTaskSessions(taskId);
+  const { data: todaysCount = 0 } = useTodaysTaskSessions(taskId, true);
 
   if (estimatedSessions <= 0) return null;
 
